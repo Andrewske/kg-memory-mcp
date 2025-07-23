@@ -3,16 +3,8 @@
  * Core AutoSchemaKG functionality that combines multiple search strategies
  */
 
-import type { Result } from "~/shared/services/types.js";
-import type {
-	DatabaseAdapter,
-	EmbeddingService,
-} from "~/shared/services/types.js";
-import type {
-	KnowledgeTriple,
-	KnowledgeGraphConfig,
-} from "~/shared/types/index.js";
-import type { SearchOptions } from "./types.js";
+import type { Result, DatabaseAdapter, EmbeddingService } from '~/shared/types/index.js';
+import type { KnowledgeTriple, KnowledgeGraphConfig, SearchOptions } from '~/shared/types/index.js';
 
 export interface FusionSearchResult {
 	triple: KnowledgeTriple;
@@ -50,16 +42,16 @@ export async function searchFusion(
 	config: KnowledgeGraphConfig,
 	options?: SearchOptions & {
 		weights?: Partial<FusionSearchWeights>;
-		enabledSearchTypes?: ("entity" | "relationship" | "semantic" | "concept")[];
-	},
+		enabledSearchTypes?: ('entity' | 'relationship' | 'semantic' | 'concept')[];
+	}
 ): Promise<Result<FusionSearchResult[]>> {
 	try {
 		const weights = { ...DEFAULT_FUSION_WEIGHTS, ...options?.weights };
 		const enabledTypes = options?.enabledSearchTypes || [
-			"entity",
-			"relationship",
-			"semantic",
-			"concept",
+			'entity',
+			'relationship',
+			'semantic',
+			'concept',
 		];
 		const topK = options?.limit || config.search.topK;
 
@@ -69,16 +61,16 @@ export async function searchFusion(
 
 		// Generate embedding once for all vector-based searches
 		let queryEmbedding: number[] | null = null;
-		if (enabledTypes.some(type => ["entity", "relationship", "semantic"].includes(type))) {
+		if (enabledTypes.some(type => ['entity', 'relationship', 'semantic'].includes(type))) {
 			const embeddingResult = await embeddingService.embed(query);
 			if (embeddingResult.success) {
 				queryEmbedding = embeddingResult.data;
 			} else {
-				console.warn("[FUSION SEARCH] Failed to generate query embedding:", embeddingResult.error);
+				console.warn('[FUSION SEARCH] Failed to generate query embedding:', embeddingResult.error);
 			}
 		}
 
-		if (enabledTypes.includes("entity")) {
+		if (enabledTypes.includes('entity')) {
 			if (queryEmbedding) {
 				// Use vector-based entity search
 				searchPromises.push(
@@ -86,19 +78,19 @@ export async function searchFusion(
 						queryEmbedding,
 						topK,
 						options?.threshold || config.search.minScore,
-						options,
-					),
+						options
+					)
 				);
-				searchTypeNames.push("entity");
+				searchTypeNames.push('entity');
 			} else {
 				// Fallback to text-based entity search
-				console.warn("[FUSION SEARCH] Using fallback text-based entity search");
+				console.warn('[FUSION SEARCH] Using fallback text-based entity search');
 				searchPromises.push(db.searchByEntity(query, topK, options));
-				searchTypeNames.push("entity");
+				searchTypeNames.push('entity');
 			}
 		}
 
-		if (enabledTypes.includes("relationship")) {
+		if (enabledTypes.includes('relationship')) {
 			if (queryEmbedding) {
 				// Use vector-based relationship search
 				searchPromises.push(
@@ -106,19 +98,19 @@ export async function searchFusion(
 						queryEmbedding,
 						topK,
 						options?.threshold || config.search.minScore,
-						options,
-					),
+						options
+					)
 				);
-				searchTypeNames.push("relationship");
+				searchTypeNames.push('relationship');
 			} else {
 				// Fallback to text-based relationship search
-				console.warn("[FUSION SEARCH] Using fallback text-based relationship search");
+				console.warn('[FUSION SEARCH] Using fallback text-based relationship search');
 				searchPromises.push(db.searchByRelationship(query, topK, options));
-				searchTypeNames.push("relationship");
+				searchTypeNames.push('relationship');
 			}
 		}
 
-		if (enabledTypes.includes("semantic")) {
+		if (enabledTypes.includes('semantic')) {
 			if (queryEmbedding) {
 				// Use vector-based semantic search
 				searchPromises.push(
@@ -126,16 +118,16 @@ export async function searchFusion(
 						queryEmbedding,
 						topK,
 						options?.threshold || config.search.minScore,
-						options,
-					),
+						options
+					)
 				);
-				searchTypeNames.push("semantic");
+				searchTypeNames.push('semantic');
 			} else {
-				console.warn("[FUSION SEARCH] Cannot perform semantic search without embedding");
+				console.warn('[FUSION SEARCH] Cannot perform semantic search without embedding');
 			}
 		}
 
-		if (enabledTypes.includes("concept")) {
+		if (enabledTypes.includes('concept')) {
 			if (queryEmbedding) {
 				// Use vector-based concept search
 				searchPromises.push(
@@ -144,15 +136,15 @@ export async function searchFusion(
 						db,
 						topK,
 						options?.threshold || config.search.minScore,
-						options,
-					),
+						options
+					)
 				);
-				searchTypeNames.push("concept");
+				searchTypeNames.push('concept');
 			} else {
 				// Fallback to text-based concept search
-				console.warn("[FUSION SEARCH] Using fallback text-based concept search");
+				console.warn('[FUSION SEARCH] Using fallback text-based concept search');
 				searchPromises.push(db.searchByConcept(query, topK, options));
-				searchTypeNames.push("concept");
+				searchTypeNames.push('concept');
 			}
 		}
 
@@ -179,12 +171,7 @@ export async function searchFusion(
 		}
 
 		// Perform fusion ranking
-		const fusionResults = fuseSearchResults(
-			resultSets,
-			activeSearchTypes,
-			weights,
-			topK,
-		);
+		const fusionResults = fuseSearchResults(resultSets, activeSearchTypes, weights, topK);
 
 		return {
 			success: true,
@@ -194,8 +181,8 @@ export async function searchFusion(
 		return {
 			success: false,
 			error: {
-				type: "FUSION_SEARCH_ERROR",
-				message: "Failed to perform fusion search",
+				type: 'FUSION_SEARCH_ERROR',
+				message: 'Failed to perform fusion search',
 				cause: error,
 			},
 		};
@@ -209,7 +196,7 @@ function fuseSearchResults(
 	resultSets: KnowledgeTriple[][],
 	searchTypes: string[],
 	weights: FusionSearchWeights,
-	topK: number,
+	topK: number
 ): FusionSearchResult[] {
 	// Create a map to aggregate results by triple ID
 	const tripleMap = new Map<
@@ -307,7 +294,7 @@ export async function searchByEntity(
 	query: string,
 	db: DatabaseAdapter,
 	config: KnowledgeGraphConfig,
-	options?: SearchOptions,
+	options?: SearchOptions
 ): Promise<Result<KnowledgeTriple[]>> {
 	const topK = options?.limit || config.search.topK;
 	return db.searchByEntity(query, topK, options);
@@ -317,7 +304,7 @@ export async function searchByRelationship(
 	query: string,
 	db: DatabaseAdapter,
 	config: KnowledgeGraphConfig,
-	options?: SearchOptions,
+	options?: SearchOptions
 ): Promise<Result<KnowledgeTriple[]>> {
 	const topK = options?.limit || config.search.topK;
 	return db.searchByRelationship(query, topK, options);
@@ -328,7 +315,7 @@ export async function searchBySemantic(
 	db: DatabaseAdapter,
 	embeddingService: EmbeddingService,
 	config: KnowledgeGraphConfig,
-	options?: SearchOptions,
+	options?: SearchOptions
 ): Promise<Result<KnowledgeTriple[]>> {
 	const embeddingResult = await embeddingService.embed(query);
 	if (!embeddingResult.success) {
@@ -345,7 +332,7 @@ export async function searchByConcept(
 	query: string,
 	db: DatabaseAdapter,
 	config: KnowledgeGraphConfig,
-	options?: SearchOptions,
+	options?: SearchOptions
 ): Promise<Result<KnowledgeTriple[]>> {
 	const topK = options?.limit || config.search.topK;
 	return db.searchByConcept(query, topK, options);
@@ -360,19 +347,15 @@ async function searchByConceptVector(
 	db: DatabaseAdapter,
 	topK: number,
 	minScore: number,
-	options?: SearchOptions,
+	options?: SearchOptions
 ): Promise<Result<KnowledgeTriple[]>> {
 	try {
 		console.log(
-			`[DB DEBUG] searchByConceptVector: topK=${topK}, minScore=${minScore}, embedding length=${embedding.length}`,
+			`[DB DEBUG] searchByConceptVector: topK=${topK}, minScore=${minScore}, embedding length=${embedding.length}`
 		);
 
 		// First, find similar concepts using vector search
-		const conceptSearchResult = await db.searchConceptsByEmbedding(
-			embedding,
-			topK,
-			minScore,
-		);
+		const conceptSearchResult = await db.searchConceptsByEmbedding(embedding, topK, minScore);
 
 		if (!conceptSearchResult.success) {
 			console.log(`[DB DEBUG] Concept vector search failed:`, conceptSearchResult.error);
@@ -391,33 +374,40 @@ async function searchByConceptVector(
 
 		// Extract concept names for relationship lookup
 		const conceptNames = similarConcepts.map(concept => concept.concept);
-		console.log(`[DB DEBUG] Looking up triples for concepts: [${conceptNames.slice(0, 3).join(', ')}${conceptNames.length > 3 ? '...' : ''}]`);
+		console.log(
+			`[DB DEBUG] Looking up triples for concepts: [${conceptNames.slice(0, 3).join(', ')}${conceptNames.length > 3 ? '...' : ''}]`
+		);
 
 		// Find triples connected to these concepts via conceptualization relationships
 		// We'll use a more direct query to find triples linked to these concepts
 		const allTriples: KnowledgeTriple[] = [];
-		
+
 		for (const concept of similarConcepts) {
 			// Get conceptualization relationships for this concept
 			const relationships = await db.getConceptualizationsByConcept(concept.concept);
-			console.log(`[DB DEBUG] Found ${relationships.length} conceptualization relationships for concept "${concept.concept}"`);
-			
+			console.log(
+				`[DB DEBUG] Found ${relationships.length} conceptualization relationships for concept "${concept.concept}"`
+			);
+
 			// Get triples that contain the elements linked to this concept
 			if (relationships.length > 0) {
 				const elements = relationships.map(rel => rel.source_element);
-				
+
 				// Find triples that contain any of these elements
 				const triplesResult = await db.getAllTriples();
 				if (triplesResult.success) {
-					const relevantTriples = triplesResult.data.filter(triple => 
-						elements.some(element => 
-							triple.subject === element || 
-							triple.object === element || 
-							triple.predicate === element
+					const relevantTriples = triplesResult.data.filter(triple =>
+						elements.some(
+							element =>
+								triple.subject === element ||
+								triple.object === element ||
+								triple.predicate === element
 						)
 					);
-					
-					console.log(`[DB DEBUG] Found ${relevantTriples.length} triples for concept "${concept.concept}"`);
+
+					console.log(
+						`[DB DEBUG] Found ${relevantTriples.length} triples for concept "${concept.concept}"`
+					);
 					allTriples.push(...relevantTriples);
 				}
 			}
@@ -440,16 +430,12 @@ async function searchByConceptVector(
 
 		// Apply source filtering
 		if (options?.sources && options.sources.length > 0) {
-			filteredTriples = filteredTriples.filter(triple => 
-				options.sources!.includes(triple.source)
-			);
+			filteredTriples = filteredTriples.filter(triple => options.sources!.includes(triple.source));
 		}
 
 		// Apply type filtering
 		if (options?.types && options.types.length > 0) {
-			filteredTriples = filteredTriples.filter(triple => 
-				options.types!.includes(triple.type)
-			);
+			filteredTriples = filteredTriples.filter(triple => options.types!.includes(triple.type));
 		}
 
 		// Limit results
@@ -462,12 +448,12 @@ async function searchByConceptVector(
 			data: filteredTriples,
 		};
 	} catch (error) {
-		console.error("Concept vector search error:", error);
+		console.error('Concept vector search error:', error);
 		return {
 			success: false,
 			error: {
-				type: "DATABASE_ERROR",
-				message: "Failed to search by concept vector",
+				type: 'DATABASE_ERROR',
+				message: 'Failed to search by concept vector',
 				cause: error,
 			},
 		};

@@ -2,13 +2,9 @@ import type {
 	KnowledgeTriple,
 	ConceptNode,
 	KnowledgeGraphConfig,
-} from "../../shared/types/index.js";
-import type {
-	DatabaseAdapter,
-	EmbeddingService,
-	Result,
-} from "../../shared/services/types.js";
-import type { SearchResult, SearchOptions } from "./types.js";
+} from '../../shared/types/index.js';
+import type { DatabaseAdapter, EmbeddingService, Result } from '~/shared/types/index.js';
+import type { SearchResult, SearchOptions } from '~/shared/types/index.js';
 import {
 	searchFusion,
 	type FusionSearchResult,
@@ -17,29 +13,27 @@ import {
 	searchByRelationship as fusionSearchByRelationship,
 	searchBySemantic as fusionSearchBySemantic,
 	searchByConcept as fusionSearchByConcept,
-} from "./fusion-search.js";
+} from './fusion-search.js';
 
 /**
  * Generate temporal metadata from search results
  */
-function generateTemporalMetadata(
-	triples: KnowledgeTriple[],
-): SearchResult["temporal"] {
-	const triplesWithDates = triples.filter((t) => t.conversation_date);
+function generateTemporalMetadata(triples: KnowledgeTriple[]): SearchResult['temporal'] {
+	const triplesWithDates = triples.filter(t => t.source_date);
 
 	if (triplesWithDates.length === 0) {
 		return undefined;
 	}
 
-	const dates = triplesWithDates.map((t) => new Date(t.conversation_date!));
-	const earliest = new Date(Math.min(...dates.map((d) => d.getTime())));
-	const latest = new Date(Math.max(...dates.map((d) => d.getTime())));
+	const dates = triplesWithDates.map(t => new Date(t.source_date!));
+	const earliest = new Date(Math.min(...dates.map(d => d.getTime())));
+	const latest = new Date(Math.max(...dates.map(d => d.getTime())));
 
 	// Simple temporal clustering by month
 	const clusters = new Map<string, number>();
-	triplesWithDates.forEach((triple) => {
-		const date = new Date(triple.conversation_date!);
-		const monthKey = `${date.getFullYear()}-${(date.getMonth() + 1).toString().padStart(2, "0")}`;
+	triplesWithDates.forEach(triple => {
+		const date = new Date(triple.source_date!);
+		const monthKey = `${date.getFullYear()}-${(date.getMonth() + 1).toString().padStart(2, '0')}`;
 		clusters.set(monthKey, (clusters.get(monthKey) || 0) + 1);
 	});
 
@@ -51,7 +45,7 @@ function generateTemporalMetadata(
 		clusters: Array.from(clusters.entries()).map(([period, count]) => ({
 			period,
 			count,
-			timespan: "month",
+			timespan: 'month',
 		})),
 	};
 }
@@ -65,67 +59,52 @@ export async function searchByText(
 	db: DatabaseAdapter,
 	embeddingService: EmbeddingService,
 	config: KnowledgeGraphConfig,
-	options?: SearchOptions,
+	options?: SearchOptions
 ): Promise<Result<SearchResult>> {
 	try {
 		const topK = options?.limit || config.search?.topK || 10;
 		const minScore = options?.threshold || config.search?.minScore || 0.7;
 
-		console.log(
-			`[FUSION SEARCH DEBUG] Starting multi-index fusion search for: "${query}"`,
-		);
+		console.log(`[FUSION SEARCH DEBUG] Starting multi-index fusion search for: "${query}"`);
 		console.log(`[FUSION SEARCH DEBUG] topK=${topK}, minScore=${minScore}`);
 
 		// Use AutoSchemaKG multi-index fusion search strategy
-		const fusionResult = await searchFusion(
-			query,
-			db,
-			embeddingService,
-			config,
-			{
-				...options,
-				weights: {
-					entity: 0.25, // Entity-based search
-					relationship: 0.2, // Relationship-based search
-					semantic: 0.35, // Vector similarity search (highest weight)
-					concept: 0.2, // Concept-based search
-				},
-				enabledSearchTypes: ["entity", "relationship", "semantic", "concept"],
+		const fusionResult = await searchFusion(query, db, embeddingService, config, {
+			...options,
+			weights: {
+				entity: 0.25, // Entity-based search
+				relationship: 0.2, // Relationship-based search
+				semantic: 0.35, // Vector similarity search (highest weight)
+				concept: 0.2, // Concept-based search
 			},
-		);
+			enabledSearchTypes: ['entity', 'relationship', 'semantic', 'concept'],
+		});
 
 		if (!fusionResult.success) {
-			console.log(
-				`[FUSION SEARCH DEBUG] Fusion search failed:`,
-				fusionResult.error,
-			);
+			console.log(`[FUSION SEARCH DEBUG] Fusion search failed:`, fusionResult.error);
 			return fusionResult;
 		}
 
-		console.log(
-			`[FUSION SEARCH DEBUG] Fusion search found ${fusionResult.data.length} results`,
-		);
+		console.log(`[FUSION SEARCH DEBUG] Fusion search found ${fusionResult.data.length} results`);
 
 		// Convert fusion results to SearchResult format
-		const searchTriples = fusionResult.data.map((fusionTriple) => ({
+		const searchTriples = fusionResult.data.map(fusionTriple => ({
 			triple: fusionTriple.triple,
 			score: fusionTriple.scores.fusion,
-			searchType: "fusion" as const,
+			searchType: 'fusion' as const,
 		}));
 
 		console.log(
-			`[FUSION SEARCH DEBUG] Fusion search completed: ${searchTriples.length} triples found`,
+			`[FUSION SEARCH DEBUG] Fusion search completed: ${searchTriples.length} triples found`
 		);
 		if (searchTriples.length === 0) {
 			console.log(
-				`[FUSION SEARCH DEBUG] No triples found - concepts were already used within fusion search for triple discovery`,
+				`[FUSION SEARCH DEBUG] No triples found - concepts were already used within fusion search for triple discovery`
 			);
 		}
 
 		// Generate temporal metadata from triples
-		const temporal = generateTemporalMetadata(
-			searchTriples.map((st) => st.triple),
-		);
+		const temporal = generateTemporalMetadata(searchTriples.map(st => st.triple));
 
 		const searchResult: SearchResult = {
 			triples: searchTriples,
@@ -134,7 +113,7 @@ export async function searchByText(
 		};
 
 		console.log(
-			`[FUSION SEARCH DEBUG] Final result: ${searchResult.triples.length} triples (concepts used for triple discovery within fusion search)`,
+			`[FUSION SEARCH DEBUG] Final result: ${searchResult.triples.length} triples (concepts used for triple discovery within fusion search)`
 		);
 
 		return {
@@ -146,8 +125,8 @@ export async function searchByText(
 		return {
 			success: false,
 			error: {
-				type: "SEARCH_ERROR",
-				message: "Failed to search by text",
+				type: 'SEARCH_ERROR',
+				message: 'Failed to search by text',
 				cause: error,
 			},
 		};
@@ -161,23 +140,16 @@ export async function searchByEmbedding(
 	embedding: number[],
 	db: DatabaseAdapter,
 	config: KnowledgeGraphConfig,
-	options?: SearchOptions,
+	options?: SearchOptions
 ): Promise<Result<SearchResult>> {
 	try {
 		const topK = options?.limit || config.search?.topK || 10;
 		const minScore = options?.threshold || config.search?.minScore || 0.7;
 
-		console.log(
-			`[SEARCH DEBUG] Searching with topK=${topK}, minScore=${minScore}`,
-		);
+		console.log(`[SEARCH DEBUG] Searching with topK=${topK}, minScore=${minScore}`);
 
 		// Search triples by embedding with optional temporal filtering
-		const tripleResults = await db.searchByEmbedding(
-			embedding,
-			topK,
-			minScore,
-			options,
-		);
+		const tripleResults = await db.searchByEmbedding(embedding, topK, minScore, options);
 		if (!tripleResults.success) {
 			console.log(`[SEARCH DEBUG] Triple search failed:`, tripleResults.error);
 			return tripleResults;
@@ -193,35 +165,30 @@ export async function searchByEmbedding(
 			conceptResults = await db.searchConceptsByEmbedding?.(
 				embedding,
 				Math.min(topK, 10), // Limit concepts to reasonable number
-				minScore,
+				minScore
 			);
 			// Fallback to text-based concept search if embedding search not available
 			if (!conceptResults) {
 				console.log(`[SEARCH DEBUG] Falling back to text-based concept search`);
-				conceptResults = await db.searchConcepts("", undefined);
+				conceptResults = await db.searchConcepts('', undefined);
 			} else {
 				console.log(
-					`[SEARCH DEBUG] Found ${conceptResults.success ? conceptResults.data.length : 0} concepts via embedding`,
+					`[SEARCH DEBUG] Found ${conceptResults.success ? conceptResults.data.length : 0} concepts via embedding`
 				);
 			}
 		} else {
-			console.log(
-				`[SEARCH DEBUG] Found triples, skipping concept search to prioritize triples`,
-			);
+			console.log(`[SEARCH DEBUG] Found triples, skipping concept search to prioritize triples`);
 			// If triples found, return empty concepts to prioritize triples
 			conceptResults = { success: true, data: [] };
 		}
 
 		if (!conceptResults || !conceptResults.success) {
-			console.log(
-				`[SEARCH DEBUG] Concept search failed:`,
-				conceptResults?.error,
-			);
+			console.log(`[SEARCH DEBUG] Concept search failed:`, conceptResults?.error);
 			return {
 				success: false,
 				error: conceptResults?.error || {
-					type: "SEARCH_ERROR",
-					message: "Concept search failed",
+					type: 'SEARCH_ERROR',
+					message: 'Concept search failed',
 				},
 			};
 		}
@@ -234,7 +201,7 @@ export async function searchByEmbedding(
 			triples: tripleResults.data.map((triple: any) => ({
 				triple,
 				score: triple._similarity || 0.0, // Use actual similarity from vector search
-				searchType: "semantic" as const,
+				searchType: 'semantic' as const,
 			})),
 			concepts: conceptResults.data.map((concept: any) => ({
 				concept,
@@ -251,8 +218,8 @@ export async function searchByEmbedding(
 		return {
 			success: false,
 			error: {
-				type: "SEARCH_ERROR",
-				message: "Failed to search by embedding",
+				type: 'SEARCH_ERROR',
+				message: 'Failed to search by embedding',
 				cause: error,
 			},
 		};
@@ -265,7 +232,7 @@ export async function searchByEmbedding(
 export async function searchConcepts(
 	query: string,
 	db: DatabaseAdapter,
-	abstraction?: string,
+	abstraction?: string
 ): Promise<Result<ConceptNode[]>> {
 	try {
 		const result = await db.searchConcepts(query, abstraction);
@@ -274,8 +241,8 @@ export async function searchConcepts(
 		return {
 			success: false,
 			error: {
-				type: "SEARCH_ERROR",
-				message: "Failed to search concepts",
+				type: 'SEARCH_ERROR',
+				message: 'Failed to search concepts',
 				cause: error,
 			},
 		};

@@ -2,34 +2,27 @@ import type {
 	KnowledgeTriple,
 	ConceptNode,
 	KnowledgeGraphConfig,
-} from "../../shared/types/index.js";
-import type {
-	DatabaseAdapter,
-	EmbeddingService,
-	Result,
-} from "../../shared/services/types.js";
-import type { StoreResult, GraphStats } from "./types.js";
-import { v4 as uuidv4 } from "uuid";
+} from '../../shared/types/index.js';
+import type { DatabaseAdapter, EmbeddingService, Result } from '~/shared/types/index.js';
+import type { GraphStats } from '~/shared/types/index.js';
+import type { StoreResult } from './types.js';
+import { v4 as uuidv4 } from 'uuid';
 
 export interface EntityEnumerationOptions {
-	role?: "subject" | "object" | "both";
+	role?: 'subject' | 'object' | 'both';
 	min_occurrence?: number;
 	sources?: string[];
-	types?: Array<
-		"entity-entity" | "entity-event" | "event-event" | "emotional-context"
-	>;
+	types?: Array<'entity-entity' | 'entity-event' | 'event-event' | 'emotional-context'>;
 	limit?: number;
-	sort_by?: "frequency" | "alphabetical" | "recent";
+	sort_by?: 'frequency' | 'alphabetical' | 'recent';
 }
 
 export interface EntityEnumerationResult {
 	entity: string;
 	occurrences: number;
-	roles: Array<"subject" | "object">;
+	roles: Array<'subject' | 'object'>;
 	sources: string[];
-	types: Array<
-		"entity-entity" | "entity-event" | "event-event" | "emotional-context"
-	>;
+	types: Array<'entity-entity' | 'entity-event' | 'event-event' | 'emotional-context'>;
 	last_seen: string;
 	confidence?: number;
 }
@@ -47,23 +40,21 @@ export async function storeTriples(
 	triples: KnowledgeTriple[],
 	db: DatabaseAdapter,
 	config: KnowledgeGraphConfig,
-	embeddingService?: EmbeddingService,
+	embeddingService?: EmbeddingService
 ): Promise<Result<StoreResult>> {
 	try {
 		// Generate IDs for each triple
-		const triplesWithIds = triples.map((triple) => ({
+		const triplesWithIds = triples.map(triple => ({
 			...triple,
 			id: generateTripleId(triple),
 		}));
 
 		// Check for existing triples
-		const ids = triplesWithIds.map((t) => t.id);
+		const ids = triplesWithIds.map(t => t.id);
 		const existingIds = await db.checkExistingTriples(ids);
 
 		// Filter out duplicates
-		const newTriples = triplesWithIds.filter(
-			(t) => !existingIds.includes(t.id),
-		);
+		const newTriples = triplesWithIds.filter(t => !existingIds.includes(t.id));
 
 		if (newTriples.length === 0) {
 			return {
@@ -84,29 +75,33 @@ export async function storeTriples(
 
 		// Generate and store vectors for the new triples (if embedding service available)
 		let vectorsGenerated = 0;
-		
+
 		console.log(`[VECTOR DEBUG] embeddingService present: ${!!embeddingService}`);
 		console.log(`[VECTOR DEBUG] newTriples.length: ${newTriples.length}`);
 		console.log(`[VECTOR DEBUG] embeddingService type: ${typeof embeddingService}`);
-		
+
 		if (embeddingService && newTriples.length > 0) {
 			try {
-				console.log(`[VECTOR GENERATION] Starting vector generation for ${newTriples.length} new triples...`);
-				console.log(`[VECTOR GENERATION] Sample triple: "${newTriples[0]?.subject}" → "${newTriples[0]?.predicate}" → "${newTriples[0]?.object}"`);
-				
+				console.log(
+					`[VECTOR GENERATION] Starting vector generation for ${newTriples.length} new triples...`
+				);
+				console.log(
+					`[VECTOR GENERATION] Sample triple: "${newTriples[0]?.subject}" → "${newTriples[0]?.predicate}" → "${newTriples[0]?.object}"`
+				);
+
 				const vectorResult = await generateAndStoreVectors(
 					newTriples,
 					embeddingService,
 					db,
-					config,
+					config
 				);
-				
+
 				console.log(`[VECTOR GENERATION] Vector generation result:`, {
 					success: vectorResult.success,
 					vectorsStored: vectorResult.success ? vectorResult.data.vectorsStored : 0,
-					error: vectorResult.success ? null : vectorResult.error
+					error: vectorResult.success ? null : vectorResult.error,
 				});
-				
+
 				if (vectorResult.success) {
 					vectorsGenerated = vectorResult.data.vectorsStored;
 					console.log(`[VECTOR GENERATION] ✅ Successfully stored ${vectorsGenerated} vectors`);
@@ -120,7 +115,9 @@ export async function storeTriples(
 			}
 		} else {
 			if (!embeddingService) {
-				console.warn(`[VECTOR DEBUG] ⚠️  No embedding service provided - vectors will not be generated`);
+				console.warn(
+					`[VECTOR DEBUG] ⚠️  No embedding service provided - vectors will not be generated`
+				);
 			}
 			if (newTriples.length === 0) {
 				console.warn(`[VECTOR DEBUG] ⚠️  No new triples to generate vectors for`);
@@ -140,8 +137,8 @@ export async function storeTriples(
 		return {
 			success: false,
 			error: {
-				type: "STORAGE_ERROR",
-				message: "Failed to store triples",
+				type: 'STORAGE_ERROR',
+				message: 'Failed to store triples',
 				cause: error,
 			},
 		};
@@ -161,7 +158,7 @@ export async function storeConcepts(
 	concepts: ConceptNode[],
 	db: DatabaseAdapter,
 	config: KnowledgeGraphConfig,
-	embeddingService?: EmbeddingService,
+	embeddingService?: EmbeddingService
 ): Promise<Result<{ conceptsStored: number; vectorsGenerated?: number }>> {
 	try {
 		// Store concepts first
@@ -175,39 +172,51 @@ export async function storeConcepts(
 		// Generate and store vectors for the concepts (if embedding service available)
 		console.log(`[CONCEPT VECTOR DEBUG] embeddingService present: ${!!embeddingService}`);
 		console.log(`[CONCEPT VECTOR DEBUG] concepts.length: ${concepts.length}`);
-		
+
 		if (embeddingService && concepts.length > 0) {
 			try {
-				console.log(`[CONCEPT VECTOR GENERATION] Starting vector generation for ${concepts.length} concepts...`);
+				console.log(
+					`[CONCEPT VECTOR GENERATION] Starting vector generation for ${concepts.length} concepts...`
+				);
 				console.log(`[CONCEPT VECTOR GENERATION] Sample concept: "${concepts[0]?.concept}"`);
-				
+
 				const vectorResult = await generateAndStoreConceptVectors(
 					concepts,
 					embeddingService,
 					db,
-					config,
+					config
 				);
-				
+
 				console.log(`[CONCEPT VECTOR GENERATION] Vector generation result:`, {
 					success: vectorResult.success,
 					vectorsStored: vectorResult.success ? vectorResult.data.vectorsStored : 0,
-					error: vectorResult.success ? null : vectorResult.error
+					error: vectorResult.success ? null : vectorResult.error,
 				});
-				
+
 				if (vectorResult.success) {
 					vectorsGenerated = vectorResult.data.vectorsStored;
-					console.log(`[CONCEPT VECTOR GENERATION] ✅ Successfully stored ${vectorsGenerated} concept vectors`);
+					console.log(
+						`[CONCEPT VECTOR GENERATION] ✅ Successfully stored ${vectorsGenerated} concept vectors`
+					);
 				} else {
-					console.warn(`[CONCEPT VECTOR GENERATION] ❌ Failed to store concept vectors:`, vectorResult.error);
+					console.warn(
+						`[CONCEPT VECTOR GENERATION] ❌ Failed to store concept vectors:`,
+						vectorResult.error
+					);
 					// Don't fail the entire operation if vector generation fails
 				}
 			} catch (error) {
-				console.warn(`[CONCEPT VECTOR GENERATION] ❌ Concept vector generation error (non-blocking):`, error);
+				console.warn(
+					`[CONCEPT VECTOR GENERATION] ❌ Concept vector generation error (non-blocking):`,
+					error
+				);
 				// Vector generation is non-blocking - continue with success
 			}
 		} else {
 			if (!embeddingService) {
-				console.warn(`[CONCEPT VECTOR DEBUG] ⚠️  No embedding service provided - concept vectors will not be generated`);
+				console.warn(
+					`[CONCEPT VECTOR DEBUG] ⚠️  No embedding service provided - concept vectors will not be generated`
+				);
 			}
 			if (concepts.length === 0) {
 				console.warn(`[CONCEPT VECTOR DEBUG] ⚠️  No concepts to generate vectors for`);
@@ -225,8 +234,8 @@ export async function storeConcepts(
 		return {
 			success: false,
 			error: {
-				type: "STORAGE_ERROR",
-				message: "Failed to store concepts",
+				type: 'STORAGE_ERROR',
+				message: 'Failed to store concepts',
 				cause: error,
 			},
 		};
@@ -236,9 +245,7 @@ export async function storeConcepts(
 /**
  * Get knowledge graph statistics
  */
-export async function getStats(
-	db: DatabaseAdapter,
-): Promise<Result<GraphStats>> {
+export async function getStats(db: DatabaseAdapter): Promise<Result<GraphStats>> {
 	try {
 		const [totalTriples, totalConcepts, triplesByType] = await Promise.all([
 			db.getTripleCount(),
@@ -259,8 +266,8 @@ export async function getStats(
 		return {
 			success: false,
 			error: {
-				type: "STORAGE_ERROR",
-				message: "Failed to get graph statistics",
+				type: 'STORAGE_ERROR',
+				message: 'Failed to get graph statistics',
 				cause: error,
 			},
 		};
@@ -272,7 +279,7 @@ export async function getStats(
  */
 export function generateTripleId(triple: KnowledgeTriple): string {
 	const key = `${triple.subject}|${triple.predicate}|${triple.object}|${triple.type}`;
-	return Buffer.from(key).toString("base64").replace(/[+/=]/g, "_");
+	return Buffer.from(key).toString('base64').replace(/[+/=]/g, '_');
 }
 
 /**
@@ -280,7 +287,7 @@ export function generateTripleId(triple: KnowledgeTriple): string {
  */
 export function generateConceptId(concept: ConceptNode): string {
 	const key = `${concept.concept}|${concept.abstraction_level}|${concept.source}`;
-	return Buffer.from(key).toString("base64").replace(/[+/=]/g, "_");
+	return Buffer.from(key).toString('base64').replace(/[+/=]/g, '_');
 }
 
 /**
@@ -288,16 +295,16 @@ export function generateConceptId(concept: ConceptNode): string {
  */
 export async function enumerateEntities(
 	options: EntityEnumerationOptions,
-	db: DatabaseAdapter,
+	db: DatabaseAdapter
 ): Promise<Result<EntityEnumerationResult[]>> {
 	try {
 		const {
-			role = "both",
+			role = 'both',
 			min_occurrence = 1,
 			sources = [],
 			types = [],
 			limit = 100,
-			sort_by = "frequency",
+			sort_by = 'frequency',
 		} = options;
 
 		// Get all triples from database
@@ -311,11 +318,9 @@ export async function enumerateEntities(
 			string,
 			{
 				occurrences: number;
-				roles: Set<"subject" | "object">;
+				roles: Set<'subject' | 'object'>;
 				sources: Set<string>;
-				types: Set<
-					"entity-entity" | "entity-event" | "event-event" | "emotional-context"
-				>;
+				types: Set<'entity-entity' | 'entity-event' | 'event-event' | 'emotional-context'>;
 				last_seen: string;
 				confidence?: number;
 			}
@@ -334,7 +339,7 @@ export async function enumerateEntities(
 			}
 
 			// Process subject
-			if (role === "subject" || role === "both") {
+			if (role === 'subject' || role === 'both') {
 				const entity = triple.subject;
 				if (!entityStats.has(entity)) {
 					entityStats.set(entity, {
@@ -348,22 +353,19 @@ export async function enumerateEntities(
 
 				const stats = entityStats.get(entity)!;
 				stats.occurrences++;
-				stats.roles.add("subject");
+				stats.roles.add('subject');
 				stats.sources.add(triple.source);
 				stats.types.add(triple.type);
 				if (triple.extracted_at > stats.last_seen) {
 					stats.last_seen = triple.extracted_at;
 				}
-				if (
-					triple.confidence &&
-					(!stats.confidence || triple.confidence > stats.confidence)
-				) {
+				if (triple.confidence && (!stats.confidence || triple.confidence > stats.confidence)) {
 					stats.confidence = triple.confidence;
 				}
 			}
 
 			// Process object
-			if (role === "object" || role === "both") {
+			if (role === 'object' || role === 'both') {
 				const entity = triple.object;
 				if (!entityStats.has(entity)) {
 					entityStats.set(entity, {
@@ -377,16 +379,13 @@ export async function enumerateEntities(
 
 				const stats = entityStats.get(entity)!;
 				stats.occurrences++;
-				stats.roles.add("object");
+				stats.roles.add('object');
 				stats.sources.add(triple.source);
 				stats.types.add(triple.type);
 				if (triple.extracted_at > stats.last_seen) {
 					stats.last_seen = triple.extracted_at;
 				}
-				if (
-					triple.confidence &&
-					(!stats.confidence || triple.confidence > stats.confidence)
-				) {
+				if (triple.confidence && (!stats.confidence || triple.confidence > stats.confidence)) {
 					stats.confidence = triple.confidence;
 				}
 			}
@@ -407,13 +406,13 @@ export async function enumerateEntities(
 
 		// Sort results
 		switch (sort_by) {
-			case "frequency":
+			case 'frequency':
 				results.sort((a, b) => b.occurrences - a.occurrences);
 				break;
-			case "alphabetical":
+			case 'alphabetical':
 				results.sort((a, b) => a.entity.localeCompare(b.entity));
 				break;
-			case "recent":
+			case 'recent':
 				results.sort((a, b) => b.last_seen.localeCompare(a.last_seen));
 				break;
 		}
@@ -431,8 +430,8 @@ export async function enumerateEntities(
 		return {
 			success: false,
 			error: {
-				type: "ENUMERATION_ERROR",
-				message: "Failed to enumerate entities",
+				type: 'ENUMERATION_ERROR',
+				message: 'Failed to enumerate entities',
 				cause: error,
 			},
 		};
@@ -447,11 +446,11 @@ async function generateAndStoreVectors(
 	triples: KnowledgeTriple[],
 	embeddingService: EmbeddingService,
 	db: DatabaseAdapter,
-	config: KnowledgeGraphConfig,
+	config: KnowledgeGraphConfig
 ): Promise<Result<{ vectorsStored: number }>> {
 	try {
 		console.log(`[VECTOR DETAIL] Starting vector generation for ${triples.length} triples`);
-		
+
 		const entityVectors: Array<{
 			vector_id: string;
 			text: string;
@@ -484,38 +483,47 @@ async function generateAndStoreVectors(
 			uniqueEntities.add(triple.subject);
 			uniqueEntities.add(triple.object);
 			uniqueRelationships.add(triple.predicate);
-			
+
 			// Generate semantic text combining all parts of the triple
 			const semanticText = `${triple.subject} ${triple.predicate} ${triple.object}`;
 			semanticTexts.push(semanticText);
 			tripleIds.push((triple as any).id);
 		}
 
-		console.log(`[VECTOR DETAIL] Collected ${uniqueEntities.size} entities, ${uniqueRelationships.size} relationships, ${semanticTexts.length} semantic texts`);
+		console.log(
+			`[VECTOR DETAIL] Collected ${uniqueEntities.size} entities, ${uniqueRelationships.size} relationships, ${semanticTexts.length} semantic texts`
+		);
 		console.log(`[VECTOR DETAIL] Sample semantic text: "${semanticTexts[0]}"`);
 
 		const batchSize = config.embeddings?.batchSize || 32;
 		let totalVectors = 0;
-		
+
 		console.log(`[VECTOR DETAIL] Using batch size: ${batchSize}`);
 
 		// Generate entity embeddings
 		const entityArray = Array.from(uniqueEntities);
-		console.log(`[VECTOR DETAIL] Processing ${entityArray.length} entities in ${Math.ceil(entityArray.length / batchSize)} batches`);
-		
+		console.log(
+			`[VECTOR DETAIL] Processing ${entityArray.length} entities in ${Math.ceil(entityArray.length / batchSize)} batches`
+		);
+
 		for (let i = 0; i < entityArray.length; i += batchSize) {
 			const batch = entityArray.slice(i, i + batchSize);
-			console.log(`[VECTOR DETAIL] Generating embeddings for entity batch ${Math.floor(i / batchSize) + 1}: ${batch.length} entities`);
-			
+			console.log(
+				`[VECTOR DETAIL] Generating embeddings for entity batch ${Math.floor(i / batchSize) + 1}: ${batch.length} entities`
+			);
+
 			try {
 				const embeddings = await embeddingService.embedBatch(batch);
-				console.log(`[VECTOR DETAIL] Entity embeddings result:`, { success: embeddings.success, dataLength: embeddings.success ? embeddings.data.length : 0 });
-				
+				console.log(`[VECTOR DETAIL] Entity embeddings result:`, {
+					success: embeddings.success,
+					dataLength: embeddings.success ? embeddings.data.length : 0,
+				});
+
 				if (embeddings.success) {
 					for (let j = 0; j < batch.length; j++) {
 						const entity = batch[j];
 						const embedding = embeddings.data[j];
-						
+
 						// Find all triples that contain this entity
 						for (const triple of triples) {
 							if (triple.subject === entity || triple.object === entity) {
@@ -543,12 +551,12 @@ async function generateAndStoreVectors(
 		for (let i = 0; i < relationshipArray.length; i += batchSize) {
 			const batch = relationshipArray.slice(i, i + batchSize);
 			const embeddings = await embeddingService.embedBatch(batch);
-			
+
 			if (embeddings.success) {
 				for (let j = 0; j < batch.length; j++) {
 					const relationship = batch[j];
 					const embedding = embeddings.data[j];
-					
+
 					// Find all triples that contain this relationship
 					for (const triple of triples) {
 						if (triple.predicate === relationship) {
@@ -565,23 +573,28 @@ async function generateAndStoreVectors(
 		}
 
 		// Generate semantic embeddings (full triple content)
-		console.log(`[VECTOR DETAIL] Processing ${semanticTexts.length} semantic texts in ${Math.ceil(semanticTexts.length / batchSize)} batches`);
-		
+		console.log(
+			`[VECTOR DETAIL] Processing ${semanticTexts.length} semantic texts in ${Math.ceil(semanticTexts.length / batchSize)} batches`
+		);
+
 		for (let i = 0; i < semanticTexts.length; i += batchSize) {
 			const batch = semanticTexts.slice(i, i + batchSize);
 			const batchIds = tripleIds.slice(i, i + batchSize);
-			console.log(`[VECTOR DETAIL] Generating semantic embeddings for batch ${Math.floor(i / batchSize) + 1}: ${batch.length} texts`);
+			console.log(
+				`[VECTOR DETAIL] Generating semantic embeddings for batch ${Math.floor(i / batchSize) + 1}: ${batch.length} texts`
+			);
 			console.log(`[VECTOR DETAIL] Sample text: "${batch[0]}"`);
 			console.log(`[VECTOR DETAIL] Sample triple ID: "${batchIds[0]}"`);
-			
+
 			try {
 				const embeddings = await embeddingService.embedBatch(batch);
-				console.log(`[VECTOR DETAIL] Semantic embeddings result:`, { 
-					success: embeddings.success, 
+				console.log(`[VECTOR DETAIL] Semantic embeddings result:`, {
+					success: embeddings.success,
 					dataLength: embeddings.success ? embeddings.data.length : 0,
-					firstEmbeddingLength: embeddings.success && embeddings.data[0] ? embeddings.data[0].length : 0
+					firstEmbeddingLength:
+						embeddings.success && embeddings.data[0] ? embeddings.data[0].length : 0,
 				});
-				
+
 				if (embeddings.success) {
 					for (let j = 0; j < batch.length; j++) {
 						semanticVectors.push({
@@ -602,8 +615,10 @@ async function generateAndStoreVectors(
 
 		// Store all vectors in database
 		totalVectors = entityVectors.length + relationshipVectors.length + semanticVectors.length;
-		console.log(`[VECTOR DETAIL] Preparing to store ${totalVectors} vectors (${entityVectors.length} entity, ${relationshipVectors.length} relationship, ${semanticVectors.length} semantic)`);
-		
+		console.log(
+			`[VECTOR DETAIL] Preparing to store ${totalVectors} vectors (${entityVectors.length} entity, ${relationshipVectors.length} relationship, ${semanticVectors.length} semantic)`
+		);
+
 		if (totalVectors === 0) {
 			console.warn(`[VECTOR DETAIL] ⚠️  No vectors to store - all embedding generations failed`);
 			return {
@@ -613,7 +628,7 @@ async function generateAndStoreVectors(
 				},
 			};
 		}
-		
+
 		try {
 			const storeResult = await db.storeVectors({
 				entity: entityVectors,
@@ -623,7 +638,7 @@ async function generateAndStoreVectors(
 
 			console.log(`[VECTOR DETAIL] Vector storage result:`, {
 				success: storeResult.success,
-				error: storeResult.success ? null : storeResult.error
+				error: storeResult.success ? null : storeResult.error,
 			});
 
 			if (!storeResult.success) {
@@ -631,7 +646,9 @@ async function generateAndStoreVectors(
 				return storeResult;
 			}
 
-			console.log(`[VECTOR GENERATION] ✅ Successfully generated and stored ${totalVectors} vectors (${entityVectors.length} entity, ${relationshipVectors.length} relationship, ${semanticVectors.length} semantic)`);
+			console.log(
+				`[VECTOR GENERATION] ✅ Successfully generated and stored ${totalVectors} vectors (${entityVectors.length} entity, ${relationshipVectors.length} relationship, ${semanticVectors.length} semantic)`
+			);
 
 			return {
 				success: true,
@@ -644,8 +661,8 @@ async function generateAndStoreVectors(
 			return {
 				success: false,
 				error: {
-					type: "VECTOR_STORAGE_ERROR",
-					message: "Failed to store vectors in database",
+					type: 'VECTOR_STORAGE_ERROR',
+					message: 'Failed to store vectors in database',
 					cause: error,
 				},
 			};
@@ -654,8 +671,8 @@ async function generateAndStoreVectors(
 		return {
 			success: false,
 			error: {
-				type: "VECTOR_GENERATION_ERROR",
-				message: "Failed to generate and store vectors",
+				type: 'VECTOR_GENERATION_ERROR',
+				message: 'Failed to generate and store vectors',
 				cause: error,
 			},
 		};
@@ -670,11 +687,13 @@ async function generateAndStoreConceptVectors(
 	concepts: ConceptNode[],
 	embeddingService: EmbeddingService,
 	db: DatabaseAdapter,
-	config: KnowledgeGraphConfig,
+	config: KnowledgeGraphConfig
 ): Promise<Result<{ vectorsStored: number }>> {
 	try {
-		console.log(`[CONCEPT VECTOR DETAIL] Starting concept vector generation for ${concepts.length} concepts`);
-		
+		console.log(
+			`[CONCEPT VECTOR DETAIL] Starting concept vector generation for ${concepts.length} concepts`
+		);
+
 		if (concepts.length === 0) {
 			console.log(`[CONCEPT VECTOR DETAIL] No concepts to process`);
 			return {
@@ -695,7 +714,7 @@ async function generateAndStoreConceptVectors(
 		// Generate concept texts for embedding
 		const conceptTexts: string[] = [];
 		const conceptIds: string[] = [];
-		
+
 		for (const concept of concepts) {
 			// Create rich text representation of the concept
 			const conceptText = concept.concept; // Start with the concept name
@@ -713,19 +732,22 @@ async function generateAndStoreConceptVectors(
 		for (let i = 0; i < conceptTexts.length; i += batchSize) {
 			const batch = conceptTexts.slice(i, i + batchSize);
 			const batchIds = conceptIds.slice(i, i + batchSize);
-			
-			console.log(`[CONCEPT VECTOR DETAIL] Generating concept embeddings for batch ${Math.floor(i / batchSize) + 1}: ${batch.length} concepts`);
+
+			console.log(
+				`[CONCEPT VECTOR DETAIL] Generating concept embeddings for batch ${Math.floor(i / batchSize) + 1}: ${batch.length} concepts`
+			);
 			console.log(`[CONCEPT VECTOR DETAIL] Sample concept in batch: "${batch[0]}"`);
 			console.log(`[CONCEPT VECTOR DETAIL] Sample concept ID: "${batchIds[0]}"`);
-			
+
 			try {
 				const embeddings = await embeddingService.embedBatch(batch);
-				console.log(`[CONCEPT VECTOR DETAIL] Concept embeddings result:`, { 
-					success: embeddings.success, 
+				console.log(`[CONCEPT VECTOR DETAIL] Concept embeddings result:`, {
+					success: embeddings.success,
 					dataLength: embeddings.success ? embeddings.data.length : 0,
-					firstEmbeddingLength: embeddings.success && embeddings.data[0] ? embeddings.data[0].length : 0
+					firstEmbeddingLength:
+						embeddings.success && embeddings.data[0] ? embeddings.data[0].length : 0,
 				});
-				
+
 				if (embeddings.success) {
 					for (let j = 0; j < batch.length; j++) {
 						conceptVectors.push({
@@ -735,7 +757,9 @@ async function generateAndStoreConceptVectors(
 							concept_node_id: batchIds[j],
 						});
 					}
-					console.log(`[CONCEPT VECTOR DETAIL] Added ${batch.length} concept vectors for this batch`);
+					console.log(
+						`[CONCEPT VECTOR DETAIL] Added ${batch.length} concept vectors for this batch`
+					);
 				} else {
 					console.warn(`[CONCEPT VECTOR DETAIL] ❌ Concept embedding failed:`, embeddings.error);
 				}
@@ -747,9 +771,11 @@ async function generateAndStoreConceptVectors(
 		// Store concept vectors in database
 		const totalVectors = conceptVectors.length;
 		console.log(`[CONCEPT VECTOR DETAIL] Preparing to store ${totalVectors} concept vectors`);
-		
+
 		if (totalVectors === 0) {
-			console.warn(`[CONCEPT VECTOR DETAIL] ⚠️  No concept vectors to store - all embedding generations failed`);
+			console.warn(
+				`[CONCEPT VECTOR DETAIL] ⚠️  No concept vectors to store - all embedding generations failed`
+			);
 			return {
 				success: true,
 				data: {
@@ -757,7 +783,7 @@ async function generateAndStoreConceptVectors(
 				},
 			};
 		}
-		
+
 		try {
 			const storeResult = await db.storeVectors({
 				concept: conceptVectors,
@@ -765,15 +791,20 @@ async function generateAndStoreConceptVectors(
 
 			console.log(`[CONCEPT VECTOR DETAIL] Concept vector storage result:`, {
 				success: storeResult.success,
-				error: storeResult.success ? null : storeResult.error
+				error: storeResult.success ? null : storeResult.error,
 			});
 
 			if (!storeResult.success) {
-				console.warn(`[CONCEPT VECTOR DETAIL] ❌ Failed to store concept vectors:`, storeResult.error);
+				console.warn(
+					`[CONCEPT VECTOR DETAIL] ❌ Failed to store concept vectors:`,
+					storeResult.error
+				);
 				return storeResult;
 			}
 
-			console.log(`[CONCEPT VECTOR GENERATION] ✅ Successfully generated and stored ${totalVectors} concept vectors`);
+			console.log(
+				`[CONCEPT VECTOR GENERATION] ✅ Successfully generated and stored ${totalVectors} concept vectors`
+			);
 
 			return {
 				success: true,
@@ -786,8 +817,8 @@ async function generateAndStoreConceptVectors(
 			return {
 				success: false,
 				error: {
-					type: "CONCEPT_VECTOR_STORAGE_ERROR",
-					message: "Failed to store concept vectors in database",
+					type: 'CONCEPT_VECTOR_STORAGE_ERROR',
+					message: 'Failed to store concept vectors in database',
 					cause: error,
 				},
 			};
@@ -796,8 +827,8 @@ async function generateAndStoreConceptVectors(
 		return {
 			success: false,
 			error: {
-				type: "CONCEPT_VECTOR_GENERATION_ERROR",
-				message: "Failed to generate and store concept vectors",
+				type: 'CONCEPT_VECTOR_GENERATION_ERROR',
+				message: 'Failed to generate and store concept vectors',
 				cause: error,
 			},
 		};

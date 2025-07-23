@@ -1,17 +1,15 @@
-import { openai } from "@ai-sdk/openai";
-import { embed } from "ai";
-import type { EmbeddingService, Result, EmbeddingConfig } from "./types.js";
+import { openai } from '@ai-sdk/openai';
+import { embed } from 'ai';
+import type { EmbeddingService, Result, EmbeddingConfig } from '../types/index.js';
 
 /**
  * OpenAI embedding service implementation
  */
-export function createEmbeddingService(
-	config: EmbeddingConfig,
-): EmbeddingService {
+export function createEmbeddingService(config: EmbeddingConfig): EmbeddingService {
 	return {
 		async embed(
 			text: string,
-			context?: { operation_type?: string; thread_id?: string },
+			context?: { operation_type?: string; thread_id?: string }
 		): Promise<Result<number[]>> {
 			try {
 				const modelConfig = { ...config };
@@ -29,8 +27,8 @@ export function createEmbeddingService(
 				return {
 					success: false,
 					error: {
-						type: "EMBEDDING_ERROR",
-						message: "Failed to generate embedding",
+						type: 'EMBEDDING_ERROR',
+						message: 'Failed to generate embedding',
 						cause: error,
 					},
 				};
@@ -39,7 +37,7 @@ export function createEmbeddingService(
 
 		async embedBatch(
 			texts: string[],
-			context?: { operation_type?: string; thread_id?: string },
+			context?: { operation_type?: string; thread_id?: string }
 		): Promise<Result<number[][]>> {
 			try {
 				const modelConfig = { ...config };
@@ -49,7 +47,7 @@ export function createEmbeddingService(
 				// Process in batches to avoid rate limits
 				for (let i = 0; i < texts.length; i += batchSize) {
 					const batch = texts.slice(i, i + batchSize);
-					const batchPromises = batch.map(async (text) => {
+					const batchPromises = batch.map(async text => {
 						const { embedding } = await embed({
 							model: openai.embedding(modelConfig.model),
 							value: text,
@@ -62,7 +60,7 @@ export function createEmbeddingService(
 
 					// Add small delay between batches to respect rate limits
 					if (i + batchSize < texts.length) {
-						await new Promise((resolve) => setTimeout(resolve, 100));
+						await new Promise(resolve => setTimeout(resolve, 100));
 					}
 				}
 
@@ -74,8 +72,8 @@ export function createEmbeddingService(
 				return {
 					success: false,
 					error: {
-						type: "EMBEDDING_ERROR",
-						message: "Failed to generate batch embeddings",
+						type: 'EMBEDDING_ERROR',
+						message: 'Failed to generate batch embeddings',
 						cause: error,
 					},
 				};

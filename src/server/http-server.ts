@@ -3,32 +3,19 @@
  * Provides REST API endpoints alongside STDIO MCP transport
  */
 
-import express from "express";
-import cors from "cors";
-import compression from "compression";
-import helmet from "helmet";
-import { rateLimit } from "express-rate-limit";
-import type { Server } from "http";
+import express from 'express';
+import cors from 'cors';
+import compression from 'compression';
+import helmet from 'helmet';
+import type { Server } from 'http';
 
-import swaggerUi from "swagger-ui-express";
-import { createKnowledgeRoutes } from "./routes/knowledge-routes.js";
-import { KnowledgeGraphSSEServer } from "./sse-server.js";
-import { openApiSpec } from "./docs/openapi.js";
-import type { KnowledgeGraphConfig } from "~/shared/types/index.js";
-import type {
-	DatabaseAdapter,
-	EmbeddingService,
-	AIProvider,
-} from "~/shared/services/types.js";
-import type { TokenTrackingService } from "~/shared/services/token-tracking-service.js";
-
+import { createKnowledgeRoutes } from './routes/knowledge-routes.js';
+import type { KnowledgeGraphConfig } from '~/shared/types/index.js';
+import type { DatabaseAdapter, EmbeddingService, AIProvider } from '~/shared/types/index.js';
 export interface HttpServerConfig {
 	port: number;
 	basePath: string;
 	corsOrigins: string | string[];
-	rateLimitWindow: number; // minutes
-	rateLimitMax: number; // requests per window
-	enableSSE?: boolean; // Enable SSE/MCP endpoint
 }
 
 export interface HttpServerDependencies {
@@ -36,7 +23,6 @@ export interface HttpServerDependencies {
 	db: DatabaseAdapter;
 	embeddingService: EmbeddingService;
 	aiProvider: AIProvider;
-	tokenTracker?: TokenTrackingService;
 }
 
 export class KnowledgeGraphHttpServer {
@@ -44,12 +30,8 @@ export class KnowledgeGraphHttpServer {
 	private server: Server | null = null;
 	private httpConfig: HttpServerConfig;
 	private dependencies: HttpServerDependencies;
-	private sseServer: KnowledgeGraphSSEServer | null = null;
 
-	constructor(
-		httpConfig: HttpServerConfig,
-		dependencies: HttpServerDependencies,
-	) {
+	constructor(httpConfig: HttpServerConfig, dependencies: HttpServerDependencies) {
 		this.httpConfig = httpConfig;
 		this.dependencies = dependencies;
 		this.app = express();
@@ -66,68 +48,51 @@ export class KnowledgeGraphHttpServer {
 						defaultSrc: ["'self'"],
 						styleSrc: ["'self'", "'unsafe-inline'"],
 						scriptSrc: ["'self'"],
-						imgSrc: ["'self'", "data:", "https:"],
+						imgSrc: ["'self'", 'data:', 'https:'],
 					},
 				},
-			}),
+			})
 		);
 
 		// CORS configuration
 		this.app.use(
 			cors({
 				origin: this.httpConfig.corsOrigins,
-				methods: ["GET", "POST", "OPTIONS"],
+				methods: ['GET', 'POST', 'OPTIONS'],
 				allowedHeaders: [
-					"Content-Type",
-					"Authorization",
-					"X-MCP-Version",
-					"X-MCP-Client-Name",
-					"X-MCP-Client-Version",
+					'Content-Type',
+					'Authorization',
+					'X-MCP-Version',
+					'X-MCP-Client-Name',
+					'X-MCP-Client-Version',
 				],
-				exposedHeaders: [
-					"X-MCP-Version",
-					"X-MCP-Server-Name",
-					"X-MCP-Capabilities",
-				],
+				exposedHeaders: ['X-MCP-Version', 'X-MCP-Server-Name', 'X-MCP-Capabilities'],
 				credentials: false,
-			}),
+			})
 		);
 
 		// Compression
 		this.app.use(compression());
 
-		// Rate limiting
-		const limiter = rateLimit({
-			windowMs: this.httpConfig.rateLimitWindow * 60 * 1000, // Convert minutes to ms
-			max: this.httpConfig.rateLimitMax,
-			message: {
-				error: "Too many requests",
-				details: "Rate limit exceeded. Please try again later.",
-			},
-			standardHeaders: true,
-			legacyHeaders: false,
-		});
-		this.app.use(limiter);
-
 		// Body parsing
-		this.app.use(express.json({ limit: "10mb" }));
-		this.app.use(express.urlencoded({ extended: true, limit: "10mb" }));
+		this.app.use(express.json({ limit: '10mb' }));
+		this.app.use(express.urlencoded({ extended: true, limit: '10mb' }));
 
 		// MCP Headers middleware
 		this.app.use((req, res, next) => {
 			// Add MCP server headers to all responses
-			res.setHeader("X-MCP-Version", "2024-11-05");
-			res.setHeader("X-MCP-Server-Name", "knowledge-graph-mcp");
-			res.setHeader("X-MCP-Capabilities", "tools,resources");
+			res.setHeader('X-MCP-Version', '2024-11-05');
+			res.setHeader('X-MCP-Server-Name', 'knowledge-graph-mcp');
+			res.setHeader('X-MCP-Capabilities', 'tools,resources');
 
 			// Log MCP client information if provided
-			const clientName = req.get("X-MCP-Client-Name");
-			const clientVersion = req.get("X-MCP-Client-Version");
-			const mcpVersion = req.get("X-MCP-Version");
+			const clientName = req.get('X-MCP-Client-Name');
+			const clientVersion = req.get('X-MCP-Client-Version');
+			const mcpVersion = req.get('X-MCP-Version');
 
 			if (clientName || clientVersion || mcpVersion) {
 				console.log(
-					`MCP Client: ${clientName || "unknown"}@${clientVersion || "unknown"} (MCP ${mcpVersion || "unknown"})`,
+					`MCP Client: ${clientName || 'unknown'}@${clientVersion || 'unknown'} (MCP ${mcpVersion || 'unknown'})`
 				);
 			}
 
@@ -137,11 +102,9 @@ export class KnowledgeGraphHttpServer {
 		// Request logging middleware
 		this.app.use((req, res, next) => {
 			const start = Date.now();
-			res.on("finish", () => {
+			res.on('finish', () => {
 				const duration = Date.now() - start;
-				console.log(
-					`${req.method} ${req.path} - ${res.statusCode} (${duration}ms)`,
-				);
+				console.log(`${req.method} ${req.path} - ${res.statusCode} (${duration}ms)`);
 			});
 			next();
 		});
@@ -151,7 +114,7 @@ export class KnowledgeGraphHttpServer {
 		const router = express.Router();
 
 		// Enhanced health check endpoint
-		router.get("/health", async (req, res) => {
+		router.get('/health', async (req, res) => {
 			const startTime = Date.now();
 
 			try {
@@ -163,16 +126,14 @@ export class KnowledgeGraphHttpServer {
 
 				const responseTime = Date.now() - startTime;
 				const overallStatus =
-					dbHealth.status === "healthy" && aiHealth.status === "healthy"
-						? "healthy"
-						: "degraded";
+					dbHealth.status === 'healthy' && aiHealth.status === 'healthy' ? 'healthy' : 'degraded';
 
 				const healthResponse = {
 					status: overallStatus,
 					timestamp: new Date().toISOString(),
-					service: "knowledge-graph-mcp",
-					version: "1.0.0",
-					transport: "http",
+					service: 'knowledge-graph-mcp',
+					version: '1.0.0',
+					transport: 'http',
 					responseTime: `${responseTime}ms`,
 					checks: {
 						database: dbHealth,
@@ -192,39 +153,34 @@ export class KnowledgeGraphHttpServer {
 				};
 
 				// Return appropriate status code
-				const statusCode = overallStatus === "healthy" ? 200 : 503;
+				const statusCode = overallStatus === 'healthy' ? 200 : 503;
 				res.status(statusCode).json(healthResponse);
 			} catch (error) {
 				const responseTime = Date.now() - startTime;
 				res.status(503).json({
-					status: "unhealthy",
+					status: 'unhealthy',
 					timestamp: new Date().toISOString(),
-					service: "knowledge-graph-mcp",
-					version: "1.0.0",
-					transport: "http",
+					service: 'knowledge-graph-mcp',
+					version: '1.0.0',
+					transport: 'http',
 					responseTime: `${responseTime}ms`,
-					error: error instanceof Error ? error.message : "Unknown error",
+					error: error instanceof Error ? error.message : 'Unknown error',
 				});
 			}
 		});
 
 		// Version endpoint
-		router.get("/version", (req, res) => {
+		router.get('/version', (req, res) => {
 			res.json({
-				service: "knowledge-graph-mcp",
-				version: "1.0.0",
-				transport: "http",
-				capabilities: [
-					"knowledge-extraction",
-					"search",
-					"concepts",
-					"deduplication",
-				],
+				service: 'knowledge-graph-mcp',
+				version: '1.0.0',
+				transport: 'http',
+				capabilities: ['knowledge-extraction', 'search', 'concepts', 'deduplication'],
 			});
 		});
 
 		// Metrics endpoint
-		router.get("/metrics", (req, res) => {
+		router.get('/metrics', (req, res) => {
 			const memUsage = process.memoryUsage();
 			const cpuUsage = process.cpuUsage();
 
@@ -254,9 +210,9 @@ export class KnowledgeGraphHttpServer {
 				},
 				environment: {
 					transport: {
-						stdio: process.env.ENABLE_STDIO_TRANSPORT !== "false",
-						http: process.env.ENABLE_HTTP_TRANSPORT === "true",
-						sse: process.env.HTTP_ENABLE_SSE === "true",
+						stdio: process.env.ENABLE_STDIO_TRANSPORT !== 'false',
+						http: process.env.ENABLE_HTTP_TRANSPORT === 'true',
+						sse: process.env.HTTP_ENABLE_SSE === 'true',
 					},
 					aiProvider: this.dependencies.config.ai.provider,
 					embeddingModel: this.dependencies.config.embeddings.model,
@@ -265,20 +221,19 @@ export class KnowledgeGraphHttpServer {
 		});
 
 		// MCP capabilities negotiation endpoint
-		router.get("/capabilities", (req, res) => {
-			const clientMcpVersion = req.get("X-MCP-Version");
-			const serverMcpVersion = "2024-11-05";
+		router.get('/capabilities', (req, res) => {
+			const clientMcpVersion = req.get('X-MCP-Version');
+			const serverMcpVersion = '2024-11-05';
 
 			// Simple version compatibility check
-			const isCompatible =
-				!clientMcpVersion || clientMcpVersion <= serverMcpVersion;
+			const isCompatible = !clientMcpVersion || clientMcpVersion <= serverMcpVersion;
 
 			if (!isCompatible) {
 				return res.status(400).json({
-					error: "Incompatible MCP version",
+					error: 'Incompatible MCP version',
 					clientVersion: clientMcpVersion,
 					serverVersion: serverMcpVersion,
-					message: "Client MCP version is newer than server version",
+					message: 'Client MCP version is newer than server version',
 				});
 			}
 
@@ -291,47 +246,35 @@ export class KnowledgeGraphHttpServer {
 					logging: {},
 				},
 				serverInfo: {
-					name: "knowledge-graph-mcp",
-					version: "1.0.0",
+					name: 'knowledge-graph-mcp',
+					version: '1.0.0',
 				},
 				tools: [
 					{
-						name: "process_knowledge",
+						name: 'process_knowledge',
 						description:
-							"Extract knowledge triples from text and store them in the knowledge graph",
+							'Extract knowledge triples from text and store them in the knowledge graph',
 						endpoint: `${this.httpConfig.basePath}/process-knowledge`,
-						method: "POST",
+						method: 'POST',
 					},
 					{
-						name: "search_knowledge_graph",
-						description: "Search the knowledge graph for relevant triples",
-						endpoint: `${this.httpConfig.basePath}/search-knowledge`,
-						method: "POST",
-					},
-					{
-						name: "search_concepts",
-						description: "Search for concepts in the knowledge graph",
-						endpoint: `${this.httpConfig.basePath}/search-concepts`,
-						method: "POST",
-					},
-					{
-						name: "deduplicate_triples",
-						description: "Deduplicate knowledge triples",
-						endpoint: `${this.httpConfig.basePath}/deduplicate`,
-						method: "POST",
-					},
-					{
-						name: "get_knowledge_graph_stats",
-						description: "Get knowledge graph statistics",
-						endpoint: `${this.httpConfig.basePath}/stats`,
-						method: "GET",
-					},
-					{
-						name: "enumerate_entities",
+						name: 'search_knowledge_graph',
 						description:
-							"Enumerate entities in the knowledge graph with filtering options",
-						endpoint: `${this.httpConfig.basePath}/entities`,
-						method: "GET",
+							'Search the knowledge graph using fusion search (combines entity, relationship, semantic, and concept search)',
+						endpoint: `${this.httpConfig.basePath}/search-knowledge`,
+						method: 'POST',
+					},
+					{
+						name: 'search_concepts',
+						description: 'Search for concepts in the knowledge graph',
+						endpoint: `${this.httpConfig.basePath}/search-concepts`,
+						method: 'POST',
+					},
+					{
+						name: 'get_knowledge_graph_stats',
+						description: 'Get knowledge graph statistics',
+						endpoint: `${this.httpConfig.basePath}/stats`,
+						method: 'GET',
 					},
 				],
 			});
@@ -339,64 +282,23 @@ export class KnowledgeGraphHttpServer {
 
 		// Create and mount knowledge routes
 		const knowledgeRoutes = createKnowledgeRoutes(this.dependencies);
-		router.use("/", knowledgeRoutes);
-
-		// Setup Swagger/OpenAPI documentation - temporarily disabled for debugging
-		// router.use('/docs', swaggerUi.serve);
-		// router.get('/docs', swaggerUi.setup(openApiSpec, {
-		//   customCssUrl: 'https://cdn.jsdelivr.net/npm/swagger-ui-themes@3.0.1/themes/3.x/theme-material.css',
-		//   customSiteTitle: 'Knowledge Graph MCP API Documentation',
-		//   customfavIcon: '/favicon.ico',
-		//   swaggerOptions: {
-		//     persistAuthorization: true,
-		//     displayRequestDuration: true,
-		//     filter: true,
-		//     tryItOutEnabled: true,
-		//   },
-		// }));
-
-		// OpenAPI spec endpoint
-		router.get("/openapi.json", (req, res) => {
-			res.json(openApiSpec);
-		});
-
-		// Setup SSE/MCP endpoint if enabled
-		if (this.httpConfig.enableSSE) {
-			this.sseServer = new KnowledgeGraphSSEServer(
-				{ endpoint: `${this.httpConfig.basePath}/mcp` },
-				this.dependencies,
-			);
-
-			// SSE endpoint for MCP protocol
-			router.get("/mcp", this.sseServer.createSSEMiddleware());
-
-			// SSE info endpoint
-			router.get("/mcp/info", this.sseServer.createSSEInfoMiddleware());
-		}
+		router.use('/', knowledgeRoutes);
 
 		// Mount router at base path
 		this.app.use(this.httpConfig.basePath, router);
 
 		// Root endpoint
-		this.app.get("/", (req, res) => {
+		this.app.get('/', (req, res) => {
 			const response: any = {
-				service: "Knowledge Graph MCP Server",
-				version: "1.0.0",
-				transports: ["http"],
+				service: 'Knowledge Graph MCP Server',
+				version: '1.0.0',
+				transports: ['http'],
 				endpoints: {
 					capabilities: `${this.httpConfig.basePath}/capabilities`,
 					health: `${this.httpConfig.basePath}/health`,
 					metrics: `${this.httpConfig.basePath}/metrics`,
-					documentation: `${this.httpConfig.basePath}/docs`,
-					openapi: `${this.httpConfig.basePath}/openapi.json`,
 				},
 			};
-
-			if (this.httpConfig.enableSSE) {
-				response.transports.push("sse", "mcp");
-				response.endpoints.mcp = `${this.httpConfig.basePath}/mcp`;
-				response.endpoints.mcpInfo = `${this.httpConfig.basePath}/mcp/info`;
-			}
 
 			res.json(response);
 		});
@@ -404,7 +306,7 @@ export class KnowledgeGraphHttpServer {
 		// 404 handler
 		this.app.use((req, res) => {
 			res.status(404).json({
-				error: "Not Found",
+				error: 'Not Found',
 				message: `Endpoint ${req.path} not found`,
 				availableEndpoints: `${this.httpConfig.basePath}/capabilities`,
 			});
@@ -412,19 +314,14 @@ export class KnowledgeGraphHttpServer {
 
 		// Error handler
 		this.app.use(
-			(
-				err: Error,
-				req: express.Request,
-				res: express.Response,
-				next: express.NextFunction,
-			) => {
-				console.error("HTTP Server Error:", err);
+			(err: Error, req: express.Request, res: express.Response, next: express.NextFunction) => {
+				console.error('HTTP Server Error:', err);
 				res.status(500).json({
-					error: "Internal Server Error",
-					message: "An unexpected error occurred",
+					error: 'Internal Server Error',
+					message: 'An unexpected error occurred',
 					timestamp: new Date().toISOString(),
 				});
-			},
+			}
 		);
 	}
 
@@ -434,16 +331,16 @@ export class KnowledgeGraphHttpServer {
 				this.server = this.app.listen(this.httpConfig.port, () => {
 					console.log(`🌐 HTTP Server started on port ${this.httpConfig.port}`);
 					console.log(
-						`📖 API documentation: http://localhost:${this.httpConfig.port}${this.httpConfig.basePath}/capabilities`,
+						`📖 API documentation: http://localhost:${this.httpConfig.port}${this.httpConfig.basePath}/capabilities`
 					);
 					console.log(
-						`❤️  Health check: http://localhost:${this.httpConfig.port}${this.httpConfig.basePath}/health`,
+						`❤️  Health check: http://localhost:${this.httpConfig.port}${this.httpConfig.basePath}/health`
 					);
 					resolve();
 				});
 
-				this.server.on("error", (error) => {
-					console.error("HTTP Server failed to start:", error);
+				this.server.on('error', error => {
+					console.error('HTTP Server failed to start:', error);
 					reject(error);
 				});
 			} catch (error) {
@@ -459,12 +356,12 @@ export class KnowledgeGraphHttpServer {
 				return;
 			}
 
-			this.server.close((error) => {
+			this.server.close(error => {
 				if (error) {
-					console.error("Error stopping HTTP server:", error);
+					console.error('Error stopping HTTP server:', error);
 					reject(error);
 				} else {
-					console.log("🛑 HTTP Server stopped");
+					console.log('🛑 HTTP Server stopped');
 					this.server = null;
 					resolve();
 				}
@@ -484,16 +381,15 @@ export class KnowledgeGraphHttpServer {
 			const responseTime = Date.now() - startTime;
 
 			return {
-				status: "healthy",
-				message: "Database connection successful",
+				status: 'healthy',
+				message: 'Database connection successful',
 				responseTime: `${responseTime}ms`,
 			};
 		} catch (error) {
 			const responseTime = Date.now() - startTime;
 			return {
-				status: "unhealthy",
-				message:
-					error instanceof Error ? error.message : "Database connection failed",
+				status: 'unhealthy',
+				message: error instanceof Error ? error.message : 'Database connection failed',
 				responseTime: `${responseTime}ms`,
 			};
 		}
@@ -508,28 +404,27 @@ export class KnowledgeGraphHttpServer {
 			// Simple AI provider test - just check if the service is configured
 			const config = this.dependencies.config.ai;
 			const hasApiKey =
-				config.provider === "openai"
+				config.provider === 'openai'
 					? !!process.env.OPENAI_API_KEY
 					: !!process.env.ANTHROPIC_API_KEY;
 
 			if (!hasApiKey) {
 				return {
-					status: "degraded",
+					status: 'degraded',
 					message: `${config.provider} API key not configured`,
 					provider: config.provider,
 				};
 			}
 
 			return {
-				status: "healthy",
+				status: 'healthy',
 				message: `${config.provider} provider configured`,
 				provider: config.provider,
 			};
 		} catch (error) {
 			return {
-				status: "unhealthy",
-				message:
-					error instanceof Error ? error.message : "AI provider check failed",
+				status: 'unhealthy',
+				message: error instanceof Error ? error.message : 'AI provider check failed',
 			};
 		}
 	}
@@ -546,7 +441,7 @@ export class KnowledgeGraphHttpServer {
 		if (minutes > 0) parts.push(`${minutes}m`);
 		if (secs > 0) parts.push(`${secs}s`);
 
-		return parts.join(" ") || "0s";
+		return parts.join(' ') || '0s';
 	}
 
 	public getApp(): express.Application {
@@ -556,16 +451,11 @@ export class KnowledgeGraphHttpServer {
 
 export function createHttpServerConfig(): HttpServerConfig {
 	return {
-		port: parseInt(process.env.HTTP_PORT || "3000"),
-		basePath: process.env.HTTP_BASE_PATH || "/api",
+		port: parseInt(process.env.HTTP_PORT || '3000'),
+		basePath: process.env.HTTP_BASE_PATH || '/api',
 		corsOrigins:
-			process.env.HTTP_CORS_ORIGINS === "*"
-				? "*"
-				: process.env.HTTP_CORS_ORIGINS?.split(",") || [
-						"http://localhost:3000",
-					],
-		rateLimitWindow: parseInt(process.env.HTTP_RATE_LIMIT_WINDOW || "15"),
-		rateLimitMax: parseInt(process.env.HTTP_RATE_LIMIT_MAX || "100"),
-		enableSSE: process.env.HTTP_ENABLE_SSE === "true",
+			process.env.HTTP_CORS_ORIGINS === '*'
+				? '*'
+				: process.env.HTTP_CORS_ORIGINS?.split(',') || ['http://localhost:3000'],
 	};
 }

@@ -2,6 +2,12 @@
 node_modules/
 .pnpm-store/
 
+# Examples
+examples/
+logs/
+.claude/
+scripts/
+
 # Build output
 dist/
 build/

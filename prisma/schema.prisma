@@ -104,7 +104,7 @@ model ConceptualizationRelationship {
 
   // Metadata
   source              String
-  data_source_type    String // "thread", "file", "manual", "api", etc.
+  source_type         String // "thread", "file", "manual", "api", etc.
   extracted_at        DateTime
   processing_batch_id String?
 

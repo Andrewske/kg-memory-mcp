@@ -1,20 +1,19 @@
-import { db } from "./client.js";
+import { db } from './client.js';
 import type {
 	KnowledgeTriple,
 	ConceptNode,
 	ConceptualizationRelationship,
 	TripleType,
 	TokenUsage,
-} from "../types/index.js";
+} from '../types/index.js';
 import type {
 	DatabaseAdapter,
 	Result,
 	DatabaseConfig,
-} from "../services/types.js";
-import type {
 	SearchOptions,
 	TemporalFilter,
-} from "../../features/knowledge-graph/types.js";
+} from '../types/index.js';
+import type { EntityType } from '../types/core.js';
 
 /**
  * Build temporal filter for Prisma queries
@@ -26,43 +25,39 @@ function buildTemporalFilter(temporal?: TemporalFilter) {
 
 	// Handle direct date range
 	if (temporal.fromDate || temporal.toDate) {
-		filter.conversation_date = {};
+		filter.source_date = {};
 		if (temporal.fromDate) {
-			filter.conversation_date.gte = new Date(temporal.fromDate);
+			filter.source_date.gte = new Date(temporal.fromDate);
 		}
 		if (temporal.toDate) {
-			filter.conversation_date.lte = new Date(temporal.toDate);
+			filter.source_date.lte = new Date(temporal.toDate);
 		}
 	}
 
 	// Handle time window
 	if (temporal.timeWindow) {
 		const fromDate =
-			temporal.timeWindow.from === "now"
-				? new Date()
-				: new Date(temporal.timeWindow.from);
+			temporal.timeWindow.from === 'now' ? new Date() : new Date(temporal.timeWindow.from);
 
 		const toDate = new Date(fromDate);
 
 		// Calculate the time range based on unit
 		switch (temporal.timeWindow.unit) {
-			case "days":
+			case 'days':
 				fromDate.setDate(fromDate.getDate() - temporal.timeWindow.value);
 				break;
-			case "weeks":
+			case 'weeks':
 				fromDate.setDate(fromDate.getDate() - temporal.timeWindow.value * 7);
 				break;
-			case "months":
+			case 'months':
 				fromDate.setMonth(fromDate.getMonth() - temporal.timeWindow.value);
 				break;
-			case "years":
-				fromDate.setFullYear(
-					fromDate.getFullYear() - temporal.timeWindow.value,
-				);
+			case 'years':
+				fromDate.setFullYear(fromDate.getFullYear() - temporal.timeWindow.value);
 				break;
 		}
 
-		filter.conversation_date = {
+		filter.source_date = {
 			gte: fromDate,
 			lte: toDate,
 		};
@@ -80,7 +75,7 @@ export function createDatabaseAdapter(config: DatabaseConfig): DatabaseAdapter {
 		// Triple operations
 		async storeTriples(triples: KnowledgeTriple[]): Promise<Result<void>> {
 			try {
-				const prismaTriples = triples.map((triple) => ({
+				const prismaTriples = triples.map(triple => ({
 					id: generateTripleId(triple),
 					subject: triple.subject,
 					predicate: triple.predicate,
@@ -88,9 +83,7 @@ export function createDatabaseAdapter(config: DatabaseConfig): DatabaseAdapter {
 					type: mapTripleType(triple.type),
 					source: triple.source,
 					source_type: triple.source_type,
-					conversation_date: triple.conversation_date
-						? new Date(triple.conversation_date)
-						: null,
+					source_date: triple.source_date ? new Date(triple.source_date) : null,
 					extracted_at: new Date(triple.extracted_at),
 					processing_batch_id: triple.processing_batch_id,
 					confidence: triple.confidence,
@@ -106,8 +99,8 @@ export function createDatabaseAdapter(config: DatabaseConfig): DatabaseAdapter {
 				return {
 					success: false,
 					error: {
-						type: "DATABASE_ERROR",
-						message: "Failed to store triples",
+						type: 'DATABASE_ERROR',
+						message: 'Failed to store triples',
 						cause: error,
 					},
 				};
@@ -120,9 +113,9 @@ export function createDatabaseAdapter(config: DatabaseConfig): DatabaseAdapter {
 					where: { id: { in: ids } },
 					select: { id: true },
 				});
-				return existing.map((t) => t.id);
+				return existing.map(t => t.id);
 			} catch (error) {
-				console.error("Error checking existing triples:", error);
+				console.error('Error checking existing triples:', error);
 				return [];
 			}
 		},
@@ -134,7 +127,7 @@ export function createDatabaseAdapter(config: DatabaseConfig): DatabaseAdapter {
 				});
 				return count > 0;
 			} catch (error) {
-				console.error("Error checking triple existence:", error);
+				console.error('Error checking triple existence:', error);
 				return false;
 			}
 		},
@@ -146,7 +139,7 @@ export function createDatabaseAdapter(config: DatabaseConfig): DatabaseAdapter {
 				});
 				return triples.map(mapPrismaTriple);
 			} catch (error) {
-				console.error("Error getting triples by IDs:", error);
+				console.error('Error getting triples by IDs:', error);
 				return [];
 			}
 		},
@@ -162,26 +155,23 @@ export function createDatabaseAdapter(config: DatabaseConfig): DatabaseAdapter {
 				return {
 					success: false,
 					error: {
-						type: "DATABASE_ERROR",
-						message: "Failed to get all triples",
+						type: 'DATABASE_ERROR',
+						message: 'Failed to get all triples',
 						cause: error,
 					},
 				};
 			}
 		},
 
-		async searchByText(
-			query: string,
-			searchType: string,
-		): Promise<Result<KnowledgeTriple[]>> {
+		async searchByText(query: string, searchType: string): Promise<Result<KnowledgeTriple[]>> {
 			try {
 				// Simple text search - in real implementation, this would use full-text search
 				const triples = await db.knowledgeTriple.findMany({
 					where: {
 						OR: [
-							{ subject: { contains: query, mode: "insensitive" } },
-							{ predicate: { contains: query, mode: "insensitive" } },
-							{ object: { contains: query, mode: "insensitive" } },
+							{ subject: { contains: query, mode: 'insensitive' } },
+							{ predicate: { contains: query, mode: 'insensitive' } },
+							{ object: { contains: query, mode: 'insensitive' } },
 						],
 					},
 					take: 50,
@@ -195,8 +185,8 @@ export function createDatabaseAdapter(config: DatabaseConfig): DatabaseAdapter {
 				return {
 					success: false,
 					error: {
-						type: "DATABASE_ERROR",
-						message: "Failed to search by text",
+						type: 'DATABASE_ERROR',
+						message: 'Failed to search by text',
 						cause: error,
 					},
 				};
@@ -207,31 +197,31 @@ export function createDatabaseAdapter(config: DatabaseConfig): DatabaseAdapter {
 			embedding: number[],
 			topK: number,
 			minScore: number,
-			options?: SearchOptions,
+			options?: SearchOptions
 		): Promise<Result<KnowledgeTriple[]>> {
 			try {
 				console.log(
-					`[DB DEBUG] searchByEmbedding: topK=${topK}, minScore=${minScore}, embedding length=${embedding.length}`,
+					`[DB DEBUG] searchByEmbedding: topK=${topK}, minScore=${minScore}, embedding length=${embedding.length}`
 				);
 
 				// Convert embedding to pgvector format
-				const vectorString = `[${embedding.join(",")}]`;
+				const vectorString = `[${embedding.join(',')}]`;
 
 				// Build filter conditions for joins
-				let whereClause = "1=1";
+				let whereClause = '1=1';
 				const params: any[] = [vectorString, topK, minScore];
 				let paramIndex = 3;
 
 				// Add temporal filtering
 				const temporalFilter = buildTemporalFilter(options?.temporal);
-				if (temporalFilter.conversation_date) {
-					if (temporalFilter.conversation_date.gte) {
-						whereClause += ` AND kt.conversation_date >= $${++paramIndex}`;
-						params.push(temporalFilter.conversation_date.gte);
+				if (temporalFilter.source_date) {
+					if (temporalFilter.source_date.gte) {
+						whereClause += ` AND kt.source_date >= $${++paramIndex}`;
+						params.push(temporalFilter.source_date.gte);
 					}
-					if (temporalFilter.conversation_date.lte) {
-						whereClause += ` AND kt.conversation_date <= $${++paramIndex}`;
-						params.push(temporalFilter.conversation_date.lte);
+					if (temporalFilter.source_date.lte) {
+						whereClause += ` AND kt.source_date <= $${++paramIndex}`;
+						params.push(temporalFilter.source_date.lte);
 					}
 				}
 
@@ -243,18 +233,18 @@ export function createDatabaseAdapter(config: DatabaseConfig): DatabaseAdapter {
 
 				// Add type filtering
 				if (options?.types && options.types.length > 0) {
-					const enumTypes = options.types.map((type) => {
+					const enumTypes = options.types.map(type => {
 						switch (type) {
-							case "entity-entity":
-								return "ENTITY_ENTITY";
-							case "entity-event":
-								return "ENTITY_EVENT";
-							case "event-event":
-								return "EVENT_EVENT";
-							case "emotional-context":
-								return "EMOTIONAL_CONTEXT";
+							case 'entity-entity':
+								return 'ENTITY_ENTITY';
+							case 'entity-event':
+								return 'ENTITY_EVENT';
+							case 'event-event':
+								return 'EVENT_EVENT';
+							case 'emotional-context':
+								return 'EMOTIONAL_CONTEXT';
 							default:
-								return type.toUpperCase().replace("-", "_");
+								return;
 						}
 					});
 					whereClause += ` AND kt.type = ANY($${++paramIndex})`;
@@ -275,16 +265,13 @@ export function createDatabaseAdapter(config: DatabaseConfig): DatabaseAdapter {
 					LIMIT $2
 				`;
 
-				console.log(
-					`[DB DEBUG] Executing semantic vector query:`,
-					query.slice(0, 200) + "...",
-				);
-				console.log(`[DB DEBUG] Query params:`, params.slice(1)); // Skip the long embedding
+				console.log(`[DB DEBUG] Executing semantic vector query: ${query.slice(0, 200)}...`);
+				console.log(`[DB DEBUG] Query params: ${params.slice(1)}`); // Skip the long embedding
 
 				const results = await db.$queryRawUnsafe(query, ...params);
 
 				console.log(
-					`[DB DEBUG] Semantic vector query returned ${Array.isArray(results) ? results.length : "non-array"} results`,
+					`[DB DEBUG] Semantic vector query returned ${Array.isArray(results) ? results.length : 'non-array'} results`
 				);
 
 				if (!Array.isArray(results)) {
@@ -301,8 +288,8 @@ export function createDatabaseAdapter(config: DatabaseConfig): DatabaseAdapter {
 					object: row.object,
 					type: unmapTripleType(row.type),
 					source: row.source,
-					thread_id: row.thread_id,
-					conversation_date: row.conversation_date?.toISOString(),
+					source_type: row.source_type,
+					source_date: row.source_date?.toISOString(),
 					extracted_at: row.extracted_at.toISOString(),
 					processing_batch_id: row.processing_batch_id,
 					confidence: row.confidence,
@@ -315,12 +302,12 @@ export function createDatabaseAdapter(config: DatabaseConfig): DatabaseAdapter {
 					data: triples,
 				};
 			} catch (error) {
-				console.error("Vector search error:", error);
+				console.error('Vector search error:', error);
 				return {
 					success: false,
 					error: {
-						type: "DATABASE_ERROR",
-						message: "Failed to search by embedding",
+						type: 'DATABASE_ERROR',
+						message: 'Failed to search by embedding',
 						cause: error,
 					},
 				};
@@ -331,7 +318,7 @@ export function createDatabaseAdapter(config: DatabaseConfig): DatabaseAdapter {
 		async searchByEntity(
 			entityQuery: string,
 			topK: number,
-			options?: SearchOptions,
+			options?: SearchOptions
 		): Promise<Result<KnowledgeTriple[]>> {
 			try {
 				// Build filter conditions
@@ -348,18 +335,18 @@ export function createDatabaseAdapter(config: DatabaseConfig): DatabaseAdapter {
 
 				// Add type filtering
 				if (options?.types && options.types.length > 0) {
-					const enumTypes = options.types.map((type) => {
+					const enumTypes = options.types.map(type => {
 						switch (type) {
-							case "entity-entity":
-								return "ENTITY_ENTITY";
-							case "entity-event":
-								return "ENTITY_EVENT";
-							case "event-event":
-								return "EVENT_EVENT";
-							case "emotional-context":
-								return "EMOTIONAL_CONTEXT";
+							case 'entity-entity':
+								return 'ENTITY_ENTITY';
+							case 'entity-event':
+								return 'ENTITY_EVENT';
+							case 'event-event':
+								return 'EVENT_EVENT';
+							case 'emotional-context':
+								return 'EMOTIONAL_CONTEXT';
 							default:
-								return type.toUpperCase().replace("-", "_");
+								return;
 						}
 					});
 					whereConditions.type = { in: enumTypes };
@@ -367,8 +354,8 @@ export function createDatabaseAdapter(config: DatabaseConfig): DatabaseAdapter {
 
 				// Entity search: find triples where entity appears as subject or object
 				whereConditions.OR = [
-					{ subject: { contains: entityQuery, mode: "insensitive" } },
-					{ object: { contains: entityQuery, mode: "insensitive" } },
+					{ subject: { contains: entityQuery, mode: 'insensitive' } },
+					{ object: { contains: entityQuery, mode: 'insensitive' } },
 				];
 
 				const triples = await db.knowledgeTriple.findMany({
@@ -376,10 +363,10 @@ export function createDatabaseAdapter(config: DatabaseConfig): DatabaseAdapter {
 					take: topK,
 					orderBy: [
 						// Exact matches first
-						{ subject: entityQuery === undefined ? "asc" : "desc" },
-						{ object: entityQuery === undefined ? "asc" : "desc" },
+						{ subject: entityQuery === undefined ? 'asc' : 'desc' },
+						{ object: entityQuery === undefined ? 'asc' : 'desc' },
 						// Then by recency
-						{ created_at: "desc" },
+						{ created_at: 'desc' },
 					],
 				});
 
@@ -391,8 +378,8 @@ export function createDatabaseAdapter(config: DatabaseConfig): DatabaseAdapter {
 				return {
 					success: false,
 					error: {
-						type: "DATABASE_ERROR",
-						message: "Failed to search by entity",
+						type: 'DATABASE_ERROR',
+						message: 'Failed to search by entity',
 						cause: error,
 					},
 				};
@@ -402,7 +389,7 @@ export function createDatabaseAdapter(config: DatabaseConfig): DatabaseAdapter {
 		async searchByRelationship(
 			relationshipQuery: string,
 			topK: number,
-			options?: SearchOptions,
+			options?: SearchOptions
 		): Promise<Result<KnowledgeTriple[]>> {
 			try {
 				// Build filter conditions
@@ -419,18 +406,18 @@ export function createDatabaseAdapter(config: DatabaseConfig): DatabaseAdapter {
 
 				// Add type filtering
 				if (options?.types && options.types.length > 0) {
-					const enumTypes = options.types.map((type) => {
+					const enumTypes = options.types.map(type => {
 						switch (type) {
-							case "entity-entity":
-								return "ENTITY_ENTITY";
-							case "entity-event":
-								return "ENTITY_EVENT";
-							case "event-event":
-								return "EVENT_EVENT";
-							case "emotional-context":
-								return "EMOTIONAL_CONTEXT";
+							case 'entity-entity':
+								return 'ENTITY_ENTITY';
+							case 'entity-event':
+								return 'ENTITY_EVENT';
+							case 'event-event':
+								return 'EVENT_EVENT';
+							case 'emotional-context':
+								return 'EMOTIONAL_CONTEXT';
 							default:
-								return type.toUpperCase().replace("-", "_");
+								return;
 						}
 					});
 					whereConditions.type = { in: enumTypes };
@@ -439,7 +426,7 @@ export function createDatabaseAdapter(config: DatabaseConfig): DatabaseAdapter {
 				// Relationship search: find triples where relationship appears in predicate
 				whereConditions.predicate = {
 					contains: relationshipQuery,
-					mode: "insensitive",
+					mode: 'insensitive',
 				};
 
 				const triples = await db.knowledgeTriple.findMany({
@@ -447,9 +434,9 @@ export function createDatabaseAdapter(config: DatabaseConfig): DatabaseAdapter {
 					take: topK,
 					orderBy: [
 						// Exact matches first
-						{ predicate: relationshipQuery === undefined ? "asc" : "desc" },
+						{ predicate: relationshipQuery === undefined ? 'asc' : 'desc' },
 						// Then by recency
-						{ created_at: "desc" },
+						{ created_at: 'desc' },
 					],
 				});
 
@@ -461,8 +448,8 @@ export function createDatabaseAdapter(config: DatabaseConfig): DatabaseAdapter {
 				return {
 					success: false,
 					error: {
-						type: "DATABASE_ERROR",
-						message: "Failed to search by relationship",
+						type: 'DATABASE_ERROR',
+						message: 'Failed to search by relationship',
 						cause: error,
 					},
 				};
@@ -472,24 +459,24 @@ export function createDatabaseAdapter(config: DatabaseConfig): DatabaseAdapter {
 		async searchByConcept(
 			conceptQuery: string,
 			topK: number,
-			options?: SearchOptions,
+			options?: SearchOptions
 		): Promise<Result<KnowledgeTriple[]>> {
 			try {
 				// Build filter conditions for joins
-				let whereClause = "1=1";
+				let whereClause = '1=1';
 				const params: any[] = [conceptQuery, topK];
 				let paramIndex = 2;
 
 				// Add temporal filtering
 				const temporalFilter = buildTemporalFilter(options?.temporal);
-				if (temporalFilter.conversation_date) {
-					if (temporalFilter.conversation_date.gte) {
-						whereClause += ` AND kt.conversation_date >= $${++paramIndex}`;
-						params.push(temporalFilter.conversation_date.gte);
+				if (temporalFilter.source_date) {
+					if (temporalFilter.source_date.gte) {
+						whereClause += ` AND kt.source_date >= $${++paramIndex}`;
+						params.push(temporalFilter.source_date.gte);
 					}
-					if (temporalFilter.conversation_date.lte) {
-						whereClause += ` AND kt.conversation_date <= $${++paramIndex}`;
-						params.push(temporalFilter.conversation_date.lte);
+					if (temporalFilter.source_date.lte) {
+						whereClause += ` AND kt.source_date <= $${++paramIndex}`;
+						params.push(temporalFilter.source_date.lte);
 					}
 				}
 
@@ -501,18 +488,18 @@ export function createDatabaseAdapter(config: DatabaseConfig): DatabaseAdapter {
 
 				// Add type filtering
 				if (options?.types && options.types.length > 0) {
-					const enumTypes = options.types.map((type) => {
+					const enumTypes = options.types.map(type => {
 						switch (type) {
-							case "entity-entity":
-								return "ENTITY_ENTITY";
-							case "entity-event":
-								return "ENTITY_EVENT";
-							case "event-event":
-								return "EVENT_EVENT";
-							case "emotional-context":
-								return "EMOTIONAL_CONTEXT";
+							case 'entity-entity':
+								return 'ENTITY_ENTITY';
+							case 'entity-event':
+								return 'ENTITY_EVENT';
+							case 'event-event':
+								return 'EVENT_EVENT';
+							case 'emotional-context':
+								return 'EMOTIONAL_CONTEXT';
 							default:
-								return type.toUpperCase().replace("-", "_");
+									return;
 						}
 					});
 					whereClause += ` AND kt.type = ANY($${++paramIndex})`;
@@ -550,8 +537,8 @@ export function createDatabaseAdapter(config: DatabaseConfig): DatabaseAdapter {
 					object: row.object,
 					type: unmapTripleType(row.type),
 					source: row.source,
-					thread_id: row.thread_id,
-					conversation_date: row.conversation_date?.toISOString(),
+					source_type: row.source_type,
+					source_date: row.source_date?.toISOString(),
 					extracted_at: row.extracted_at.toISOString(),
 					processing_batch_id: row.processing_batch_id,
 					confidence: row.confidence,
@@ -564,12 +551,12 @@ export function createDatabaseAdapter(config: DatabaseConfig): DatabaseAdapter {
 					data: triples,
 				};
 			} catch (error) {
-				console.error("Concept search error:", error);
+				console.error('Concept search error:', error);
 				return {
 					success: false,
 					error: {
-						type: "DATABASE_ERROR",
-						message: "Failed to search by concept",
+						type: 'DATABASE_ERROR',
+						message: 'Failed to search by concept',
 						cause: error,
 					},
 				};
@@ -581,31 +568,31 @@ export function createDatabaseAdapter(config: DatabaseConfig): DatabaseAdapter {
 			embedding: number[],
 			topK: number,
 			minScore: number,
-			options?: SearchOptions,
+			options?: SearchOptions
 		): Promise<Result<KnowledgeTriple[]>> {
 			try {
 				console.log(
-					`[DB DEBUG] searchByEntityVector: topK=${topK}, minScore=${minScore}, embedding length=${embedding.length}`,
+					`[DB DEBUG] searchByEntityVector: topK=${topK}, minScore=${minScore}, embedding length=${embedding.length}`
 				);
 
 				// Convert embedding to pgvector format
-				const vectorString = `[${embedding.join(",")}]`;
+				const vectorString = `[${embedding.join(',')}]`;
 
 				// Build filter conditions for joins
-				let whereClause = "1=1";
+				let whereClause = '1=1';
 				const params: any[] = [vectorString, topK, minScore];
 				let paramIndex = 3;
 
 				// Add temporal filtering
 				const temporalFilter = buildTemporalFilter(options?.temporal);
-				if (temporalFilter.conversation_date) {
-					if (temporalFilter.conversation_date.gte) {
-						whereClause += ` AND kt.conversation_date >= $${++paramIndex}`;
-						params.push(temporalFilter.conversation_date.gte);
+				if (temporalFilter.source_date) {
+					if (temporalFilter.source_date.gte) {
+						whereClause += ` AND kt.source_date >= $${++paramIndex}`;
+						params.push(temporalFilter.source_date.gte);
 					}
-					if (temporalFilter.conversation_date.lte) {
-						whereClause += ` AND kt.conversation_date <= $${++paramIndex}`;
-						params.push(temporalFilter.conversation_date.lte);
+					if (temporalFilter.source_date.lte) {
+						whereClause += ` AND kt.source_date <= $${++paramIndex}`;
+						params.push(temporalFilter.source_date.lte);
 					}
 				}
 
@@ -617,18 +604,18 @@ export function createDatabaseAdapter(config: DatabaseConfig): DatabaseAdapter {
 
 				// Add type filtering
 				if (options?.types && options.types.length > 0) {
-					const enumTypes = options.types.map((type) => {
+					const enumTypes = options.types.map(type => {
 						switch (type) {
-							case "entity-entity":
-								return "ENTITY_ENTITY";
-							case "entity-event":
-								return "ENTITY_EVENT";
-							case "event-event":
-								return "EVENT_EVENT";
-							case "emotional-context":
-								return "EMOTIONAL_CONTEXT";
+							case 'entity-entity':
+								return 'ENTITY_ENTITY';
+							case 'entity-event':
+								return 'ENTITY_EVENT';
+							case 'event-event':
+								return 'EVENT_EVENT';
+							case 'emotional-context':
+								return 'EMOTIONAL_CONTEXT';
 							default:
-								return type.toUpperCase().replace("-", "_");
+								return;
 						}
 					});
 					whereClause += ` AND kt.type = ANY($${++paramIndex})`;
@@ -649,16 +636,13 @@ export function createDatabaseAdapter(config: DatabaseConfig): DatabaseAdapter {
 					LIMIT $2
 				`;
 
-				console.log(
-					`[DB DEBUG] Executing entity vector query:`,
-					query.slice(0, 200) + "...",
-				);
-				console.log(`[DB DEBUG] Query params:`, params.slice(1)); // Skip the long embedding
+				console.log(`[DB DEBUG] Executing entity vector query: ${query.slice(0, 200)}...`);
+				console.log(`[DB DEBUG] Query params: ${params.slice(1)}`); // Skip the long embedding
 
 				const results = await db.$queryRawUnsafe(query, ...params);
 
 				console.log(
-					`[DB DEBUG] Entity vector query returned ${Array.isArray(results) ? results.length : "non-array"} results`,
+					`[DB DEBUG] Entity vector query returned ${Array.isArray(results) ? results.length : 'non-array'} results`
 				);
 
 				if (!Array.isArray(results)) {
@@ -675,8 +659,8 @@ export function createDatabaseAdapter(config: DatabaseConfig): DatabaseAdapter {
 					object: row.object,
 					type: unmapTripleType(row.type),
 					source: row.source,
-					thread_id: row.thread_id,
-					conversation_date: row.conversation_date?.toISOString(),
+					source_type: row.source_type,
+					source_date: row.source_date?.toISOString(),
 					extracted_at: row.extracted_at.toISOString(),
 					processing_batch_id: row.processing_batch_id,
 					confidence: row.confidence,
@@ -689,12 +673,12 @@ export function createDatabaseAdapter(config: DatabaseConfig): DatabaseAdapter {
 					data: triples,
 				};
 			} catch (error) {
-				console.error("Entity vector search error:", error);
+				console.error('Entity vector search error:', error);
 				return {
 					success: false,
 					error: {
-						type: "DATABASE_ERROR",
-						message: "Failed to search by entity vector",
+						type: 'DATABASE_ERROR',
+						message: 'Failed to search by entity vector',
 						cause: error,
 					},
 				};
@@ -705,31 +689,31 @@ export function createDatabaseAdapter(config: DatabaseConfig): DatabaseAdapter {
 			embedding: number[],
 			topK: number,
 			minScore: number,
-			options?: SearchOptions,
+			options?: SearchOptions
 		): Promise<Result<KnowledgeTriple[]>> {
 			try {
 				console.log(
-					`[DB DEBUG] searchByRelationshipVector: topK=${topK}, minScore=${minScore}, embedding length=${embedding.length}`,
+					`[DB DEBUG] searchByRelationshipVector: topK=${topK}, minScore=${minScore}, embedding length=${embedding.length}`
 				);
 
 				// Convert embedding to pgvector format
-				const vectorString = `[${embedding.join(",")}]`;
+				const vectorString = `[${embedding.join(',')}]`;
 
 				// Build filter conditions for joins
-				let whereClause = "1=1";
+				let whereClause = '1=1';
 				const params: any[] = [vectorString, topK, minScore];
 				let paramIndex = 3;
 
 				// Add temporal filtering
 				const temporalFilter = buildTemporalFilter(options?.temporal);
-				if (temporalFilter.conversation_date) {
-					if (temporalFilter.conversation_date.gte) {
-						whereClause += ` AND kt.conversation_date >= $${++paramIndex}`;
-						params.push(temporalFilter.conversation_date.gte);
+				if (temporalFilter.source_date) {
+					if (temporalFilter.source_date.gte) {
+						whereClause += ` AND kt.source_date >= $${++paramIndex}`;
+						params.push(temporalFilter.source_date.gte);
 					}
-					if (temporalFilter.conversation_date.lte) {
-						whereClause += ` AND kt.conversation_date <= $${++paramIndex}`;
-						params.push(temporalFilter.conversation_date.lte);
+					if (temporalFilter.source_date.lte) {
+						whereClause += ` AND kt.source_date <= $${++paramIndex}`;
+						params.push(temporalFilter.source_date.lte);
 					}
 				}
 
@@ -741,18 +725,18 @@ export function createDatabaseAdapter(config: DatabaseConfig): DatabaseAdapter {
 
 				// Add type filtering
 				if (options?.types && options.types.length > 0) {
-					const enumTypes = options.types.map((type) => {
+					const enumTypes = options.types.map(type => {
 						switch (type) {
-							case "entity-entity":
-								return "ENTITY_ENTITY";
-							case "entity-event":
-								return "ENTITY_EVENT";
-							case "event-event":
-								return "EVENT_EVENT";
-							case "emotional-context":
-								return "EMOTIONAL_CONTEXT";
+							case 'entity-entity':
+								return 'ENTITY_ENTITY';
+							case 'entity-event':
+								return 'ENTITY_EVENT';
+							case 'event-event':
+								return 'EVENT_EVENT';
+							case 'emotional-context':
+								return 'EMOTIONAL_CONTEXT';
 							default:
-								return type.toUpperCase().replace("-", "_");
+								return;
 						}
 					});
 					whereClause += ` AND kt.type = ANY($${++paramIndex})`;
@@ -773,16 +757,13 @@ export function createDatabaseAdapter(config: DatabaseConfig): DatabaseAdapter {
 					LIMIT $2
 				`;
 
-				console.log(
-					`[DB DEBUG] Executing relationship vector query:`,
-					query.slice(0, 200) + "...",
-				);
-				console.log(`[DB DEBUG] Query params:`, params.slice(1)); // Skip the long embedding
+				console.log(`[DB DEBUG] Executing relationship vector query: ${query.slice(0, 200)}...`);
+				console.log(`[DB DEBUG] Query params: ${params.slice(1)}`); // Skip the long embedding
 
 				const results = await db.$queryRawUnsafe(query, ...params);
 
 				console.log(
-					`[DB DEBUG] Relationship vector query returned ${Array.isArray(results) ? results.length : "non-array"} results`,
+					`[DB DEBUG] Relationship vector query returned ${Array.isArray(results) ? results.length : 'non-array'} results`
 				);
 
 				if (!Array.isArray(results)) {
@@ -799,8 +780,8 @@ export function createDatabaseAdapter(config: DatabaseConfig): DatabaseAdapter {
 					object: row.object,
 					type: unmapTripleType(row.type),
 					source: row.source,
-					thread_id: row.thread_id,
-					conversation_date: row.conversation_date?.toISOString(),
+					source_type: row.source_type,
+					source_date: row.source_date?.toISOString(),
 					extracted_at: row.extracted_at.toISOString(),
 					processing_batch_id: row.processing_batch_id,
 					confidence: row.confidence,
@@ -813,12 +794,12 @@ export function createDatabaseAdapter(config: DatabaseConfig): DatabaseAdapter {
 					data: triples,
 				};
 			} catch (error) {
-				console.error("Relationship vector search error:", error);
+				console.error('Relationship vector search error:', error);
 				return {
 					success: false,
 					error: {
-						type: "DATABASE_ERROR",
-						message: "Failed to search by relationship vector",
+						type: 'DATABASE_ERROR',
+						message: 'Failed to search by relationship vector',
 						cause: error,
 					},
 				};
@@ -828,7 +809,7 @@ export function createDatabaseAdapter(config: DatabaseConfig): DatabaseAdapter {
 		// Concept operations
 		async storeConcepts(concepts: ConceptNode[]): Promise<Result<void>> {
 			try {
-				const prismaConcepts = concepts.map((concept) => ({
+				const prismaConcepts = concepts.map(concept => ({
 					id: generateConceptId(concept),
 					concept: concept.concept,
 					abstraction_level: mapAbstractionLevel(concept.abstraction_level),
@@ -849,21 +830,18 @@ export function createDatabaseAdapter(config: DatabaseConfig): DatabaseAdapter {
 				return {
 					success: false,
 					error: {
-						type: "DATABASE_ERROR",
-						message: "Failed to store concepts",
+						type: 'DATABASE_ERROR',
+						message: 'Failed to store concepts',
 						cause: error,
 					},
 				};
 			}
 		},
 
-		async searchConcepts(
-			query: string,
-			abstraction?: string,
-		): Promise<Result<ConceptNode[]>> {
+		async searchConcepts(query: string, abstraction?: string): Promise<Result<ConceptNode[]>> {
 			try {
 				const where: any = {
-					concept: { contains: query, mode: "insensitive" },
+					concept: { contains: query, mode: 'insensitive' },
 				};
 
 				if (abstraction) {
@@ -883,8 +861,8 @@ export function createDatabaseAdapter(config: DatabaseConfig): DatabaseAdapter {
 				return {
 					success: false,
 					error: {
-						type: "DATABASE_ERROR",
-						message: "Failed to search concepts",
+						type: 'DATABASE_ERROR',
+						message: 'Failed to search concepts',
 						cause: error,
 					},
 				};
@@ -894,11 +872,11 @@ export function createDatabaseAdapter(config: DatabaseConfig): DatabaseAdapter {
 		async searchConceptsByEmbedding(
 			embedding: number[],
 			topK: number,
-			minScore: number,
+			minScore: number
 		): Promise<Result<ConceptNode[]>> {
 			try {
 				// Convert embedding to pgvector format
-				const vectorString = `[${embedding.join(",")}]`;
+				const vectorString = `[${embedding.join(',')}]`;
 
 				// Perform vector similarity search using concept vectors
 				const query = `
@@ -912,12 +890,7 @@ export function createDatabaseAdapter(config: DatabaseConfig): DatabaseAdapter {
 					LIMIT $2
 				`;
 
-				const results = await db.$queryRawUnsafe(
-					query,
-					vectorString,
-					topK,
-					minScore,
-				);
+				const results = await db.$queryRawUnsafe(query, vectorString, topK, minScore);
 
 				if (!Array.isArray(results)) {
 					return {
@@ -932,6 +905,7 @@ export function createDatabaseAdapter(config: DatabaseConfig): DatabaseAdapter {
 					abstraction_level: unmapAbstractionLevel(row.abstraction_level),
 					confidence: row.confidence,
 					source: row.source,
+					source_type: row.source_type,
 					extracted_at: row.extracted_at.toISOString(),
 					processing_batch_id: row.processing_batch_id,
 					// Add similarity score for debugging
@@ -943,12 +917,12 @@ export function createDatabaseAdapter(config: DatabaseConfig): DatabaseAdapter {
 					data: concepts,
 				};
 			} catch (error) {
-				console.error("Concept embedding search error:", error);
+				console.error('Concept embedding search error:', error);
 				return {
 					success: false,
 					error: {
-						type: "DATABASE_ERROR",
-						message: "Failed to search concepts by embedding",
+						type: 'DATABASE_ERROR',
+						message: 'Failed to search concepts by embedding',
 						cause: error,
 					},
 				};
@@ -962,25 +936,25 @@ export function createDatabaseAdapter(config: DatabaseConfig): DatabaseAdapter {
 				});
 				return concepts.map(mapPrismaConcept);
 			} catch (error) {
-				console.error("Error getting concepts by IDs:", error);
+				console.error('Error getting concepts by IDs:', error);
 				return [];
 			}
 		},
 
 		// Conceptualization relationship operations
 		async storeConceptualizations(
-			relationships: ConceptualizationRelationship[],
+			relationships: ConceptualizationRelationship[]
 		): Promise<Result<void>> {
 			try {
-				const prismaRelationships = relationships.map((rel) => ({
+				const prismaRelationships = relationships.map(rel => ({
 					id: generateConceptualizationId(rel),
 					source_element: rel.source_element,
-					source_type: mapSourceType(rel.source_type),
+					entity_type: mapEntityType(rel.entity_type as EntityType),
 					concept: rel.concept,
 					confidence: rel.confidence,
 					context_triples: rel.context_triples || [],
 					source: rel.source,
-					data_source_type: rel.data_source_type,
+					source_type: rel.source_type,
 					extracted_at: new Date(rel.extracted_at),
 					processing_batch_id: rel.processing_batch_id,
 				}));
@@ -995,8 +969,8 @@ export function createDatabaseAdapter(config: DatabaseConfig): DatabaseAdapter {
 				return {
 					success: false,
 					error: {
-						type: "DATABASE_ERROR",
-						message: "Failed to store conceptualizations",
+						type: 'DATABASE_ERROR',
+						message: 'Failed to store conceptualizations',
 						cause: error,
 					},
 				};
@@ -1005,12 +979,12 @@ export function createDatabaseAdapter(config: DatabaseConfig): DatabaseAdapter {
 
 		async getConceptualizationsByElement(
 			element: string,
-			sourceType?: "entity" | "event" | "relation",
+			entityType?: EntityType
 		): Promise<ConceptualizationRelationship[]> {
 			try {
 				const where: any = { source_element: element };
-				if (sourceType) {
-					where.source_type = mapSourceType(sourceType);
+				if (entityType) {
+					where.entity_type = entityType;
 				}
 
 				const relationships = await db.conceptualizationRelationship.findMany({
@@ -1019,13 +993,13 @@ export function createDatabaseAdapter(config: DatabaseConfig): DatabaseAdapter {
 
 				return relationships.map(mapPrismaConceptualization);
 			} catch (error) {
-				console.error("Error getting conceptualizations by element:", error);
+				console.error('Error getting conceptualizations by element:', error);
 				return [];
 			}
 		},
 
 		async getConceptualizationsByConcept(
-			concept: string,
+			concept: string
 		): Promise<ConceptualizationRelationship[]> {
 			try {
 				const relationships = await db.conceptualizationRelationship.findMany({
@@ -1034,22 +1008,19 @@ export function createDatabaseAdapter(config: DatabaseConfig): DatabaseAdapter {
 
 				return relationships.map(mapPrismaConceptualization);
 			} catch (error) {
-				console.error("Error getting conceptualizations by concept:", error);
+				console.error('Error getting conceptualizations by concept:', error);
 				return [];
 			}
 		},
 
-		async getTriplesByConceptualization(
-			concept: string,
-		): Promise<KnowledgeTriple[]> {
+		async getTriplesByConceptualization(concept: string): Promise<KnowledgeTriple[]> {
 			try {
 				// Get all elements that map to this concept
-				const conceptualizations =
-					await db.conceptualizationRelationship.findMany({
-						where: { concept },
-					});
+				const conceptualizations = await db.conceptualizationRelationship.findMany({
+					where: { concept },
+				});
 
-				const elements = conceptualizations.map((rel) => rel.source_element);
+				const elements = conceptualizations.map(rel => rel.source_element);
 
 				// Find triples that contain any of these elements
 				const triples = await db.knowledgeTriple.findMany({
@@ -1064,7 +1035,7 @@ export function createDatabaseAdapter(config: DatabaseConfig): DatabaseAdapter {
 
 				return triples.map(mapPrismaTriple);
 			} catch (error) {
-				console.error("Error getting triples by conceptualization:", error);
+				console.error('Error getting triples by conceptualization:', error);
 				return [];
 			}
 		},
@@ -1100,24 +1071,26 @@ export function createDatabaseAdapter(config: DatabaseConfig): DatabaseAdapter {
 			try {
 				// Validate embedding dimensions before attempting storage
 				const expectedDimensions = 1536; // Based on text-embedding-3-small model
-				
+
 				for (const [vectorType, vectorArray] of Object.entries(vectors)) {
 					if (!vectorArray || vectorArray.length === 0) continue;
-					
+
 					for (const vector of vectorArray) {
 						if (vector.embedding.length !== expectedDimensions) {
-							console.warn(`[VECTOR STORAGE] Dimension mismatch in ${vectorType} vector: expected ${expectedDimensions}, got ${vector.embedding.length}`);
+							console.warn(
+								`[VECTOR STORAGE] Dimension mismatch in ${vectorType} vector: expected ${expectedDimensions}, got ${vector.embedding.length}`
+							);
 							return {
 								success: false,
 								error: {
-									type: "VECTOR_DIMENSION_ERROR",
+									type: 'VECTOR_DIMENSION_ERROR',
 									message: `Invalid embedding dimensions: expected ${expectedDimensions}, got ${vector.embedding.length} for ${vectorType} vector`,
 								},
 							};
 						}
 					}
 				}
-				
+
 				const operations: Promise<any>[] = [];
 				console.log(`[VECTOR STORAGE] Starting storage of vectors:`, {
 					entity: vectors.entity?.length || 0,
@@ -1128,11 +1101,11 @@ export function createDatabaseAdapter(config: DatabaseConfig): DatabaseAdapter {
 
 				// Store entity vectors
 				if (vectors.entity && vectors.entity.length > 0) {
-					const entityVectors = vectors.entity.map((v) => ({
+					const entityVectors = vectors.entity.map(v => ({
 						id: v.vector_id,
 						vector_id: v.vector_id,
 						text: v.text,
-						embedding: `[${v.embedding.join(",")}]`,
+						embedding: `[${v.embedding.join(',')}]`,
 						entity_name: v.entity_name,
 						knowledge_triple_id: v.knowledge_triple_id,
 					}));
@@ -1141,7 +1114,7 @@ export function createDatabaseAdapter(config: DatabaseConfig): DatabaseAdapter {
 						db.$executeRawUnsafe(
 							`
 							INSERT INTO entity_vectors (id, vector_id, text, embedding, entity_name, knowledge_triple_id, created_at, updated_at)
-							VALUES ${entityVectors.map((_, i) => `($${i * 6 + 1}, $${i * 6 + 2}, $${i * 6 + 3}, $${i * 6 + 4}::vector, $${i * 6 + 5}, $${i * 6 + 6}, NOW(), NOW())`).join(", ")}
+							VALUES ${entityVectors.map((_, i) => `($${i * 6 + 1}, $${i * 6 + 2}, $${i * 6 + 3}, $${i * 6 + 4}::vector, $${i * 6 + 5}, $${i * 6 + 6}, NOW(), NOW())`).join(', ')}
 							ON CONFLICT (vector_id) DO UPDATE SET
 								text = EXCLUDED.text,
 								embedding = EXCLUDED.embedding,
@@ -1149,25 +1122,25 @@ export function createDatabaseAdapter(config: DatabaseConfig): DatabaseAdapter {
 								knowledge_triple_id = EXCLUDED.knowledge_triple_id,
 								updated_at = NOW()
 						`,
-							...entityVectors.flatMap((v) => [
+							...entityVectors.flatMap(v => [
 								v.id,
 								v.vector_id,
 								v.text,
 								v.embedding,
 								v.entity_name,
 								v.knowledge_triple_id,
-							]),
-						),
+							])
+						)
 					);
 				}
 
 				// Store relationship vectors
 				if (vectors.relationship && vectors.relationship.length > 0) {
-					const relationshipVectors = vectors.relationship.map((v) => ({
+					const relationshipVectors = vectors.relationship.map(v => ({
 						id: v.vector_id,
 						vector_id: v.vector_id,
 						text: v.text,
-						embedding: `[${v.embedding.join(",")}]`,
+						embedding: `[${v.embedding.join(',')}]`,
 						knowledge_triple_id: v.knowledge_triple_id,
 					}));
 
@@ -1175,31 +1148,31 @@ export function createDatabaseAdapter(config: DatabaseConfig): DatabaseAdapter {
 						db.$executeRawUnsafe(
 							`
 							INSERT INTO relationship_vectors (id, vector_id, text, embedding, knowledge_triple_id, created_at, updated_at)
-							VALUES ${relationshipVectors.map((_, i) => `($${i * 5 + 1}, $${i * 5 + 2}, $${i * 5 + 3}, $${i * 5 + 4}::vector, $${i * 5 + 5}, NOW(), NOW())`).join(", ")}
+							VALUES ${relationshipVectors.map((_, i) => `($${i * 5 + 1}, $${i * 5 + 2}, $${i * 5 + 3}, $${i * 5 + 4}::vector, $${i * 5 + 5}, NOW(), NOW())`).join(', ')}
 							ON CONFLICT (vector_id) DO UPDATE SET
 								text = EXCLUDED.text,
 								embedding = EXCLUDED.embedding,
 								knowledge_triple_id = EXCLUDED.knowledge_triple_id,
 								updated_at = NOW()
 						`,
-							...relationshipVectors.flatMap((v) => [
+							...relationshipVectors.flatMap(v => [
 								v.id,
 								v.vector_id,
 								v.text,
 								v.embedding,
 								v.knowledge_triple_id,
-							]),
-						),
+							])
+						)
 					);
 				}
 
 				// Store semantic vectors
 				if (vectors.semantic && vectors.semantic.length > 0) {
-					const semanticVectors = vectors.semantic.map((v) => ({
+					const semanticVectors = vectors.semantic.map(v => ({
 						id: v.vector_id,
 						vector_id: v.vector_id,
 						text: v.text,
-						embedding: `[${v.embedding.join(",")}]`,
+						embedding: `[${v.embedding.join(',')}]`,
 						knowledge_triple_id: v.knowledge_triple_id,
 					}));
 
@@ -1207,31 +1180,31 @@ export function createDatabaseAdapter(config: DatabaseConfig): DatabaseAdapter {
 						db.$executeRawUnsafe(
 							`
 							INSERT INTO semantic_vectors (id, vector_id, text, embedding, knowledge_triple_id, created_at, updated_at)
-							VALUES ${semanticVectors.map((_, i) => `($${i * 5 + 1}, $${i * 5 + 2}, $${i * 5 + 3}, $${i * 5 + 4}::vector, $${i * 5 + 5}, NOW(), NOW())`).join(", ")}
+							VALUES ${semanticVectors.map((_, i) => `($${i * 5 + 1}, $${i * 5 + 2}, $${i * 5 + 3}, $${i * 5 + 4}::vector, $${i * 5 + 5}, NOW(), NOW())`).join(', ')}
 							ON CONFLICT (vector_id) DO UPDATE SET
 								text = EXCLUDED.text,
 								embedding = EXCLUDED.embedding,
 								knowledge_triple_id = EXCLUDED.knowledge_triple_id,
 								updated_at = NOW()
 						`,
-							...semanticVectors.flatMap((v) => [
+							...semanticVectors.flatMap(v => [
 								v.id,
 								v.vector_id,
 								v.text,
 								v.embedding,
 								v.knowledge_triple_id,
-							]),
-						),
+							])
+						)
 					);
 				}
 
 				// Store concept vectors
 				if (vectors.concept && vectors.concept.length > 0) {
-					const conceptVectors = vectors.concept.map((v) => ({
+					const conceptVectors = vectors.concept.map(v => ({
 						id: v.vector_id,
 						vector_id: v.vector_id,
 						text: v.text,
-						embedding: `[${v.embedding.join(",")}]`,
+						embedding: `[${v.embedding.join(',')}]`,
 						concept_node_id: v.concept_node_id,
 					}));
 
@@ -1239,21 +1212,21 @@ export function createDatabaseAdapter(config: DatabaseConfig): DatabaseAdapter {
 						db.$executeRawUnsafe(
 							`
 							INSERT INTO concept_vectors (id, vector_id, text, embedding, concept_node_id, created_at, updated_at)
-							VALUES ${conceptVectors.map((_, i) => `($${i * 5 + 1}, $${i * 5 + 2}, $${i * 5 + 3}, $${i * 5 + 4}::vector, $${i * 5 + 5}, NOW(), NOW())`).join(", ")}
+							VALUES ${conceptVectors.map((_, i) => `($${i * 5 + 1}, $${i * 5 + 2}, $${i * 5 + 3}, $${i * 5 + 4}::vector, $${i * 5 + 5}, NOW(), NOW())`).join(', ')}
 							ON CONFLICT (vector_id) DO UPDATE SET
 								text = EXCLUDED.text,
 								embedding = EXCLUDED.embedding,
 								concept_node_id = EXCLUDED.concept_node_id,
 								updated_at = NOW()
 						`,
-							...conceptVectors.flatMap((v) => [
+							...conceptVectors.flatMap(v => [
 								v.id,
 								v.vector_id,
 								v.text,
 								v.embedding,
 								v.concept_node_id,
-							]),
-						),
+							])
+						)
 					);
 				}
 
@@ -1262,12 +1235,12 @@ export function createDatabaseAdapter(config: DatabaseConfig): DatabaseAdapter {
 
 				return { success: true, data: undefined };
 			} catch (error) {
-				console.error("Error storing vectors:", error);
+				console.error('Error storing vectors:', error);
 				return {
 					success: false,
 					error: {
-						type: "DATABASE_ERROR",
-						message: "Failed to store vectors",
+						type: 'DATABASE_ERROR',
+						message: 'Failed to store vectors',
 						cause: error,
 					},
 				};
@@ -1279,7 +1252,7 @@ export function createDatabaseAdapter(config: DatabaseConfig): DatabaseAdapter {
 			try {
 				return await db.knowledgeTriple.count();
 			} catch (error) {
-				console.error("Error getting triple count:", error);
+				console.error('Error getting triple count:', error);
 				return 0;
 			}
 		},
@@ -1288,7 +1261,7 @@ export function createDatabaseAdapter(config: DatabaseConfig): DatabaseAdapter {
 			try {
 				return await db.conceptNode.count();
 			} catch (error) {
-				console.error("Error getting concept count:", error);
+				console.error('Error getting concept count:', error);
 				return 0;
 			}
 		},
@@ -1296,15 +1269,15 @@ export function createDatabaseAdapter(config: DatabaseConfig): DatabaseAdapter {
 		async getTripleCountByType(): Promise<Record<TripleType, number>> {
 			try {
 				const counts = await db.knowledgeTriple.groupBy({
-					by: ["type"],
+					by: ['type'],
 					_count: true,
 				});
 
 				const result: Record<TripleType, number> = {
-					"entity-entity": 0,
-					"entity-event": 0,
-					"event-event": 0,
-					"emotional-context": 0,
+					'entity-entity': 0,
+					'entity-event': 0,
+					'event-event': 0,
+					'emotional-context': 0,
 				};
 
 				counts.forEach(({ type, _count }) => {
@@ -1314,12 +1287,12 @@ export function createDatabaseAdapter(config: DatabaseConfig): DatabaseAdapter {
 
 				return result;
 			} catch (error) {
-				console.error("Error getting triple count by type:", error);
+				console.error('Error getting triple count by type:', error);
 				return {
-					"entity-entity": 0,
-					"entity-event": 0,
-					"event-event": 0,
-					"emotional-context": 0,
+					'entity-entity': 0,
+					'entity-event': 0,
+					'event-event': 0,
+					'emotional-context': 0,
 				};
 			}
 		},
@@ -1356,8 +1329,8 @@ export function createDatabaseAdapter(config: DatabaseConfig): DatabaseAdapter {
 				return {
 					success: false,
 					error: {
-						type: "DATABASE_ERROR",
-						message: "Failed to store token usage",
+						type: 'DATABASE_ERROR',
+						message: 'Failed to store token usage',
 						cause: error,
 					},
 				};
@@ -1405,10 +1378,10 @@ export function createDatabaseAdapter(config: DatabaseConfig): DatabaseAdapter {
 
 				const usageRecords = await db.tokenUsage.findMany({
 					where,
-					orderBy: { timestamp: "desc" },
+					orderBy: { timestamp: 'desc' },
 				});
 
-				const mappedUsage: TokenUsage[] = usageRecords.map((record) => ({
+				const mappedUsage: TokenUsage[] = usageRecords.map(record => ({
 					source: record.source,
 					source_type: record.source_type,
 					operation_type: record.operation_type,
@@ -1425,14 +1398,11 @@ export function createDatabaseAdapter(config: DatabaseConfig): DatabaseAdapter {
 						? (record.reasoning_steps as any[])
 						: undefined,
 					operation_context:
-						record.operation_context &&
-						typeof record.operation_context === "object"
+						record.operation_context && typeof record.operation_context === 'object'
 							? (record.operation_context as Record<string, any>)
 							: undefined,
 					duration_ms: record.duration_ms,
-					estimated_cost: record.estimated_cost
-						? Number(record.estimated_cost)
-						: undefined,
+					estimated_cost: record.estimated_cost ? Number(record.estimated_cost) : undefined,
 					processing_batch_id: record.processing_batch_id ?? undefined,
 					tools_used: record.tools_used,
 					timestamp: record.timestamp.toISOString(),
@@ -1446,8 +1416,8 @@ export function createDatabaseAdapter(config: DatabaseConfig): DatabaseAdapter {
 				return {
 					success: false,
 					error: {
-						type: "DATABASE_ERROR",
-						message: "Failed to get token usage",
+						type: 'DATABASE_ERROR',
+						message: 'Failed to get token usage',
 						cause: error,
 					},
 				};
@@ -1459,85 +1429,75 @@ export function createDatabaseAdapter(config: DatabaseConfig): DatabaseAdapter {
 // Helper functions
 function generateTripleId(triple: KnowledgeTriple): string {
 	const key = `${triple.subject}|${triple.predicate}|${triple.object}|${triple.type}`;
-	return Buffer.from(key).toString("base64").replace(/[+/=]/g, "_");
+	return Buffer.from(key).toString('base64').replace(/[+/=]/g, '_');
 }
 
 function generateConceptId(concept: ConceptNode): string {
 	const key = `${concept.concept}|${concept.abstraction_level}|${concept.source}`;
-	return Buffer.from(key).toString("base64").replace(/[+/=]/g, "_");
+	return Buffer.from(key).toString('base64').replace(/[+/=]/g, '_');
 }
 
-function generateConceptualizationId(
-	rel: ConceptualizationRelationship,
-): string {
+function generateConceptualizationId(rel: ConceptualizationRelationship): string {
 	const key = `${rel.source_element}|${rel.source_type}|${rel.concept}`;
-	return Buffer.from(key).toString("base64").replace(/[+/=]/g, "_");
+	return Buffer.from(key).toString('base64').replace(/[+/=]/g, '_');
 }
 
 function mapTripleType(
-	type: TripleType,
-): "ENTITY_ENTITY" | "ENTITY_EVENT" | "EVENT_EVENT" | "EMOTIONAL_CONTEXT" {
+	type: TripleType
+): 'ENTITY_ENTITY' | 'ENTITY_EVENT' | 'EVENT_EVENT' | 'EMOTIONAL_CONTEXT' {
 	const mapping = {
-		"entity-entity": "ENTITY_ENTITY" as const,
-		"entity-event": "ENTITY_EVENT" as const,
-		"event-event": "EVENT_EVENT" as const,
-		"emotional-context": "EMOTIONAL_CONTEXT" as const,
+		'entity-entity': 'ENTITY_ENTITY' as const,
+		'entity-event': 'ENTITY_EVENT' as const,
+		'event-event': 'EVENT_EVENT' as const,
+		'emotional-context': 'EMOTIONAL_CONTEXT' as const,
 	};
 	return mapping[type];
 }
 
 function unmapTripleType(
-	type: "ENTITY_ENTITY" | "ENTITY_EVENT" | "EVENT_EVENT" | "EMOTIONAL_CONTEXT",
+	type: 'ENTITY_ENTITY' | 'ENTITY_EVENT' | 'EVENT_EVENT' | 'EMOTIONAL_CONTEXT'
 ): TripleType {
 	const mapping = {
-		ENTITY_ENTITY: "entity-entity" as const,
-		ENTITY_EVENT: "entity-event" as const,
-		EVENT_EVENT: "event-event" as const,
-		EMOTIONAL_CONTEXT: "emotional-context" as const,
+		ENTITY_ENTITY: 'entity-entity' as const,
+		ENTITY_EVENT: 'entity-event' as const,
+		EVENT_EVENT: 'event-event' as const,
+		EMOTIONAL_CONTEXT: 'emotional-context' as const,
 	};
 	return mapping[type];
 }
 
-function mapAbstractionLevel(
-	level: "high" | "medium" | "low",
-): "HIGH" | "MEDIUM" | "LOW" {
+function mapAbstractionLevel(level: 'high' | 'medium' | 'low'): 'HIGH' | 'MEDIUM' | 'LOW' {
 	const mapping = {
-		high: "HIGH" as const,
-		medium: "MEDIUM" as const,
-		low: "LOW" as const,
+		high: 'HIGH' as const,
+		medium: 'MEDIUM' as const,
+		low: 'LOW' as const,
 	};
 	return mapping[level];
 }
 
-function unmapAbstractionLevel(
-	level: "HIGH" | "MEDIUM" | "LOW",
-): "high" | "medium" | "low" {
+function unmapAbstractionLevel(level: 'HIGH' | 'MEDIUM' | 'LOW'): 'high' | 'medium' | 'low' {
 	const mapping = {
-		HIGH: "high" as const,
-		MEDIUM: "medium" as const,
-		LOW: "low" as const,
+		HIGH: 'high' as const,
+		MEDIUM: 'medium' as const,
+		LOW: 'low' as const,
 	};
 	return mapping[level];
 }
 
-function mapSourceType(
-	type: "entity" | "event" | "relation",
-): "ENTITY" | "EVENT" | "RELATION" {
+function mapEntityType(type: EntityType): 'ENTITY' | 'EVENT' | 'RELATION' {
 	const mapping = {
-		entity: "ENTITY" as const,
-		event: "EVENT" as const,
-		relation: "RELATION" as const,
+		entity: 'ENTITY' as const,
+		event: 'EVENT' as const,
+		relation: 'RELATION' as const,
 	};
-	return mapping[type];
+	return mapping[type as keyof typeof mapping];
 }
 
-function unmapSourceType(
-	type: "ENTITY" | "EVENT" | "RELATION",
-): "entity" | "event" | "relation" {
+function unmapEntityType(type: 'ENTITY' | 'EVENT' | 'RELATION'): 'entity' | 'event' | 'relation' {
 	const mapping = {
-		ENTITY: "entity" as const,
-		EVENT: "event" as const,
-		RELATION: "relation" as const,
+		ENTITY: 'entity' as const,
+		EVENT: 'event' as const,
+		RELATION: 'relation' as const,
 	};
 	return mapping[type];
 }
@@ -1550,7 +1510,7 @@ function mapPrismaTriple(prismaTriple: any): KnowledgeTriple {
 		type: unmapTripleType(prismaTriple.type),
 		source: prismaTriple.source,
 		source_type: prismaTriple.source_type,
-		conversation_date: prismaTriple.conversation_date?.toISOString(),
+		source_date: prismaTriple.source_date?.toISOString(),
 		extracted_at: prismaTriple.extracted_at.toISOString(),
 		processing_batch_id: prismaTriple.processing_batch_id,
 		confidence: prismaTriple.confidence,
@@ -1569,17 +1529,15 @@ function mapPrismaConcept(prismaConcept: any): ConceptNode {
 	};
 }
 
-function mapPrismaConceptualization(
-	prismaRel: any,
-): ConceptualizationRelationship {
+function mapPrismaConceptualization(prismaRel: any): ConceptualizationRelationship {
 	return {
 		source_element: prismaRel.source_element,
-		source_type: unmapSourceType(prismaRel.source_type),
+		entity_type: unmapEntityType(prismaRel.entity_type),
 		concept: prismaRel.concept,
 		confidence: prismaRel.confidence,
 		context_triples: prismaRel.context_triples,
 		source: prismaRel.source,
-		data_source_type: prismaRel.data_source_type,
+		source_type: prismaRel.source_type,
 		extracted_at: prismaRel.extracted_at.toISOString(),
 		processing_batch_id: prismaRel.processing_batch_id,
 	};

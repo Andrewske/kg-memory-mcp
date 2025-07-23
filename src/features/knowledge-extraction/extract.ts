@@ -1,14 +1,12 @@
-import { z } from "zod";
-import type {
-	KnowledgeTriple,
-	KnowledgeGraphConfig,
-} from "../../shared/types/index.js";
-import type { AIProvider, Result } from "../../shared/services/types.js";
-import type { ExtractedKnowledge, ExtractionMetadata } from "./types.js";
+import { z } from 'zod';
+import type { KnowledgeTriple, KnowledgeGraphConfig } from '../../shared/types/index.js';
+import type { AIProvider, Result } from '../../shared/types/index.js';
+import type { ExtractedKnowledge, ExtractionMetadata } from './types.js';
 import {
 	generateConcepts,
 	extractElementsFromTriples,
-} from "../conceptualization/conceptualize.js";
+} from '../conceptualization/conceptualize.js';
+import type { EntityType } from '@prisma/client';
 
 // Zod schemas for validation
 const TripleSchema = z.object({
@@ -18,7 +16,7 @@ const TripleSchema = z.object({
 			predicate: z.string().min(1),
 			object: z.string().min(1),
 			confidence: z.number().min(0).max(1).optional(),
-		}),
+		})
 	),
 });
 
@@ -31,7 +29,7 @@ const SinglePassTripleSchema = z.object({
 			relationship_type: z.string().min(1),
 			confidence: z.number().min(0).max(1).optional(),
 			reasoning: z.string().optional(),
-		}),
+		})
 	),
 });
 
@@ -44,22 +42,17 @@ export async function extractKnowledgeTriples(
 	metadata: ExtractionMetadata,
 	aiProvider: AIProvider,
 	config: KnowledgeGraphConfig,
-	includeConcepts: boolean = false,
+	includeConcepts: boolean = false
 ): Promise<Result<ExtractedKnowledge>> {
 	try {
 		const method = config.extraction.extractionMethod;
 
 		// Extract triples first
 		let extractionResult: Result<ExtractedKnowledge>;
-		if (method === "single-pass") {
+		if (method === 'single-pass') {
 			extractionResult = await extractSinglePass(text, metadata, aiProvider);
 		} else {
-			extractionResult = await extractFourStage(
-				text,
-				metadata,
-				aiProvider,
-				config,
-			);
+			extractionResult = await extractFourStage(text, metadata, aiProvider, config);
 		}
 
 		if (!extractionResult.success) {
@@ -75,11 +68,12 @@ export async function extractKnowledgeTriples(
 				conceptInput,
 				{
 					source: metadata.source,
-					thread_id: metadata.thread_id,
+					source_type: metadata.source_type || 'unknown',
+					entity_type: metadata.entity_type || 'entity',
 					processing_batch_id: metadata.processing_batch_id,
 				},
 				aiProvider,
-				config,
+				config
 			);
 
 			if (conceptResult.success) {
@@ -100,8 +94,8 @@ export async function extractKnowledgeTriples(
 		return {
 			success: false,
 			error: {
-				type: "EXTRACTION_ERROR",
-				message: "Failed to extract knowledge",
+				type: 'EXTRACTION_ERROR',
+				message: 'Failed to extract knowledge',
 				cause: error,
 			},
 		};
@@ -114,40 +108,35 @@ export async function extractKnowledgeTriples(
 async function extractSinglePass(
 	text: string,
 	metadata: ExtractionMetadata,
-	aiProvider: AIProvider,
+	aiProvider: AIProvider
 ): Promise<Result<ExtractedKnowledge>> {
 	try {
 		const prompt = createSinglePassPrompt(text, metadata);
 
-		const result = await aiProvider.generateObject(
-			prompt,
-			SinglePassTripleSchema,
-			undefined,
-			{
-				operation_type: "extraction",
-				thread_id: metadata.thread_id,
-				processing_batch_id: metadata.processing_batch_id,
-			},
-		);
+		const result = await aiProvider.generateObject(prompt, SinglePassTripleSchema, undefined, {
+			operation_type: 'extraction',
+			source: metadata.source,
+			source_type: metadata.source_type,
+			source_date: metadata.source_date,
+			processing_batch_id: metadata.processing_batch_id,
+		});
 		if (!result.success) {
 			return result;
 		}
 
 		// Convert to KnowledgeTriple format
-		const triples: KnowledgeTriple[] = result.data.data.relationships.map(
-			(rel) => ({
-				subject: rel.subject,
-				predicate: rel.predicate,
-				object: rel.object,
-				type: mapRelationshipType(rel.relationship_type),
-				source: metadata.source,
-				thread_id: metadata.thread_id,
-				conversation_date: metadata.conversation_date,
-				extracted_at: new Date().toISOString(),
-				processing_batch_id: metadata.processing_batch_id,
-				confidence: rel.confidence,
-			}),
-		);
+		const triples: KnowledgeTriple[] = result.data.data.relationships.map(rel => ({
+			subject: rel.subject,
+			predicate: rel.predicate,
+			object: rel.object,
+			type: mapRelationshipType(rel.relationship_type),
+			source: metadata.source,
+			source_type: metadata.source_type,
+			source_date: metadata.source_date,
+			extracted_at: new Date().toISOString(),
+			processing_batch_id: metadata.processing_batch_id,
+			confidence: rel.confidence,
+		}));
 
 		return {
 			success: true,
@@ -161,8 +150,8 @@ async function extractSinglePass(
 		return {
 			success: false,
 			error: {
-				type: "EXTRACTION_ERROR",
-				message: "Single-pass extraction failed",
+				type: 'EXTRACTION_ERROR',
+				message: 'Single-pass extraction failed',
 				cause: error,
 			},
 		};
@@ -176,25 +165,14 @@ async function extractFourStage(
 	text: string,
 	metadata: ExtractionMetadata,
 	aiProvider: AIProvider,
-	config: KnowledgeGraphConfig,
+	config: KnowledgeGraphConfig
 ): Promise<Result<ExtractedKnowledge>> {
 	try {
 		const allTriples: KnowledgeTriple[] = [];
-		const types = [
-			"entity-entity",
-			"entity-event",
-			"event-event",
-			"emotional-context",
-		] as const;
+		const types = ['entity-entity', 'entity-event', 'event-event', 'emotional-context'] as const;
 
 		for (const type of types) {
-			const result = await extractByType(
-				text,
-				type,
-				metadata,
-				aiProvider,
-				config,
-			);
+			const result = await extractByType(text, type, metadata, aiProvider, config);
 			if (result.success) {
 				allTriples.push(...result.data);
 			}
@@ -216,8 +194,8 @@ async function extractFourStage(
 		return {
 			success: false,
 			error: {
-				type: "EXTRACTION_ERROR",
-				message: "Four-stage extraction failed",
+				type: 'EXTRACTION_ERROR',
+				message: 'Four-stage extraction failed',
 				cause: error,
 			},
 		};
@@ -229,42 +207,36 @@ async function extractFourStage(
  */
 async function extractByType(
 	text: string,
-	type: "entity-entity" | "entity-event" | "event-event" | "emotional-context",
+	type: 'entity-entity' | 'entity-event' | 'event-event' | 'emotional-context',
 	metadata: ExtractionMetadata,
 	aiProvider: AIProvider,
-	config: KnowledgeGraphConfig,
+	config: KnowledgeGraphConfig
 ): Promise<Result<KnowledgeTriple[]>> {
 	try {
 		const prompt = createTypeSpecificPrompt(text, type, metadata);
 
-		const result = await aiProvider.generateObject(
-			prompt,
-			TripleSchema,
-			undefined,
-			{
-				operation_type: "extraction",
-				thread_id: metadata.thread_id,
-				processing_batch_id: metadata.processing_batch_id,
-			},
-		);
+		const result = await aiProvider.generateObject(prompt, TripleSchema, undefined, {
+			operation_type: 'extraction',
+			source: metadata.source,
+			source_type: metadata.source_type,
+			processing_batch_id: metadata.processing_batch_id,
+		});
 		if (!result.success) {
 			return result;
 		}
 
-		const triples: KnowledgeTriple[] = result.data.data.triples.map(
-			(triple) => ({
-				subject: triple.subject,
-				predicate: triple.predicate,
-				object: triple.object,
-				type,
-				source: metadata.source,
-				thread_id: metadata.thread_id,
-				conversation_date: metadata.conversation_date,
-				extracted_at: new Date().toISOString(),
-				processing_batch_id: metadata.processing_batch_id,
-				confidence: triple.confidence,
-			}),
-		);
+		const triples: KnowledgeTriple[] = result.data.data.triples.map(triple => ({
+			subject: triple.subject,
+			predicate: triple.predicate,
+			object: triple.object,
+			type,
+			source: metadata.source,
+			source_type: metadata.source_type,
+			source_date: metadata.source_date,
+			extracted_at: new Date().toISOString(),
+			processing_batch_id: metadata.processing_batch_id,
+			confidence: triple.confidence,
+		}));
 
 		return {
 			success: true,
@@ -274,7 +246,7 @@ async function extractByType(
 		return {
 			success: false,
 			error: {
-				type: "EXTRACTION_ERROR",
+				type: 'EXTRACTION_ERROR',
 				message: `Failed to extract ${type} relationships`,
 				cause: error,
 			},
@@ -283,13 +255,10 @@ async function extractByType(
 }
 
 // Helper functions
-function createSinglePassPrompt(
-	text: string,
-	metadata?: ExtractionMetadata,
-): string {
-	const temporalContext = metadata?.conversation_date
-		? `\n\nTemporal Context: This text is from ${new Date(metadata.conversation_date).toLocaleDateString()}. Pay special attention to temporal relationships and time-sensitive information.`
-		: "";
+function createSinglePassPrompt(text: string, metadata?: ExtractionMetadata): string {
+	const temporalContext = metadata?.source_date
+		? `\n\nTemporal Context: This text is from ${new Date(metadata.source_date).toLocaleDateString()}. Pay special attention to temporal relationships and time-sensitive information.`
+		: '';
 
 	return `Extract all meaningful relationships from the following text. Identify:
 1. Entity-Entity relationships (how entities relate to each other)
@@ -313,29 +282,27 @@ Respond with a JSON object containing an array of relationships.`;
 function createTypeSpecificPrompt(
 	text: string,
 	type: string,
-	metadata?: ExtractionMetadata,
+	metadata?: ExtractionMetadata
 ): string {
 	const typeDescriptions: Record<string, string> = {
-		"entity-entity":
-			"relationships between people, places, things, or concepts",
-		"entity-event": "how entities are involved in or affected by events",
-		"event-event": "causal, temporal, or logical relationships between events",
-		"emotional-context":
-			"emotional states, feelings, or contextual information",
+		'entity-entity': 'relationships between people, places, things, or concepts',
+		'entity-event': 'how entities are involved in or affected by events',
+		'event-event': 'causal, temporal, or logical relationships between events',
+		'emotional-context': 'emotional states, feelings, or contextual information',
 	};
 
-	const temporalContext = metadata?.conversation_date
-		? `\n\nTemporal Context: This text is from ${new Date(metadata.conversation_date).toLocaleDateString()}. Consider this temporal context when extracting relationships.`
-		: "";
+	const temporalContext = metadata?.source_date
+		? `\n\nTemporal Context: This text is from ${new Date(metadata.source_date).toLocaleDateString()}. Consider this temporal context when extracting relationships.`
+		: '';
 
 	const temporalGuidance =
-		type === "event-event"
+		type === 'event-event'
 			? `\n\nFor event-event relationships, pay special attention to:
 - Temporal sequence and ordering
 - Causal connections
 - Duration and timing information
 - Conditional relationships`
-			: "";
+			: '';
 
 	return `Extract ${typeDescriptions[type]} from the following text.
 
@@ -345,22 +312,22 @@ Respond with a JSON object containing an array of triples.`;
 }
 
 function mapRelationshipType(
-	type: string,
-): "entity-entity" | "entity-event" | "event-event" | "emotional-context" {
+	type: string
+): 'entity-entity' | 'entity-event' | 'event-event' | 'emotional-context' {
 	switch (type) {
-		case "entity-entity":
-			return "entity-entity";
-		case "entity-event":
-			return "entity-event";
-		case "event-event":
-			return "event-event";
-		case "emotional-context":
-			return "emotional-context";
+		case 'entity-entity':
+			return 'entity-entity';
+		case 'entity-event':
+			return 'entity-event';
+		case 'event-event':
+			return 'event-event';
+		case 'emotional-context':
+			return 'emotional-context';
 		default:
-			return "entity-entity"; // default fallback
+			return 'entity-entity'; // default fallback
 	}
 }
 
 function sleep(ms: number): Promise<void> {
-	return new Promise((resolve) => setTimeout(resolve, ms));
+	return new Promise(resolve => setTimeout(resolve, ms));
 }

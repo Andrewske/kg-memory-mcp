@@ -12,12 +12,13 @@ This is a **Knowledge Graph MCP Server** built with:
 - **Model Context Protocol (MCP)** via multiple transports:
   - **STDIO transport** (traditional MCP)
   - **HTTP/REST API** with OpenAPI documentation
-  - **Server-Sent Events (SSE)** for MCP over HTTP
 - **Express.js** for HTTP server with security middleware
 - **Vector embeddings** with OpenAI text-embedding models
-- **Biome** for linting and formatting
 - **Jest** for testing
 - **pnpm** for package management
+
+## Extra instructions
+- use aliases ~ example: import package from '~/api/package'
 
 ## Common Development Commands
 
@@ -62,7 +63,6 @@ The server supports **dual transport modes** with shared stateless functions:
 1. **Transport Layer** (`src/server/`): Multiple transport implementations
    - `stdio-server.ts`: Traditional MCP over stdin/stdout
    - `http-server.ts`: Express.js HTTP server with REST API
-   - `sse-server.ts`: Server-Sent Events for MCP over HTTP
    - `transport-manager.ts`: Shared tool handling logic
    - `routes/`: HTTP endpoint implementations
    - `docs/`: OpenAPI documentation
@@ -132,9 +132,9 @@ The server exposes 6 main tools (available via both transports):
 
 - **Type Safety**: Strict TypeScript with comprehensive type definitions in `src/shared/types/index.ts`
 - **Error Handling**: Use Result types, avoid throwing exceptions
-- **Database**: Always run `pnpm run db:generate` after schema changes
+- **Database**: Always run `pnpm run db:push` after schema changes
 - **Testing**: Mock dependencies for unit tests, use real services for integration tests
-- **Configuration**: Pass config as parameters, no global state
+- **Configuration**: use env.ts
 - **No State Management**: All functions are stateless with explicit parameters
 - **Direct Function Calls**: No factory patterns or dependency injection frameworks
 - **Database Indexes**: Ensure proper indexes for efficient queries (replacing in-memory lookups)
@@ -239,39 +239,8 @@ it('should store triples', async () => {
 });
 ```
 
-## Migration Notes
 
-When refactoring to the new architecture:
-1. Delete all `create*Operations` factory functions
-2. Remove all `*State` type definitions
-3. Replace closures with direct function parameters
-4. Remove embedding caches and in-memory mappings
-5. Update imports to use direct function imports
-6. Pass dependencies explicitly in function calls
 
-## HTTP Transport Implementation
-
-The server now supports **dual transport modes**:
-
-### HTTP API Endpoints (REST)
-- `POST /api/process-knowledge` - Extract and store knowledge  
-- `POST /api/search-knowledge` - Search knowledge graph
-- `POST /api/search-concepts` - Search concepts
-- `GET /api/stats` - Get knowledge graph statistics
-- `GET /api/entities` - Enumerate entities
-- `GET /api/health` - Health check with database/AI status
-- `GET /api/openapi.json` - OpenAPI specification
-
-### MCP over Server-Sent Events  
-- `GET /api/mcp` - SSE endpoint for MCP protocol over HTTP
-- Real-time bidirectional communication
-- Compatible with MCP SDK SSE transport
-
-### Production Features
-- CORS, compression, rate limiting, security headers
-- Request validation and comprehensive error handling
-- Health monitoring and metrics endpoints
-- Background conceptualization processing
 
 ## Client Examples
 

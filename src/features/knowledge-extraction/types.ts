@@ -2,7 +2,8 @@ import type {
 	KnowledgeTriple,
 	ConceptNode,
 	ConceptualizationRelationship,
-} from "../../shared/types/index.js";
+} from '../../shared/types/index.js';
+import type { EntityType } from '~/shared/types/core.js';
 
 export interface ExtractedKnowledge {
 	triples: KnowledgeTriple[];
@@ -12,7 +13,8 @@ export interface ExtractedKnowledge {
 
 export interface ExtractionMetadata {
 	source: string;
-	thread_id?: string;
-	conversation_date?: string;
+	source_type: string;
+	entity_type?: EntityType;
+	source_date?: string;
 	processing_batch_id?: string;
 }

@@ -1,37 +1,32 @@
-import { z } from "zod";
+import { z } from 'zod';
 import type {
 	ConceptNode,
 	ConceptualizationRelationship,
 	KnowledgeTriple,
-} from "../../shared/types/index.js";
-import type {
-	AIProvider,
-	Result,
-	KnowledgeGraphConfig,
-} from "../../shared/services/types.js";
-import type {
-	ConceptualizationInput,
-	ConceptualizationOutput,
-} from "./types.js";
+} from '../../shared/types/index.js';
+
+import type { AIProvider, Result, KnowledgeGraphConfig } from '~/shared/types/index.js';
+import type { ConceptualizationInput, ConceptualizationOutput } from './types.js';
+import type { EntityType } from '~/shared/types/core.js';
 
 // Zod schema for concept validation
 const ConceptSchema = z.object({
 	concepts: z.array(
 		z.object({
 			concept: z.string().min(1),
-			abstraction_level: z.enum(["high", "medium", "low"]),
+			abstraction_level: z.enum(['high', 'medium', 'low']),
 			confidence: z.number().min(0).max(1),
 			reasoning: z.string().optional(),
-		}),
+		})
 	),
 	relationships: z.array(
 		z.object({
 			source_element: z.string().min(1),
-			source_type: z.enum(["entity", "event", "relation"]),
+			entity_type: z.enum(['entity', 'event', 'relation']),
 			concept: z.string().min(1),
 			confidence: z.number().min(0).max(1),
 			reasoning: z.string().optional(),
-		}),
+		})
 	),
 });
 
@@ -43,56 +38,54 @@ export async function generateConcepts(
 	input: ConceptualizationInput,
 	metadata: {
 		source: string;
-		thread_id?: string;
+		source_type: string;
+		entity_type?: EntityType;
 		processing_batch_id?: string;
 	},
 	aiProvider: AIProvider,
-	_config: KnowledgeGraphConfig,
+	_config: KnowledgeGraphConfig
 ): Promise<Result<ConceptualizationOutput>> {
 	try {
 		const prompt = createConceptualizationPrompt(input);
 
-		const result = await aiProvider.generateObject(
-			prompt,
-			ConceptSchema,
-			undefined,
-			{
-				operation_type: "conceptualization",
-				thread_id: metadata.thread_id,
-				processing_batch_id: metadata.processing_batch_id,
-			},
-		);
+		const result = await aiProvider.generateObject(prompt, ConceptSchema, undefined, {
+			operation_type: 'conceptualization',
+			source: metadata.source,
+			source_type: metadata.source_type,
+			entity_type: metadata.entity_type,
+			processing_batch_id: metadata.processing_batch_id,
+		});
 
 		if (!result.success) {
 			return result;
 		}
 
-		const { concepts: conceptData, relationships: relationshipData } =
-			result.data.data;
+		const { concepts: conceptData, relationships: relationshipData } = result.data.data;
 		const now = new Date().toISOString();
 
 		// Convert to ConceptNode format
-		const concepts: ConceptNode[] = conceptData.map((concept) => ({
+		const concepts: ConceptNode[] = conceptData.map(concept => ({
 			concept: concept.concept,
 			abstraction_level: concept.abstraction_level,
 			confidence: concept.confidence,
 			source: metadata.source,
+			source_type: metadata.source_type,
 			extracted_at: now,
 			processing_batch_id: metadata.processing_batch_id,
 		}));
 
 		// Convert to ConceptualizationRelationship format
-		const conceptualizations: ConceptualizationRelationship[] =
-			relationshipData.map((rel) => ({
-				source_element: rel.source_element,
-				source_type: rel.source_type,
-				concept: rel.concept,
-				confidence: rel.confidence,
-				context_triples: input.contextTriples,
-				source: metadata.source,
-				extracted_at: now,
-				processing_batch_id: metadata.processing_batch_id,
-			}));
+		const conceptualizations: ConceptualizationRelationship[] = relationshipData.map(rel => ({
+			source_element: rel.source_element,
+			entity_type: rel.entity_type as EntityType,
+			concept: rel.concept,
+			confidence: rel.confidence,
+			context_triples: input.contextTriples,
+			source: metadata.source,
+			source_type: metadata.source_type,
+			extracted_at: now,
+			processing_batch_id: metadata.processing_batch_id,
+		}));
 
 		return {
 			success: true,
@@ -105,8 +98,8 @@ export async function generateConcepts(
 		return {
 			success: false,
 			error: {
-				type: "CONCEPTUALIZATION_ERROR",
-				message: "Failed to generate concepts",
+				type: 'CONCEPTUALIZATION_ERROR',
+				message: 'Failed to generate concepts',
 				cause: error,
 			},
 		};
@@ -116,9 +109,7 @@ export async function generateConcepts(
 /**
  * Extract entities and events from knowledge triples for conceptualization
  */
-export function extractElementsFromTriples(
-	triples: KnowledgeTriple[],
-): ConceptualizationInput {
+export function extractElementsFromTriples(triples: KnowledgeTriple[]): ConceptualizationInput {
 	const entities = new Set<string>();
 	const events = new Set<string>();
 	const relationships = new Set<string>();
@@ -131,22 +122,22 @@ export function extractElementsFromTriples(
 
 		// Extract entities and events based on triple type
 		switch (triple.type) {
-			case "entity-entity":
+			case 'entity-entity':
 				entities.add(triple.subject);
 				entities.add(triple.object);
 				relationships.add(triple.predicate);
 				break;
-			case "entity-event":
+			case 'entity-event':
 				entities.add(triple.subject);
 				events.add(triple.object);
 				relationships.add(triple.predicate);
 				break;
-			case "event-event":
+			case 'event-event':
 				events.add(triple.subject);
 				events.add(triple.object);
 				relationships.add(triple.predicate);
 				break;
-			case "emotional-context":
+			case 'emotional-context':
 				// Treat emotional context as events
 				events.add(triple.subject);
 				events.add(triple.object);
@@ -167,9 +158,9 @@ export function extractElementsFromTriples(
 function createConceptualizationPrompt(input: ConceptualizationInput): string {
 	return `Analyze the following knowledge elements and generate high-level concepts that organize and categorize them.
 
-Entities: ${input.entities.join(", ")}
-Events: ${input.events.join(", ")}
-Relationships: ${input.relationships.join(", ")}
+Entities: ${input.entities.join(', ')}
+Events: ${input.events.join(', ')}
+Relationships: ${input.relationships.join(', ')}
 
 For each concept, provide:
 1. The concept name (e.g., "Technology", "Human Interaction", "Business Process")
@@ -186,5 +177,5 @@ Generate concepts that would be useful for organizing and searching this knowled
 
 function generateTripleId(triple: KnowledgeTriple): string {
 	const key = `${triple.subject}|${triple.predicate}|${triple.object}|${triple.type}`;
-	return Buffer.from(key).toString("base64").replace(/[+/=]/g, "_");
+	return Buffer.from(key).toString('base64').replace(/[+/=]/g, '_');
 }

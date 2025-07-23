@@ -1,7 +1,4 @@
-import type {
-	ConceptNode,
-	ConceptualizationRelationship,
-} from "../../shared/types/index.js";
+import type { ConceptNode, ConceptualizationRelationship } from '../../shared/types/index.js';
 
 export interface ConceptualizationInput {
 	entities: string[];

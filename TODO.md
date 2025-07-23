@@ -4,6 +4,60 @@
 
 The knowledge graph server has comprehensive architecture with full pgvector implementation, complete token usage tracking, and sophisticated multi-index fusion search. Only database model cleanup and analytics integration remain for full AutoSchemaKG implementation.
 
+## 🚨 PROJECT SIMPLIFICATION - HIGH PRIORITY
+
+### Goal: Reduce complexity while preserving AutoSchemaKG core features
+> Reduce codebase by 50-60% while maintaining HTTP server, conceptualization, and fusion search
+
+#### Phase 1: Remove SSE Server & Clean Infrastructure
+- [x] **1.1** Delete SSE server (`/src/server/sse-server.ts`)
+- [x] **1.2** Remove SSE client examples from `/examples/`
+- [x] **1.3** Remove SSE endpoint from HTTP server routes
+- [x] **1.4** Delete Swagger/OpenAPI generation (`/src/server/docs/`)
+- [x] **1.5** Remove rate limiting middleware from HTTP server
+- [x] **1.6** Remove express-validator from HTTP routes (replaced with Zod)
+- [x] **1.7** Clean up examples directory (keep only basic HTTP examples)
+
+#### Phase 2: Consolidate Tools (8 → 4)
+- [x] **2.1** Make fusion search the default in `search_knowledge_graph`
+- [x] **2.2** Remove `search_knowledge_graph_fusion` tool (redundant)
+- [x] **2.3** Remove `search_knowledge_graph_by_type` tool
+- [ ] **2.4** Remove `deduplicate_triples` tool (keep as internal only)
+- [ ] **2.5** Remove `enumerate_entities` tool
+- [ ] **2.6** Update transport-manager.ts to expose only 4 tools
+- [ ] **2.7** Update TOOL_DEFINITIONS array
+
+#### Phase 3: Refactor to Functional Approach
+- [ ] **3.1** Remove ToolHandler class from transport-manager.ts
+- [ ] **3.2** Convert tool methods to pure function exports
+- [ ] **3.3** Remove factory patterns in services
+- [ ] **3.4** Simplify error handling (remove Result types)
+- [ ] **3.5** Pass dependencies explicitly (no hidden state)
+- [ ] **3.6** Remove service wrapper layers
+
+#### Phase 4: Simplify Features
+- [ ] **4.1** Make deduplication automatic only (no manual control)
+- [ ] **4.2** Remove token tracking service and wrappers
+- [ ] **4.3** Simplify fusion search configuration
+- [ ] **4.4** Remove temporal migration utilities
+- [ ] **4.5** Consolidate search functions into single module
+
+#### Phase 5: Clean Dependencies
+- [ ] **5.1** Remove swagger-jsdoc and swagger-ui-express
+- [ ] **5.2** Remove express-validator and express-rate-limit
+- [ ] **5.3** Remove @anthropic-ai/tokenizer and gpt-tokenizer
+- [ ] **5.4** Remove unused dev dependencies
+- [ ] **5.5** Update package.json scripts
+- [ ] **5.6** Run pnpm install to clean lockfile
+
+#### Phase 6: Final Structure & Documentation
+- [ ] **6.1** Reorganize file structure per simplified design
+- [ ] **6.2** Update README.md for simplified architecture
+- [ ] **6.3** Update CLAUDE.md with new tool list
+- [ ] **6.4** Remove obsolete documentation
+- [ ] **6.5** Update example usage in documentation
+- [ ] **6.6** Final testing of all 4 tools
+
 ## 🔥 Active Tasks
 
 ### 1. Database Schema Cleanup 🎯 HIGH PRIORITY

@@ -1,10 +1,6 @@
-import type { KnowledgeTriple } from "../../shared/types/index.js";
-import type {
-	EmbeddingService,
-	Result,
-	DeduplicationConfig,
-} from "../../shared/services/types.js";
-import type { DeduplicationResult, SimilarityScore } from "./types.js";
+import type { KnowledgeTriple } from '../../shared/types/index.js';
+import type { EmbeddingService, Result, DeduplicationConfig } from '~/shared/types/index.js';
+import type { DeduplicationResult, SimilarityScore } from './types.js';
 
 /**
  * Deduplicate knowledge triples using exact and semantic matching
@@ -13,7 +9,7 @@ import type { DeduplicationResult, SimilarityScore } from "./types.js";
 export async function deduplicateTriples(
 	triples: KnowledgeTriple[],
 	embeddingService: EmbeddingService,
-	config: DeduplicationConfig,
+	config: DeduplicationConfig
 ): Promise<Result<DeduplicationResult>> {
 	try {
 		let processedTriples = [...triples];
@@ -22,7 +18,7 @@ export async function deduplicateTriples(
 		const mergedMetadata: Array<{
 			originalId: string;
 			mergedIntoId: string;
-			reason: "exact" | "semantic";
+			reason: 'exact' | 'semantic';
 		}> = [];
 
 		// Step 1: Remove exact duplicates
@@ -36,7 +32,7 @@ export async function deduplicateTriples(
 			const semanticResult = await removeSemanticDuplicates(
 				processedTriples,
 				embeddingService,
-				config,
+				config
 			);
 
 			if (semanticResult.success) {
@@ -58,8 +54,8 @@ export async function deduplicateTriples(
 		return {
 			success: false,
 			error: {
-				type: "DEDUPLICATION_ERROR",
-				message: "Failed to deduplicate triples",
+				type: 'DEDUPLICATION_ERROR',
+				message: 'Failed to deduplicate triples',
 				cause: error,
 			},
 		};
@@ -75,14 +71,14 @@ export function removeExactDuplicates(triples: KnowledgeTriple[]): {
 	mergedMetadata: Array<{
 		originalId: string;
 		mergedIntoId: string;
-		reason: "exact";
+		reason: 'exact';
 	}>;
 } {
 	const uniqueMap = new Map<string, KnowledgeTriple>();
 	const mergedMetadata: Array<{
 		originalId: string;
 		mergedIntoId: string;
-		reason: "exact";
+		reason: 'exact';
 	}> = [];
 
 	for (const triple of triples) {
@@ -97,7 +93,7 @@ export function removeExactDuplicates(triples: KnowledgeTriple[]): {
 			mergedMetadata.push({
 				originalId: generateTripleId(triple),
 				mergedIntoId: generateTripleId(existing),
-				reason: "exact",
+				reason: 'exact',
 			});
 		} else {
 			uniqueMap.set(key, triple);
@@ -117,7 +113,7 @@ export function removeExactDuplicates(triples: KnowledgeTriple[]): {
 export async function removeSemanticDuplicates(
 	triples: KnowledgeTriple[],
 	embeddingService: EmbeddingService,
-	config: DeduplicationConfig,
+	config: DeduplicationConfig
 ): Promise<
 	Result<{
 		uniqueTriples: KnowledgeTriple[];
@@ -125,14 +121,14 @@ export async function removeSemanticDuplicates(
 		mergedMetadata: Array<{
 			originalId: string;
 			mergedIntoId: string;
-			reason: "semantic";
+			reason: 'semantic';
 		}>;
 	}>
 > {
 	try {
 		// Generate embeddings for all triples
 		const tripleTexts = triples.map(
-			(triple) => `${triple.subject} ${triple.predicate} ${triple.object}`,
+			triple => `${triple.subject} ${triple.predicate} ${triple.object}`
 		);
 
 		const embeddingResult = await embeddingService.embedBatch(tripleTexts);
@@ -145,7 +141,7 @@ export async function removeSemanticDuplicates(
 		const mergedMetadata: Array<{
 			originalId: string;
 			mergedIntoId: string;
-			reason: "semantic";
+			reason: 'semantic';
 		}> = [];
 		const processedIndices = new Set<number>();
 
@@ -162,10 +158,7 @@ export async function removeSemanticDuplicates(
 			for (let j = i + 1; j < triples.length; j++) {
 				if (processedIndices.has(j)) continue;
 
-				const similarity = calculateCosineSimilarity(
-					currentEmbedding,
-					embeddings[j],
-				);
+				const similarity = calculateCosineSimilarity(currentEmbedding, embeddings[j]);
 
 				if (similarity >= config.semanticSimilarityThreshold) {
 					// Merge the similar triple
@@ -175,7 +168,7 @@ export async function removeSemanticDuplicates(
 					mergedMetadata.push({
 						originalId: generateTripleId(triples[j]),
 						mergedIntoId: generateTripleId(bestMatch),
-						reason: "semantic",
+						reason: 'semantic',
 					});
 				}
 			}
@@ -196,8 +189,8 @@ export async function removeSemanticDuplicates(
 		return {
 			success: false,
 			error: {
-				type: "DEDUPLICATION_ERROR",
-				message: "Failed to remove semantic duplicates",
+				type: 'DEDUPLICATION_ERROR',
+				message: 'Failed to remove semantic duplicates',
 				cause: error,
 			},
 		};
@@ -211,12 +204,12 @@ function createTripleKey(triple: KnowledgeTriple): string {
 
 function generateTripleId(triple: KnowledgeTriple): string {
 	const key = createTripleKey(triple);
-	return Buffer.from(key).toString("base64").replace(/[+/=]/g, "_");
+	return Buffer.from(key).toString('base64').replace(/[+/=]/g, '_');
 }
 
 function mergeTripleMetadata(
 	existing: KnowledgeTriple,
-	duplicate: KnowledgeTriple,
+	duplicate: KnowledgeTriple
 ): KnowledgeTriple {
 	// Merge metadata, preferring higher confidence and more recent dates
 	return {
@@ -231,7 +224,7 @@ function mergeTripleMetadata(
 
 function calculateCosineSimilarity(a: number[], b: number[]): number {
 	if (a.length !== b.length) {
-		throw new Error("Vectors must have the same length");
+		throw new Error('Vectors must have the same length');
 	}
 
 	let dotProduct = 0;
