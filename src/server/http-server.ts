@@ -13,8 +13,8 @@ import type {
 	DatabaseAdapter,
 	EmbeddingService,
 	KnowledgeGraphConfig,
-} from '~/shared/types/index.js';
-import { createKnowledgeRoutes } from './routes/knowledge-routes.js';
+} from '~/shared/types';
+import { createKnowledgeRoutes } from './routes/knowledge-routes';
 export interface HttpServerConfig {
 	port: number;
 	basePath: string;

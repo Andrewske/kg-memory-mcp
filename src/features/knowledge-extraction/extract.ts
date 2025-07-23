@@ -4,13 +4,13 @@ import type {
 	KnowledgeGraphConfig,
 	KnowledgeTriple,
 	Result,
-} from '../../shared/types/index.js';
-import { trackTokenUsage } from '../../shared/utils/token-tracking.js';
+} from '../../shared/types';
+import { trackTokenUsage } from '../../shared/utils/token-tracking';
 import {
 	extractElementsFromTriples,
 	generateConcepts,
-} from '../conceptualization/conceptualize.js';
-import type { ExtractedKnowledge, ExtractionMetadata } from './types.js';
+} from '../conceptualization/conceptualize';
+import type { ExtractedKnowledge, ExtractionMetadata } from './types';
 
 // Zod schemas for validation
 const TripleSchema = z.object({

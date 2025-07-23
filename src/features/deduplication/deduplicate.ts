@@ -1,6 +1,6 @@
-import type { DeduplicationConfig, EmbeddingService, Result } from '~/shared/types/index.js';
-import type { KnowledgeTriple } from '../../shared/types/index.js';
-import type { DeduplicationResult, SimilarityScore } from './types.js';
+import type { DeduplicationConfig, EmbeddingService, Result } from '~/shared/types';
+import type { KnowledgeTriple } from '../../shared/types';
+import type { DeduplicationResult, SimilarityScore } from './types';
 
 /**
  * Deduplicate knowledge triples using exact and semantic matching

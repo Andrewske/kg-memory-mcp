@@ -3,14 +3,13 @@
  * Provides shared tool handling logic across different transports
  */
 
-import { deduplicateTriples } from '~/features/deduplication/deduplicate.js';
-import { extractKnowledgeTriples } from '~/features/knowledge-extraction/extract.js';
-import { searchFusion } from '~/features/knowledge-graph/fusion-search.js';
-import { getStats, storeTriples } from '~/features/knowledge-graph/operations.js';
-import { searchConcepts } from '~/features/knowledge-graph/search.js';
-import { env } from '~/shared/config/env.js';
+import { deduplicateTriples } from '~/features/deduplication/deduplicate';
+import { extractKnowledgeTriples } from '~/features/knowledge-extraction/extract';
+import { searchFusion } from '~/features/knowledge-graph/fusion-search';
+import { getStats, storeTriples } from '~/features/knowledge-graph/operations';
+import { searchConcepts } from '~/features/knowledge-graph/search';
 
-import type { ToolDependencies, ToolResult } from '~/shared/types/index.js';
+import type { ToolDependencies, ToolResult } from '~/shared/types';
 
 /**
  * Extract and store knowledge triples from text
@@ -20,7 +19,7 @@ export async function processKnowledge(
 		text: string;
 		source: string;
 		source_type: string;
-		source_date?: string;
+		source_date: string;
 		processing_batch_id?: string;
 		include_concepts?: boolean;
 	},
@@ -115,7 +114,7 @@ export async function processKnowledge(
 					console.log(`[Background] Starting conceptualization for ${triples.length} triples...`);
 
 					const { generateConcepts, extractElementsFromTriples } = await import(
-						'~/features/conceptualization/conceptualize.js'
+						'~/features/conceptualization/conceptualize'
 					);
 					const conceptInput = extractElementsFromTriples(triples);
 					const conceptualizeResult = await generateConcepts(
@@ -126,7 +125,7 @@ export async function processKnowledge(
 					);
 
 					if (conceptualizeResult.success && conceptualizeResult.data.concepts.length > 0) {
-						const { storeConcepts } = await import('~/features/knowledge-graph/operations.js');
+						const { storeConcepts } = await import('~/features/knowledge-graph/operations');
 						const conceptResult = await storeConcepts(
 							conceptualizeResult.data.concepts,
 							db,

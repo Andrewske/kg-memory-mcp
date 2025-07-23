@@ -11,7 +11,7 @@ export interface KnowledgeTriple {
 	// Data lineage fields
 	source: string; // The actual identifier (thread_12345, filename.txt, etc.)
 	source_type: string; // "thread", "file", "manual", "api", etc.
-	source_date?: string; // when conversation happened (ISO format)
+	source_date: string; // when conversation happened (ISO format)
 	extracted_at: string; // when relationship was extracted (ISO format)
 	processing_batch_id?: string; // batch ID for grouped processing
 

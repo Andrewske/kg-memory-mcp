@@ -1,7 +1,7 @@
 // Service interface types for dependency injection
 
 import type { z } from 'zod';
-import type { AIConfig } from './config.js';
+import type { AIConfig } from './config';
 import type {
 	AIResponseWithUsage,
 	ConceptNode,
@@ -10,8 +10,8 @@ import type {
 	KnowledgeTriple,
 	TokenUsage,
 	TripleType,
-} from './core.js';
-import type { SearchOptions } from './search.js';
+} from './core';
+import type { SearchOptions } from './search';
 
 // Result type for consistent error handling
 export type Result<T> = { success: true; data: T } | { success: false; error: OperationError };

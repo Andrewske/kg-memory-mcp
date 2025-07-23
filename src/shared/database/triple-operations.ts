@@ -1,6 +1,6 @@
-import type { KnowledgeTriple, Result } from '~/shared/types/index.js';
-import { db } from './client.js';
-import { generateTripleId, mapPrismaTriple, mapTripleType } from './database-utils.js';
+import type { KnowledgeTriple, Result } from '~/shared/types';
+import { db } from './client';
+import { generateTripleId, mapPrismaTriple, mapTripleType } from './database-utils';
 
 /**
  * Store knowledge triples in the database

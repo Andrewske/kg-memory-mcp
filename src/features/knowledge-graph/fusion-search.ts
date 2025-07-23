@@ -10,7 +10,7 @@ import type {
 	KnowledgeTriple,
 	Result,
 	SearchOptions,
-} from '~/shared/types/index.js';
+} from '~/shared/types';
 
 export interface FusionSearchResult {
 	triple: KnowledgeTriple;

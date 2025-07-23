@@ -1,4 +1,3 @@
-import type { EntityType } from '../types/core.js';
 import type {
 	ConceptNode,
 	ConceptualizationRelationship,
@@ -10,15 +9,15 @@ import type {
 	TemporalFilter,
 	TokenUsage,
 	TripleType,
-} from '../types/index.js';
-import { db } from './client.js';
+} from '../types';
+import type { EntityType } from '../types/core';
+import { db } from './client';
+import * as ConceptOps from './concept-operations';
+import * as SearchOps from './search-operations';
+import * as StatsOps from './stats-operations';
 // Import all operation modules
-import * as TripleOps from './triple-operations.js';
-import * as SearchOps from './search-operations.js';
-import * as VectorOps from './vector-operations.js';
-import * as ConceptOps from './concept-operations.js';
-import * as StatsOps from './stats-operations.js';
-
+import * as TripleOps from './triple-operations';
+import * as VectorOps from './vector-operations';
 
 /**
  * Database adapter implementation using Prisma
@@ -63,4 +62,3 @@ export function createDatabaseAdapter(config: DatabaseConfig): DatabaseAdapter {
 		getTokenUsage: StatsOps.getTokenUsage,
 	};
 }
-

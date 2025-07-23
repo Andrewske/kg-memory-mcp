@@ -3,7 +3,7 @@
 		"target": "ES2022",
 		"module": "ESNext",
 		"lib": ["ES2022"],
-		"moduleResolution": "Bundler",
+		"moduleResolution": "bundler",
 		"outDir": "./dist",
 		"rootDir": "./src",
 		"strict": true,
@@ -20,5 +20,19 @@
 		}
 	},
 	"include": ["src/**/*"],
-	"exclude": ["node_modules", "dist", "prisma", ".ignore"]
+	"exclude": ["node_modules", "dist", "prisma", ".ignore"],
+	"tsc-alias": {
+		"resolveFullPaths": true,
+		"resolveFullExtension": ".js",
+		"debug": false,
+		"replacers": {
+			"~/": "./",
+			"~/*": "./*"
+		},
+		"fileExtensions": {
+			".js": [".ts", ".tsx"],
+			".jsx": [".tsx"]
+		}
+	}
+	
 }

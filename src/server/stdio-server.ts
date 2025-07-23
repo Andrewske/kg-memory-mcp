@@ -11,15 +11,15 @@ import {
 	ListToolsRequestSchema,
 	McpError,
 } from '@modelcontextprotocol/sdk/types.js';
-import { env } from '~/shared/config/env.js';
+import { env } from '~/shared/config/env';
 import type {
 	AIProvider,
 	DatabaseAdapter,
 	EmbeddingService,
 	KnowledgeGraphConfig,
-} from '~/shared/types/index.js';
+} from '~/shared/types';
 // Import unified tool functions
-import { executeToolFunction, TOOL_DEFINITIONS } from './transport-manager.js';
+import { executeToolFunction, TOOL_DEFINITIONS } from './transport-manager';
 export interface StdioServerDependencies {
 	config: KnowledgeGraphConfig;
 	db: DatabaseAdapter;

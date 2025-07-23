@@ -1,6 +1,6 @@
-import type { Result, TokenUsage, TripleType } from '~/shared/types/index.js';
-import { db } from './client.js';
-import { unmapTripleType } from './database-utils.js';
+import type { Result, TokenUsage, TripleType } from '~/shared/types';
+import { db } from './client';
+import { unmapTripleType } from './database-utils';
 
 /**
  * Get total count of knowledge triples

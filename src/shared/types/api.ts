@@ -1,7 +1,7 @@
 // API and transport-related types
 
-import type { KnowledgeGraphConfig } from './config.js';
-import type { AIProvider, DatabaseAdapter, EmbeddingService } from './services.js';
+import type { KnowledgeGraphConfig } from './config';
+import type { AIProvider, DatabaseAdapter, EmbeddingService } from './services';
 
 // Transport-specific types
 export interface ToolDependencies {

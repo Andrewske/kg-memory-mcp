@@ -1,6 +1,6 @@
 // Search-related types for the Knowledge Graph system
 
-import type { ConceptNode, KnowledgeTriple } from './core.js';
+import type { ConceptNode, KnowledgeTriple } from './core';
 
 // Unified SearchOptions interface combining both variations
 export interface SearchOptions {

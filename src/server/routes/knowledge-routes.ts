@@ -5,14 +5,14 @@
 
 import { type Request, type Response, Router } from 'express';
 import { z } from 'zod';
-import type { RoutesDependencies } from '~/shared/types/index.js';
+import type { RoutesDependencies } from '~/shared/types';
 // Import unified tool functions
 import {
 	getKnowledgeGraphStats,
 	processKnowledge,
 	searchConceptsTool,
 	searchKnowledgeGraph,
-} from '../transport-manager.js';
+} from '../transport-manager';
 
 // Zod validation schemas
 const processKnowledgeSchema = z.object({

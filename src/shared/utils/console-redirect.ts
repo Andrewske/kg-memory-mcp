@@ -1,6 +1,6 @@
 import fs from 'node:fs';
 import path from 'node:path';
-import { env } from '~/shared/config/env.js';
+import { env } from '~/shared/config/env';
 
 // Log levels
 const LOG_LEVELS = {
@@ -11,7 +11,7 @@ const LOG_LEVELS = {
 	TRACE: 4,
 } as const;
 
-const currentLevel = LOG_LEVELS[env.LOG_LEVEL] ?? LOG_LEVELS.INFO;
+const currentLevel = LOG_LEVELS[env.LOG_LEVEL as keyof typeof LOG_LEVELS] ?? LOG_LEVELS.INFO;
 
 /**
  * Redirects console output to log files when running as MCP server

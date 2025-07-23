@@ -1,11 +1,11 @@
-import type { EntityType } from '~/shared/types/core.js';
 import type {
 	ConceptNode,
 	ConceptualizationRelationship,
 	KnowledgeTriple,
 	TemporalFilter,
 	TripleType,
-} from '~/shared/types/index.js';
+} from '~/shared/types';
+import type { EntityType } from '~/shared/types/core';
 
 /**
  * Generic ID generation utility using Base64 encoding
@@ -232,20 +232,22 @@ export function mapPrismaConceptualization(prismaRel: any): ConceptualizationRel
  * Handles the repetitive type conversion used in search methods
  */
 export function convertTripleTypesForFilter(types: string[]): string[] {
-	return types.map(type => {
-		switch (type) {
-			case 'entity-entity':
-				return 'ENTITY_ENTITY';
-			case 'entity-event':
-				return 'ENTITY_EVENT';
-			case 'event-event':
-				return 'EVENT_EVENT';
-			case 'emotional-context':
-				return 'EMOTIONAL_CONTEXT';
-			default:
-				return type;
-		}
-	}).filter(Boolean);
+	return types
+		.map(type => {
+			switch (type) {
+				case 'entity-entity':
+					return 'ENTITY_ENTITY';
+				case 'entity-event':
+					return 'ENTITY_EVENT';
+				case 'event-event':
+					return 'EVENT_EVENT';
+				case 'emotional-context':
+					return 'EMOTIONAL_CONTEXT';
+				default:
+					return type;
+			}
+		})
+		.filter(Boolean);
 }
 
 /**
@@ -259,7 +261,7 @@ export function convertEmbeddingToVector(embedding: number[]): string {
  * Validate embedding dimensions
  */
 export function validateEmbeddingDimensions(
-	embedding: number[], 
+	embedding: number[],
 	expectedDimensions: number = 1536
 ): boolean {
 	return embedding.length === expectedDimensions;

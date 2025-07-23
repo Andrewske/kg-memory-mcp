@@ -4,12 +4,12 @@ import type {
 	Result,
 	SearchOptions,
 	SearchResult,
-} from '~/shared/types/index.js';
+} from '~/shared/types';
 import type {
 	ConceptNode,
 	KnowledgeGraphConfig,
 	KnowledgeTriple,
-} from '../../shared/types/index.js';
+} from '../../shared/types';
 import {
 	type FusionSearchResult,
 	type FusionSearchWeights,
@@ -18,7 +18,7 @@ import {
 	searchByRelationship as fusionSearchByRelationship,
 	searchBySemantic as fusionSearchBySemantic,
 	searchFusion,
-} from './fusion-search.js';
+} from './fusion-search';
 
 /**
  * Generate temporal metadata from search results
@@ -163,7 +163,7 @@ export async function searchByEmbedding(
 		console.log(`[SEARCH DEBUG] Found ${tripleResults.data.length} triples`);
 
 		// Search concepts by embedding (only if triples search was successful)
-		let conceptResults;
+		let conceptResults: Result<ConceptNode[]> | undefined	;
 		if (tripleResults.data.length === 0) {
 			console.log(`[SEARCH DEBUG] No triples found, searching concepts`);
 			// If no triples found, search concepts using the embedding

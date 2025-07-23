@@ -1,12 +1,12 @@
-import type { KnowledgeTriple, Result, SearchOptions } from '~/shared/types/index.js';
-import { db } from './client.js';
+import type { KnowledgeTriple, Result, SearchOptions } from '~/shared/types';
+import { db } from './client';
 import {
 	buildTemporalFilter,
 	buildVectorSearchParams,
 	convertTripleTypesForFilter,
 	mapPrismaTriple,
 	unmapTripleType,
-} from './database-utils.js';
+} from './database-utils';
 
 /**
  * Search triples by text content

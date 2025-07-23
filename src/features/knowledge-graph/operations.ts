@@ -4,13 +4,13 @@ import type {
 	EmbeddingService,
 	GraphStats,
 	Result,
-} from '~/shared/types/index.js';
+} from '~/shared/types';
 import type {
 	ConceptNode,
 	KnowledgeGraphConfig,
 	KnowledgeTriple,
-} from '../../shared/types/index.js';
-import type { StoreResult } from './types.js';
+} from '../../shared/types';
+import type { StoreResult } from './types';
 
 export interface EntityEnumerationOptions {
 	role?: 'subject' | 'object' | 'both';

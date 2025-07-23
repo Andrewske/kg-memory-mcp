@@ -6,14 +6,14 @@
 
 import { config } from 'dotenv';
 // Import service implementations
-import { createDatabaseAdapter } from '~/shared/database/database-adapter.js';
-import { createAIProvider } from '~/shared/services/ai-provider-service.js';
-import { createEmbeddingService } from '~/shared/services/embedding-service.js';
-import type { KnowledgeGraphConfig } from '~/shared/types/index.js';
-import { redirectConsoleToFiles } from '~/shared/utils/console-redirect.js';
-import { createHttpServerConfig, KnowledgeGraphHttpServer } from './server/http-server.js';
+import { createDatabaseAdapter } from '~/shared/database/database-adapter';
+import { createAIProvider } from '~/shared/services/ai-provider-service';
+import { createEmbeddingService } from '~/shared/services/embedding-service';
+import type { KnowledgeGraphConfig } from '~/shared/types';
+import { redirectConsoleToFiles } from '~/shared/utils/console-redirect';
+import { createHttpServerConfig, KnowledgeGraphHttpServer } from './server/http-server';
 // Import server implementations
-import { KnowledgeGraphStdioServer } from './server/stdio-server.js';
+import { KnowledgeGraphStdioServer } from './server/stdio-server';
 
 // Load environment variables
 config();
@@ -36,7 +36,7 @@ const createDefaultConfig = (): KnowledgeGraphConfig => ({
 	},
 	extraction: {
 		extractionMethod:
-			(process.env.KG_EXTRACTION_METHOD as 'single-pass' | 'four-stage') || 'single-pass',
+			(process.env.KG_EXTRACTION_METHOD as 'single-pass' | 'four-stage') || 'four-stage',
 		delayBetweenTypes: parseInt(process.env.KG_DELAY_BETWEEN_TYPES || '2000'),
 		maxChunkTokens: parseInt(process.env.KG_MAX_CHUNK_TOKENS || '1500'),
 		model: process.env.KG_EXTRACTION_MODEL || 'gpt-4o-mini',

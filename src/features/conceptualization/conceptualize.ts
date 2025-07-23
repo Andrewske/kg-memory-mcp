@@ -1,18 +1,13 @@
 import { z } from 'zod';
-import type { EntityType } from '~/shared/types/core.js';
-
-import type {
-	AIProvider,
-	KnowledgeGraphConfig,
-	Result,
-} from '~/shared/types/index.js';
+import type { AIProvider, KnowledgeGraphConfig, Result } from '~/shared/types';
+import type { EntityType } from '~/shared/types/core';
 import type {
 	ConceptNode,
 	ConceptualizationRelationship,
 	KnowledgeTriple,
-} from '../../shared/types/index.js';
-import { trackTokenUsage } from '../../shared/utils/token-tracking.js';
-import type { ConceptualizationInput, ConceptualizationOutput } from './types.js';
+} from '../../shared/types';
+import { trackTokenUsage } from '../../shared/utils/token-tracking';
+import type { ConceptualizationInput, ConceptualizationOutput } from './types';
 
 // Zod schema for concept validation
 const ConceptSchema = z.object({

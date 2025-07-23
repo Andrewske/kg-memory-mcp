@@ -1,11 +1,11 @@
-import type { EntityType } from '~/shared/types/core.js';
 import type {
 	ConceptNode,
 	ConceptualizationRelationship,
 	KnowledgeTriple,
 	Result,
-} from '~/shared/types/index.js';
-import { db } from './client.js';
+} from '~/shared/types';
+import type { EntityType } from '~/shared/types/core';
+import { db } from './client';
 import {
 	convertEmbeddingToVector,
 	generateConceptId,
@@ -16,7 +16,7 @@ import {
 	mapPrismaConceptualization,
 	mapPrismaTriple,
 	unmapAbstractionLevel,
-} from './database-utils.js';
+} from './database-utils';
 
 /**
  * Store concept nodes in the database
@@ -55,7 +55,10 @@ export async function storeConcepts(concepts: ConceptNode[]): Promise<Result<voi
 /**
  * Search concepts by text query
  */
-export async function searchConcepts(query: string, abstraction?: string): Promise<Result<ConceptNode[]>> {
+export async function searchConcepts(
+	query: string,
+	abstraction?: string
+): Promise<Result<ConceptNode[]>> {
 	try {
 		const where: any = {
 			concept: { contains: query, mode: 'insensitive' },

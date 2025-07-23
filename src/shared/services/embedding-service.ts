@@ -1,7 +1,8 @@
 import { openai } from '@ai-sdk/openai';
 import { embed } from 'ai';
-import type { EmbeddingConfig, EmbeddingService, Result } from '../types/index.js';
-
+import tiktoken from 'tiktoken';
+import { storeTokenUsage } from '../database/stats-operations';
+import type { EmbeddingConfig, EmbeddingService, Result } from '../types';
 /**
  * OpenAI embedding service implementation
  */
@@ -43,10 +44,15 @@ export function createEmbeddingService(config: EmbeddingConfig): EmbeddingServic
 				const modelConfig = { ...config };
 				const batchSize = modelConfig.batchSize || 32;
 				const embeddings: number[][] = [];
+				const encoder = tiktoken.encoding_for_model('text-embedding-3-small');
+
+				const tokens = texts.map(text => encoder.encode(text).length);
+				const totalTokens = tokens.reduce((acc, curr) => acc + curr, 0);
 
 				// Process in batches to avoid rate limits
 				for (let i = 0; i < texts.length; i += batchSize) {
 					const batch = texts.slice(i, i + batchSize);
+
 					const batchPromises = batch.map(async text => {
 						const { embedding } = await embed({
 							model: openai.embedding(modelConfig.model),
@@ -63,6 +69,22 @@ export function createEmbeddingService(config: EmbeddingConfig): EmbeddingServic
 						await new Promise(resolve => setTimeout(resolve, 100));
 					}
 				}
+
+				await storeTokenUsage({
+					source: 'embedding',
+					source_type: 'batch',
+					operation_type: 'embed',
+					provider: 'openai',
+					model: modelConfig.model,
+					input_tokens: totalTokens,
+					output_tokens: 0,
+					total_tokens: totalTokens,
+					estimated_cost: totalTokens * 0.02,
+					timestamp: new Date().toISOString(),
+					duration_ms: 0,
+					reasoning_tokens: 0,
+					thinking_tokens: 0,
+				});
 
 				return {
 					success: true,

@@ -1,11 +1,11 @@
-import type { KnowledgeTriple, Result, SearchOptions } from '~/shared/types/index.js';
-import { db } from './client.js';
+import type { KnowledgeTriple, Result, SearchOptions } from '~/shared/types';
+import { db } from './client';
 import {
 	buildVectorSearchParams,
 	convertEmbeddingToVector,
 	unmapTripleType,
 	validateEmbeddingDimensions,
-} from './database-utils.js';
+} from './database-utils';
 
 /**
  * Search triples by entity vector similarity

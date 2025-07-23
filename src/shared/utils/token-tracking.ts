@@ -1,10 +1,5 @@
-import type {
-	AIConfig,
-	AIResponseWithUsage,
-	Result,
-	TokenUsage,
-} from '../types/index.js';
-import { db } from '../database/client.js';
+import { db } from '../database/client';
+import type { AIConfig, AIResponseWithUsage, Result, TokenUsage } from '../types';
 
 /**
  * Context information for token tracking
@@ -65,37 +60,39 @@ export async function trackTokenUsage<T>(
 		};
 
 		// Store the token usage in the database
-		return await db.tokenUsage.create({
-			data: {
-				source: tokenUsage.source,
-				source_type: tokenUsage.source_type,
-				operation_type: tokenUsage.operation_type,
-				provider: tokenUsage.provider,
-				model: tokenUsage.model,
-				input_tokens: tokenUsage.input_tokens,
-				output_tokens: tokenUsage.output_tokens,
-				total_tokens: tokenUsage.total_tokens,
-				thinking_tokens: tokenUsage.thinking_tokens,
-				reasoning_tokens: tokenUsage.reasoning_tokens,
-				cached_read_tokens: tokenUsage.cached_read_tokens,
-				cached_write_tokens: tokenUsage.cached_write_tokens,
-				reasoning_steps: tokenUsage.reasoning_steps ?? undefined,
-				operation_context: tokenUsage.operation_context ?? undefined,
-				duration_ms: tokenUsage.duration_ms,
-				estimated_cost: tokenUsage.estimated_cost ?? null,
-				processing_batch_id: tokenUsage.processing_batch_id,
-				tools_used: tokenUsage.tools_used || [],
-				timestamp: new Date(),
-			},
-		}).then(() => ({ success: true as const, data: undefined }))
-		  .catch((error: any) => ({
-			success: false as const,
-			error: {
-				type: 'DATABASE_ERROR' as const,
-				message: 'Failed to store token usage',
-				cause: error,
-			},
-		  }));
+		return await db.tokenUsage
+			.create({
+				data: {
+					source: tokenUsage.source,
+					source_type: tokenUsage.source_type,
+					operation_type: tokenUsage.operation_type,
+					provider: tokenUsage.provider,
+					model: tokenUsage.model,
+					input_tokens: tokenUsage.input_tokens,
+					output_tokens: tokenUsage.output_tokens,
+					total_tokens: tokenUsage.total_tokens,
+					thinking_tokens: tokenUsage.thinking_tokens,
+					reasoning_tokens: tokenUsage.reasoning_tokens,
+					cached_read_tokens: tokenUsage.cached_read_tokens,
+					cached_write_tokens: tokenUsage.cached_write_tokens,
+					reasoning_steps: tokenUsage.reasoning_steps ?? undefined,
+					operation_context: tokenUsage.operation_context ?? undefined,
+					duration_ms: tokenUsage.duration_ms,
+					estimated_cost: tokenUsage.estimated_cost ?? null,
+					processing_batch_id: tokenUsage.processing_batch_id,
+					tools_used: tokenUsage.tools_used || [],
+					timestamp: new Date(),
+				},
+			})
+			.then(() => ({ success: true as const, data: undefined }))
+			.catch((error: any) => ({
+				success: false as const,
+				error: {
+					type: 'DATABASE_ERROR' as const,
+					message: 'Failed to store token usage',
+					cause: error,
+				},
+			}));
 	} catch (error) {
 		return {
 			success: false,

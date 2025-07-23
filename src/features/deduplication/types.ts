@@ -1,4 +1,4 @@
-import type { KnowledgeTriple } from '../../shared/types/index.js';
+import type { KnowledgeTriple } from '../../shared/types';
 
 export interface DeduplicationResult {
 	uniqueTriples: KnowledgeTriple[];
