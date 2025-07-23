@@ -1,12 +1,17 @@
 import { z } from 'zod';
 import type { EntityType } from '~/shared/types/core.js';
 
-import type { AIProvider, KnowledgeGraphConfig, Result } from '~/shared/types/index.js';
+import type {
+	AIProvider,
+	KnowledgeGraphConfig,
+	Result,
+} from '~/shared/types/index.js';
 import type {
 	ConceptNode,
 	ConceptualizationRelationship,
 	KnowledgeTriple,
 } from '../../shared/types/index.js';
+import { trackTokenUsage } from '../../shared/utils/token-tracking.js';
 import type { ConceptualizationInput, ConceptualizationOutput } from './types.js';
 
 // Zod schema for concept validation
@@ -43,7 +48,7 @@ export async function generateConcepts(
 		processing_batch_id?: string;
 	},
 	aiProvider: AIProvider,
-	_config: KnowledgeGraphConfig
+	config: KnowledgeGraphConfig
 ): Promise<Result<ConceptualizationOutput>> {
 	try {
 		const prompt = createConceptualizationPrompt(input);
@@ -59,6 +64,26 @@ export async function generateConcepts(
 		if (!result.success) {
 			return result;
 		}
+
+		// Track token usage
+		await trackTokenUsage(
+			result.data,
+			{
+				source: metadata.source,
+				source_type: metadata.source_type,
+				operation_type: 'conceptualization',
+				processing_batch_id: metadata.processing_batch_id,
+				operation_context: {
+					entities_count: input.entities.length,
+					events_count: input.events.length,
+					relationships_count: input.relationships.length,
+					context_triples_count: input.contextTriples?.length || 0,
+					generated_concepts_count: result.data.data.concepts.length,
+					generated_relationships_count: result.data.data.relationships.length,
+				},
+			},
+			config.ai
+		);
 
 		const { concepts: conceptData, relationships: relationshipData } = result.data.data;
 		const now = new Date().toISOString();

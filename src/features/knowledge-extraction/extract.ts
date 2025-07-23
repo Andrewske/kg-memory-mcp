@@ -1,4 +1,3 @@
-import type { EntityType } from '@prisma/client';
 import { z } from 'zod';
 import type {
 	AIProvider,
@@ -6,6 +5,7 @@ import type {
 	KnowledgeTriple,
 	Result,
 } from '../../shared/types/index.js';
+import { trackTokenUsage } from '../../shared/utils/token-tracking.js';
 import {
 	extractElementsFromTriples,
 	generateConcepts,
@@ -54,7 +54,7 @@ export async function extractKnowledgeTriples(
 		// Extract triples first
 		let extractionResult: Result<ExtractedKnowledge>;
 		if (method === 'single-pass') {
-			extractionResult = await extractSinglePass(text, metadata, aiProvider);
+			extractionResult = await extractSinglePass(text, metadata, aiProvider, config);
 		} else {
 			extractionResult = await extractFourStage(text, metadata, aiProvider, config);
 		}
@@ -112,7 +112,8 @@ export async function extractKnowledgeTriples(
 async function extractSinglePass(
 	text: string,
 	metadata: ExtractionMetadata,
-	aiProvider: AIProvider
+	aiProvider: AIProvider,
+	config: KnowledgeGraphConfig
 ): Promise<Result<ExtractedKnowledge>> {
 	try {
 		const prompt = createSinglePassPrompt(text, metadata);
@@ -127,6 +128,23 @@ async function extractSinglePass(
 		if (!result.success) {
 			return result;
 		}
+
+		// Track token usage
+		await trackTokenUsage(
+			result.data,
+			{
+				source: metadata.source,
+				source_type: metadata.source_type || 'unknown',
+				operation_type: 'extraction',
+				processing_batch_id: metadata.processing_batch_id,
+				operation_context: {
+					extraction_method: 'single-pass',
+					text_length: text.length,
+					extracted_triples_count: result.data.data.relationships.length,
+				},
+			},
+			config.ai
+		);
 
 		// Convert to KnowledgeTriple format
 		const triples: KnowledgeTriple[] = result.data.data.relationships.map(rel => ({
@@ -228,6 +246,24 @@ async function extractByType(
 		if (!result.success) {
 			return result;
 		}
+
+		// Track token usage
+		await trackTokenUsage(
+			result.data,
+			{
+				source: metadata.source,
+				source_type: metadata.source_type || 'unknown',
+				operation_type: 'extraction',
+				processing_batch_id: metadata.processing_batch_id,
+				operation_context: {
+					extraction_method: 'four-stage',
+					relationship_type: type,
+					text_length: text.length,
+					extracted_triples_count: result.data.data.triples.length,
+				},
+			},
+			config.ai
+		);
 
 		const triples: KnowledgeTriple[] = result.data.data.triples.map(triple => ({
 			subject: triple.subject,
