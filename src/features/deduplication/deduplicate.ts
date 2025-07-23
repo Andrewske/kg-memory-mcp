@@ -1,5 +1,5 @@
+import type { DeduplicationConfig, EmbeddingService, Result } from '~/shared/types/index.js';
 import type { KnowledgeTriple } from '../../shared/types/index.js';
-import type { EmbeddingService, Result, DeduplicationConfig } from '~/shared/types/index.js';
 import type { DeduplicationResult, SimilarityScore } from './types.js';
 
 /**

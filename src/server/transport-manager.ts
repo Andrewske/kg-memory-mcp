@@ -3,11 +3,12 @@
  * Provides shared tool handling logic across different transports
  */
 
-import { extractKnowledgeTriples } from '~/features/knowledge-extraction/extract.js';
-import { storeTriples, getStats } from '~/features/knowledge-graph/operations.js';
-import { searchConcepts } from '~/features/knowledge-graph/search.js';
-import { searchFusion } from '~/features/knowledge-graph/fusion-search.js';
 import { deduplicateTriples } from '~/features/deduplication/deduplicate.js';
+import { extractKnowledgeTriples } from '~/features/knowledge-extraction/extract.js';
+import { searchFusion } from '~/features/knowledge-graph/fusion-search.js';
+import { getStats, storeTriples } from '~/features/knowledge-graph/operations.js';
+import { searchConcepts } from '~/features/knowledge-graph/search.js';
+import { env } from '~/shared/config/env.js';
 
 import type { ToolDependencies, ToolResult } from '~/shared/types/index.js';
 
@@ -26,6 +27,7 @@ export async function processKnowledge(
 	dependencies: ToolDependencies
 ): Promise<ToolResult> {
 	try {
+		const startTime = Date.now();
 		const {
 			text,
 			source,
@@ -34,6 +36,14 @@ export async function processKnowledge(
 			processing_batch_id = `batch_${Date.now()}`,
 			include_concepts = false,
 		} = args;
+
+		console.debug('[ProcessKnowledge] Starting with:', {
+			textLength: text.length,
+			source,
+			source_type,
+			include_concepts,
+			processing_batch_id,
+		});
 
 		const metadata = {
 			source,
@@ -45,6 +55,7 @@ export async function processKnowledge(
 		const { config, db, embeddingService, aiProvider } = dependencies;
 
 		// Extract knowledge
+		console.debug('[ProcessKnowledge] Extracting triples...');
 		const extractionResult = await extractKnowledgeTriples(
 			text,
 			metadata,
@@ -53,6 +64,7 @@ export async function processKnowledge(
 			false
 		);
 		if (!extractionResult.success) {
+			console.error('[ProcessKnowledge] Extraction failed:', extractionResult.error);
 			return {
 				success: false,
 				error: {
@@ -63,22 +75,30 @@ export async function processKnowledge(
 		}
 
 		let { triples } = extractionResult.data;
+		console.debug(`[ProcessKnowledge] Extracted ${triples.length} triples`);
 
 		// Always deduplicate triples
 		if (triples.length > 0) {
+			console.debug('[ProcessKnowledge] Deduplicating triples...');
 			const deduplicationResult = await deduplicateTriples(
 				triples,
 				embeddingService,
 				config.deduplication
 			);
 			if (deduplicationResult.success) {
+				const originalCount = triples.length;
 				triples = deduplicationResult.data.uniqueTriples;
+				console.debug(
+					`[ProcessKnowledge] Deduplicated: ${originalCount} → ${triples.length} triples`
+				);
 			}
 		}
 
 		// Store triples with vector generation
+		console.debug('[ProcessKnowledge] Storing triples...');
 		const storeResult = await storeTriples(triples, db, config, embeddingService);
 		if (!storeResult.success) {
+			console.error('[ProcessKnowledge] Storage failed:', storeResult.error);
 			return {
 				success: false,
 				error: {
@@ -142,6 +162,12 @@ export async function processKnowledge(
 			});
 		}
 
+		const duration = Date.now() - startTime;
+		console.debug(`[ProcessKnowledge] Completed in ${duration}ms`, {
+			triplesStored: triples.length,
+			conceptsQueued: include_concepts && triples.length > 0,
+		});
+
 		return {
 			success: true,
 			data: {
@@ -151,6 +177,7 @@ export async function processKnowledge(
 			},
 		};
 	} catch (error) {
+		console.error('[ProcessKnowledge] Unexpected error:', error);
 		return {
 			success: false,
 			error: {
@@ -310,17 +337,26 @@ export async function executeToolFunction(
 	args: any,
 	dependencies: ToolDependencies
 ): Promise<ToolResult> {
+	const startTime = Date.now();
+	console.debug(`[ToolDispatcher] Executing ${toolName}...`);
+
+	let result: ToolResult;
 	switch (toolName) {
 		case 'process_knowledge':
-			return processKnowledge(args, dependencies);
+			result = await processKnowledge(args, dependencies);
+			break;
 		case 'search_knowledge_graph':
-			return searchKnowledgeGraph(args, dependencies);
+			result = await searchKnowledgeGraph(args, dependencies);
+			break;
 		case 'search_concepts':
-			return searchConceptsTool(args, dependencies);
+			result = await searchConceptsTool(args, dependencies);
+			break;
 		case 'get_knowledge_graph_stats':
-			return getKnowledgeGraphStats(dependencies);
+			result = await getKnowledgeGraphStats(dependencies);
+			break;
 		default:
-			return {
+			console.warn(`[ToolDispatcher] Unknown tool requested: ${toolName}`);
+			result = {
 				success: false,
 				error: {
 					message: `Unknown tool: ${toolName}`,
@@ -328,6 +364,14 @@ export async function executeToolFunction(
 				},
 			};
 	}
+
+	const duration = Date.now() - startTime;
+	console.debug(`[ToolDispatcher] ${toolName} completed in ${duration}ms`, {
+		success: result.success,
+		error: result.success ? undefined : result.error?.operation,
+	});
+
+	return result;
 }
 
 /**

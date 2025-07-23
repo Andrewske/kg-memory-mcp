@@ -1,4 +1,4 @@
-import type { Result, EmbeddingConfig } from '../types/index.js';
+import type { EmbeddingConfig, Result } from '../types/index.js';
 
 export interface EmbeddingService {
 	embed(text: string, config?: Partial<EmbeddingConfig>): Promise<Result<number[]>>;

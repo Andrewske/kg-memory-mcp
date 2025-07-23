@@ -1,18 +1,23 @@
 import type {
-	KnowledgeTriple,
+	DatabaseAdapter,
+	EmbeddingService,
+	Result,
+	SearchOptions,
+	SearchResult,
+} from '~/shared/types/index.js';
+import type {
 	ConceptNode,
 	KnowledgeGraphConfig,
+	KnowledgeTriple,
 } from '../../shared/types/index.js';
-import type { DatabaseAdapter, EmbeddingService, Result } from '~/shared/types/index.js';
-import type { SearchResult, SearchOptions } from '~/shared/types/index.js';
 import {
-	searchFusion,
 	type FusionSearchResult,
 	type FusionSearchWeights,
+	searchByConcept as fusionSearchByConcept,
 	searchByEntity as fusionSearchByEntity,
 	searchByRelationship as fusionSearchByRelationship,
 	searchBySemantic as fusionSearchBySemantic,
-	searchByConcept as fusionSearchByConcept,
+	searchFusion,
 } from './fusion-search.js';
 
 /**

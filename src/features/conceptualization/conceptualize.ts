@@ -1,13 +1,13 @@
 import { z } from 'zod';
+import type { EntityType } from '~/shared/types/core.js';
+
+import type { AIProvider, KnowledgeGraphConfig, Result } from '~/shared/types/index.js';
 import type {
 	ConceptNode,
 	ConceptualizationRelationship,
 	KnowledgeTriple,
 } from '../../shared/types/index.js';
-
-import type { AIProvider, Result, KnowledgeGraphConfig } from '~/shared/types/index.js';
 import type { ConceptualizationInput, ConceptualizationOutput } from './types.js';
-import type { EntityType } from '~/shared/types/core.js';
 
 // Zod schema for concept validation
 const ConceptSchema = z.object({

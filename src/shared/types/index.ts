@@ -1,52 +1,48 @@
 // Re-export all types from specialized modules for convenience
 
+// API and transport types
+export type {
+	GraphStats,
+	RoutesDependencies,
+	ToolDependencies,
+	ToolResult,
+} from './api.js';
+// Configuration types
+export type {
+	AIConfig,
+	DatabaseConfig,
+	DeduplicationConfig,
+	EmbeddingConfig,
+	ExtractionConfig,
+	KnowledgeGraphConfig,
+	SearchConfig,
+} from './config.js';
 // Core domain types
 export type {
-	TripleType,
-	KnowledgeTriple,
+	AIResponseWithUsage,
 	ConceptNode,
 	ConceptualizationRelationship,
 	ConversationMetadata,
-	VectorIndex,
+	KnowledgeTriple,
 	TokenUsage,
-	AIResponseWithUsage,
+	TripleType,
+	VectorIndex,
 } from './core.js';
-
 // Search-related types
 export type {
+	ConceptSearchResult,
+	EntityEnumerationOptions,
+	LegacySearchResult,
 	SearchOptions,
+	SearchResult,
 	TemporalFilter,
 	TripleSearchResult,
-	ConceptSearchResult,
-	SearchResult,
-	LegacySearchResult,
-	EntityEnumerationOptions,
 } from './search.js';
-
-// Configuration types
-export type {
-	KnowledgeGraphConfig,
-	EmbeddingConfig,
-	SearchConfig,
-	ExtractionConfig,
-	DeduplicationConfig,
-	AIConfig,
-	DatabaseConfig,
-} from './config.js';
-
 // Service interface types
 export type {
-	Result,
-	OperationError,
+	AIProvider,
 	DatabaseAdapter,
 	EmbeddingService,
-	AIProvider,
+	OperationError,
+	Result,
 } from './services.js';
-
-// API and transport types
-export type {
-	ToolDependencies,
-	ToolResult,
-	RoutesDependencies,
-	GraphStats,
-} from './api.js';

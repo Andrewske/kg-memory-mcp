@@ -3,8 +3,14 @@
  * Core AutoSchemaKG functionality that combines multiple search strategies
  */
 
-import type { Result, DatabaseAdapter, EmbeddingService } from '~/shared/types/index.js';
-import type { KnowledgeTriple, KnowledgeGraphConfig, SearchOptions } from '~/shared/types/index.js';
+import type {
+	DatabaseAdapter,
+	EmbeddingService,
+	KnowledgeGraphConfig,
+	KnowledgeTriple,
+	Result,
+	SearchOptions,
+} from '~/shared/types/index.js';
 
 export interface FusionSearchResult {
 	triple: KnowledgeTriple;

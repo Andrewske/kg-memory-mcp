@@ -5,18 +5,15 @@
  */
 
 import { config } from 'dotenv';
-
-// Import server implementations
-import { KnowledgeGraphStdioServer } from './server/stdio-server.js';
-import { KnowledgeGraphHttpServer, createHttpServerConfig } from './server/http-server.js';
-
 // Import service implementations
 import { createDatabaseAdapter } from '~/shared/database/database-adapter.js';
-import { createEmbeddingService } from '~/shared/services/embedding-service.js';
 import { createAIProvider } from '~/shared/services/ai-provider-service.js';
-import { redirectConsoleToFiles } from '~/shared/utils/console-redirect.js';
-
+import { createEmbeddingService } from '~/shared/services/embedding-service.js';
 import type { KnowledgeGraphConfig } from '~/shared/types/index.js';
+import { redirectConsoleToFiles } from '~/shared/utils/console-redirect.js';
+import { createHttpServerConfig, KnowledgeGraphHttpServer } from './server/http-server.js';
+// Import server implementations
+import { KnowledgeGraphStdioServer } from './server/stdio-server.js';
 
 // Load environment variables
 config();

@@ -3,18 +3,16 @@
  * Maps HTTP endpoints to MCP tool functions
  */
 
-import { Router, type Request, type Response } from 'express';
+import { type Request, type Response, Router } from 'express';
 import { z } from 'zod';
-
+import type { RoutesDependencies } from '~/shared/types/index.js';
 // Import unified tool functions
 import {
-	processKnowledge,
-	searchKnowledgeGraph,
-	searchConceptsTool,
 	getKnowledgeGraphStats,
+	processKnowledge,
+	searchConceptsTool,
+	searchKnowledgeGraph,
 } from '../transport-manager.js';
-
-import type { RoutesDependencies } from '~/shared/types/index.js';
 
 // Zod validation schemas
 const processKnowledgeSchema = z.object({

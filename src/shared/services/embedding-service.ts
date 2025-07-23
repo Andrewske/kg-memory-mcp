@@ -1,6 +1,6 @@
 import { openai } from '@ai-sdk/openai';
 import { embed } from 'ai';
-import type { EmbeddingService, Result, EmbeddingConfig } from '../types/index.js';
+import type { EmbeddingConfig, EmbeddingService, Result } from '../types/index.js';
 
 /**
  * OpenAI embedding service implementation

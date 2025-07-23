@@ -9,6 +9,21 @@ export const env = createEnv({
 	server: {
 		DATABASE_URL: z.string().url(),
 		NODE_ENV: z.enum(['development', 'test', 'production']),
+
+		// Logging configuration
+		LOG_LEVEL: z.enum(['ERROR', 'WARN', 'INFO', 'DEBUG', 'TRACE']).default('INFO'),
+		LOG_TO_STDERR: z
+			.string()
+			.transform(val => val === 'true')
+			.default('false'),
+		LOG_STACK_TRACE: z
+			.string()
+			.transform(val => val === 'true')
+			.default('false'),
+		DIAGNOSTIC_MODE: z
+			.string()
+			.transform(val => val === 'true')
+			.default('false'),
 	},
 
 	/**

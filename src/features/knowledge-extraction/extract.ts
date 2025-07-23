@@ -1,12 +1,16 @@
-import { z } from 'zod';
-import type { KnowledgeTriple, KnowledgeGraphConfig } from '../../shared/types/index.js';
-import type { AIProvider, Result } from '../../shared/types/index.js';
-import type { ExtractedKnowledge, ExtractionMetadata } from './types.js';
-import {
-	generateConcepts,
-	extractElementsFromTriples,
-} from '../conceptualization/conceptualize.js';
 import type { EntityType } from '@prisma/client';
+import { z } from 'zod';
+import type {
+	AIProvider,
+	KnowledgeGraphConfig,
+	KnowledgeTriple,
+	Result,
+} from '../../shared/types/index.js';
+import {
+	extractElementsFromTriples,
+	generateConcepts,
+} from '../conceptualization/conceptualize.js';
+import type { ExtractedKnowledge, ExtractionMetadata } from './types.js';
 
 // Zod schemas for validation
 const TripleSchema = z.object({

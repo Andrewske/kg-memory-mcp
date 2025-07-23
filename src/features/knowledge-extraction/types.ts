@@ -1,9 +1,9 @@
+import type { EntityType } from '~/shared/types/core.js';
 import type {
-	KnowledgeTriple,
 	ConceptNode,
 	ConceptualizationRelationship,
+	KnowledgeTriple,
 } from '../../shared/types/index.js';
-import type { EntityType } from '~/shared/types/core.js';
 
 export interface ExtractedKnowledge {
 	triples: KnowledgeTriple[];

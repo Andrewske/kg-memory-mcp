@@ -1,12 +1,16 @@
+import { v4 as uuidv4 } from 'uuid';
 import type {
-	KnowledgeTriple,
+	DatabaseAdapter,
+	EmbeddingService,
+	GraphStats,
+	Result,
+} from '~/shared/types/index.js';
+import type {
 	ConceptNode,
 	KnowledgeGraphConfig,
+	KnowledgeTriple,
 } from '../../shared/types/index.js';
-import type { DatabaseAdapter, EmbeddingService, Result } from '~/shared/types/index.js';
-import type { GraphStats } from '~/shared/types/index.js';
 import type { StoreResult } from './types.js';
-import { v4 as uuidv4 } from 'uuid';
 
 export interface EntityEnumerationOptions {
 	role?: 'subject' | 'object' | 'both';
@@ -167,7 +171,7 @@ export async function storeConcepts(
 			return result;
 		}
 
-		let vectorsGenerated: number | undefined = undefined;
+		let vectorsGenerated: number | undefined;
 
 		// Generate and store vectors for the concepts (if embedding service available)
 		console.log(`[CONCEPT VECTOR DEBUG] embeddingService present: ${!!embeddingService}`);

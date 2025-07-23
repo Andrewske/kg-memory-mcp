@@ -1,19 +1,17 @@
-import { db } from './client.js';
+import type { EntityType } from '../types/core.js';
 import type {
-	KnowledgeTriple,
 	ConceptNode,
 	ConceptualizationRelationship,
-	TripleType,
-	TokenUsage,
-} from '../types/index.js';
-import type {
 	DatabaseAdapter,
-	Result,
 	DatabaseConfig,
+	KnowledgeTriple,
+	Result,
 	SearchOptions,
 	TemporalFilter,
+	TokenUsage,
+	TripleType,
 } from '../types/index.js';
-import type { EntityType } from '../types/core.js';
+import { db } from './client.js';
 
 /**
  * Build temporal filter for Prisma queries
@@ -499,7 +497,7 @@ export function createDatabaseAdapter(config: DatabaseConfig): DatabaseAdapter {
 							case 'emotional-context':
 								return 'EMOTIONAL_CONTEXT';
 							default:
-									return;
+								return;
 						}
 					});
 					whereClause += ` AND kt.type = ANY($${++paramIndex})`;

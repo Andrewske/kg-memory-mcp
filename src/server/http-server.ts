@@ -3,15 +3,18 @@
  * Provides REST API endpoints alongside STDIO MCP transport
  */
 
-import express from 'express';
-import cors from 'cors';
 import compression from 'compression';
+import cors from 'cors';
+import express from 'express';
 import helmet from 'helmet';
 import type { Server } from 'http';
-
+import type {
+	AIProvider,
+	DatabaseAdapter,
+	EmbeddingService,
+	KnowledgeGraphConfig,
+} from '~/shared/types/index.js';
 import { createKnowledgeRoutes } from './routes/knowledge-routes.js';
-import type { KnowledgeGraphConfig } from '~/shared/types/index.js';
-import type { DatabaseAdapter, EmbeddingService, AIProvider } from '~/shared/types/index.js';
 export interface HttpServerConfig {
 	port: number;
 	basePath: string;

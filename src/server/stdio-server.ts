@@ -11,6 +11,7 @@ import {
 	ListToolsRequestSchema,
 	McpError,
 } from '@modelcontextprotocol/sdk/types.js';
+import { env } from '~/shared/config/env.js';
 import type {
 	AIProvider,
 	DatabaseAdapter,
@@ -61,9 +62,17 @@ export class KnowledgeGraphStdioServer {
 
 		// Call tool handler using unified dispatcher
 		this.server.setRequestHandler(CallToolRequestSchema, async request => {
+			const { name, arguments: args } = request.params;
+
+			// Log incoming requests in diagnostic mode
+			if (env.DIAGNOSTIC_MODE) {
+				console.debug('[STDIO Request]', { tool: name, args });
+			}
+
 			try {
 				const { config, db, embeddingService, aiProvider } = this.dependencies;
-				const { name, arguments: args } = request.params;
+
+				console.debug(`[STDIO] Executing tool: ${name}`);
 
 				// Use the unified tool dispatcher
 				const result = await executeToolFunction(name, args, {
@@ -74,7 +83,17 @@ export class KnowledgeGraphStdioServer {
 				});
 
 				if (!result.success) {
+					console.error(`[STDIO Tool Error] ${name}:`, result.error);
 					throw new McpError(ErrorCode.InternalError, result.error?.message || 'Unknown error');
+				}
+
+				// Log successful responses in diagnostic mode
+				if (env.DIAGNOSTIC_MODE) {
+					console.debug('[STDIO Response]', {
+						tool: name,
+						success: true,
+						dataKeys: Object.keys(result.data || {}),
+					});
 				}
 
 				return {
@@ -86,6 +105,7 @@ export class KnowledgeGraphStdioServer {
 					],
 				};
 			} catch (error) {
+				console.error(`[STDIO Exception] ${name}:`, error);
 				if (error instanceof McpError) {
 					throw error;
 				}
@@ -99,11 +119,18 @@ export class KnowledgeGraphStdioServer {
 
 	public async start(): Promise<void> {
 		const transport = new StdioServerTransport();
+		console.debug('[STDIO] Initializing server transport...');
 		await this.server.connect(transport);
 		console.log('🔌 STDIO MCP Server started');
+		console.debug('[STDIO] Server info:', {
+			tools: TOOL_DEFINITIONS.length,
+			logLevel: env.LOG_LEVEL,
+			diagnosticMode: env.DIAGNOSTIC_MODE,
+		});
 	}
 
 	public async stop(): Promise<void> {
+		console.debug('[STDIO] Shutting down server...');
 		await this.server.close();
 		console.log('🛑 STDIO MCP Server stopped');
 	}

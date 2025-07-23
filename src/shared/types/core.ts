@@ -1,4 +1,3 @@
-
 // Core domain types for the Knowledge Graph system
 
 export type TripleType = 'entity-entity' | 'entity-event' | 'event-event' | 'emotional-context';
