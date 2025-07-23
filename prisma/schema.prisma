@@ -1,0 +1,409 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// Knowledge Triples - Core relationships in the knowledge graph
+model KnowledgeTriple {
+  id        String   @id @default(cuid())
+  created_at DateTime @default(now())
+  updated_at DateTime @updatedAt
+
+  // Triple content
+  subject   String
+  predicate String
+  object    String
+  type      TripleType
+
+  // Data lineage fields
+  source              String
+  source_type         String // "thread", "file", "manual", "api", etc.
+  source_date   DateTime?
+  extracted_at        DateTime
+  processing_batch_id String?
+
+  // Quality fields
+  confidence Decimal? @db.Decimal(3, 2) // 0.00 to 1.00
+
+  // Relationships
+  entity_vectors       EntityVector[]
+  relationship_vectors RelationshipVector[]
+  semantic_vectors     SemanticVector[]
+  conceptualizations   ConceptualizationRelationship[]
+
+  // Indexes
+  @@index([subject])
+  @@index([predicate])
+  @@index([object])
+  @@index([type])
+  @@index([source])
+  @@index([source_type])
+  @@index([source_date])
+  @@index([extracted_at])
+  @@index([processing_batch_id])
+  @@index([source_date, type])
+  @@index([source_date, source])
+  @@index([source, source_type])
+  @@unique([subject, predicate, object, type])
+  @@map("knowledge_triples")
+}
+
+// Concept Nodes - Abstract conceptual representations
+model ConceptNode {
+  id        String   @id @default(cuid())
+  created_at DateTime @default(now())
+  updated_at DateTime @updatedAt
+
+  // Core concept information
+  concept            String
+  abstraction_level  AbstractionLevel
+  confidence         Decimal          @db.Decimal(3, 2) // 0.00 to 1.00
+
+  // Metadata
+  source              String
+  source_type         String // "thread", "file", "manual", "api", etc.
+  extracted_at        DateTime
+  processing_batch_id String?
+
+  // Relationships
+  concept_vectors    ConceptVector[]
+  conceptualizations ConceptualizationRelationship[]
+
+  // Indexes
+  @@index([concept])
+  @@index([abstraction_level])
+  @@index([source])
+  @@index([source_type])
+  @@index([extracted_at])
+  @@index([processing_batch_id])
+  @@unique([concept, abstraction_level, source, source_type])
+  @@map("concept_nodes")
+}
+
+// Conceptualization Relationships - Links between entities/events and concepts  
+model ConceptualizationRelationship {
+  id        String   @id @default(cuid())
+  created_at DateTime @default(now())
+  updated_at DateTime @updatedAt
+
+  // Relationship definition
+  source_element String
+  entity_type    EntityType
+  concept        String
+  confidence     Decimal    @db.Decimal(3, 2) // 0.00 to 1.00
+
+  // Context information
+  context_triples String[] // Array of triple IDs
+
+  // Metadata
+  source              String
+  data_source_type    String // "thread", "file", "manual", "api", etc.
+  extracted_at        DateTime
+  processing_batch_id String?
+
+  // Foreign key relationships
+  knowledge_triple_id String?
+  knowledge_triple    KnowledgeTriple? @relation(fields: [knowledge_triple_id], references: [id], onDelete: SetNull)
+  
+  concept_node_id String?
+  concept_node    ConceptNode? @relation(fields: [concept_node_id], references: [id], onDelete: SetNull)
+
+  // Indexes
+  @@index([source_element])
+  @@index([entity_type])
+  @@index([concept])
+  @@index([source])
+  @@index([extracted_at])
+  @@index([processing_batch_id])
+  @@unique([source_element, entity_type, concept])
+  @@map("conceptualization_relationships")
+}
+
+// Entity Vectors - Vector embeddings for entities
+model EntityVector {
+  id        String   @id @default(cuid())
+  created_at DateTime @default(now())
+  updated_at DateTime @updatedAt
+
+  // Vector data
+  vector_id  String   @unique // Corresponds to file-based vector ID
+  text       String
+  embedding  Unsupported("vector(1536)") // OpenAI text-embedding-3-small dimensions
+  
+  // Metadata
+  entity_name String
+  role        String   @default("entity")
+  
+  // Foreign key relationships
+  knowledge_triple_id String
+  knowledge_triple    KnowledgeTriple @relation(fields: [knowledge_triple_id], references: [id], onDelete: Cascade)
+
+  // Indexes
+  @@index([vector_id])
+  @@index([entity_name])
+  @@index([knowledge_triple_id])
+  // Vector index will be created manually: CREATE INDEX ON table_name USING ivfflat (embedding vector_cosine_ops)
+  @@map("entity_vectors")
+}
+
+// Relationship Vectors - Vector embeddings for predicates/relationships
+model RelationshipVector {
+  id        String   @id @default(cuid())
+  created_at DateTime @default(now())
+  updated_at DateTime @updatedAt
+
+  // Vector data
+  vector_id  String   @unique // Corresponds to file-based vector ID
+  text       String
+  embedding  Unsupported("vector(1536)") // OpenAI text-embedding-3-small dimensions
+  
+  // Metadata
+  role String @default("relationship")
+  
+  // Foreign key relationships
+  knowledge_triple_id String
+  knowledge_triple    KnowledgeTriple @relation(fields: [knowledge_triple_id], references: [id], onDelete: Cascade)
+
+  // Indexes
+  @@index([vector_id])
+  @@index([knowledge_triple_id])
+  // Vector index will be created manually: CREATE INDEX ON table_name USING ivfflat (embedding vector_cosine_ops)
+  @@map("relationship_vectors")
+}
+
+// Semantic Vectors - Vector embeddings for full triple semantic content
+model SemanticVector {
+  id        String   @id @default(cuid())
+  created_at DateTime @default(now())
+  updated_at DateTime @updatedAt
+
+  // Vector data
+  vector_id  String   @unique // Corresponds to file-based vector ID
+  text       String
+  embedding  Unsupported("vector(1536)") // OpenAI text-embedding-3-small dimensions
+  
+  // Metadata
+  role String @default("semantic")
+  
+  // Foreign key relationships
+  knowledge_triple_id String
+  knowledge_triple    KnowledgeTriple @relation(fields: [knowledge_triple_id], references: [id], onDelete: Cascade)
+
+  // Indexes
+  @@index([vector_id])
+  @@index([knowledge_triple_id])
+  // Vector index will be created manually: CREATE INDEX ON table_name USING ivfflat (embedding vector_cosine_ops)
+  @@map("semantic_vectors")
+}
+
+// Concept Vectors - Vector embeddings for concepts
+model ConceptVector {
+  id        String   @id @default(cuid())
+  created_at DateTime @default(now())
+  updated_at DateTime @updatedAt
+
+  // Vector data
+  vector_id  String   @unique // Corresponds to file-based vector ID
+  text       String
+  embedding  Unsupported("vector(1536)") // OpenAI text-embedding-3-small dimensions
+  
+  // Metadata
+  role String @default("concept")
+  
+  // Foreign key relationships
+  concept_node_id String
+  concept_node    ConceptNode @relation(fields: [concept_node_id], references: [id], onDelete: Cascade)
+
+  // Indexes
+  @@index([vector_id])
+  @@index([concept_node_id])
+  // Vector index will be created manually: CREATE INDEX ON table_name USING ivfflat (embedding vector_cosine_ops)
+  @@map("concept_vectors")
+}
+
+// Token Usage Tracking - Monitor API usage and costs with advanced token types
+model TokenUsage {
+  id        String   @id @default(cuid())
+  created_at DateTime @default(now())
+
+  // Usage identification
+  source         String  // thread_12345, filename.txt, etc.
+  source_type    String  // "thread", "file", "manual", "api", etc.
+  operation_type String  // "extraction", "conceptualization", "embedding", "search", "deduplication"
+  provider       String  // "openai", "anthropic"
+  model          String
+  
+  // Standard token counts
+  input_tokens   Int
+  output_tokens  Int
+  total_tokens   Int
+  
+  // Advanced token types (nullable for backward compatibility)
+  thinking_tokens      Int? // Reasoning/thinking tokens for supported models
+  reasoning_tokens     Int? // Additional reasoning step tokens
+  cached_read_tokens   Int? // Cache hit tokens (prompt caching)
+  cached_write_tokens  Int? // Cache write tokens (creating cache)
+  
+  // Reasoning and context metadata
+  reasoning_steps     Json? // Reasoning steps for supported models
+  operation_context   Json? // Additional operation-specific context
+  
+  // Performance and cost tracking
+  duration_ms         Int      // Request duration in milliseconds
+  estimated_cost      Decimal? @db.Decimal(10, 6) // Estimated cost in USD
+  
+  // Processing context
+  processing_batch_id String?  // Link to processing batch if applicable
+  tools_used          String[] // Array of tool names used
+  
+  // Timestamp
+  timestamp DateTime @default(now())
+  
+  // Indexes for efficient queries
+  @@index([source])
+  @@index([source_type])
+  @@index([operation_type])
+  @@index([provider])
+  @@index([model])
+  @@index([timestamp])
+  @@index([processing_batch_id])
+  @@index([source, source_type]) // Composite index for source filtering
+  @@index([provider, model]) // Composite index for cost analysis
+  @@index([timestamp, provider]) // Time-series analysis by provider
+  @@map("token_usage")
+}
+
+// Processing Batches - Track batch processing operations
+model ProcessingBatch {
+  id        String   @id @default(cuid())
+  created_at DateTime @default(now())
+  updated_at DateTime @updatedAt
+
+  // Batch identification
+  batch_id    String   @unique
+  source      String
+  source_type String   // "thread", "file", "manual", "api", etc.
+  status      BatchStatus @default(PENDING)
+  
+  // Processing metrics
+  total_items           Int     @default(0)
+  processed_items       Int     @default(0)
+  failed_items          Int     @default(0)
+  triples_extracted     Int     @default(0)
+  concepts_generated    Int     @default(0)
+  duplicates_removed    Int     @default(0)
+  
+  // Timing
+  started_at   DateTime?
+  completed_at DateTime?
+  duration     Int?      // milliseconds
+  
+  // Configuration
+  extraction_method String?
+  ai_provider       String?
+  ai_model          String?
+  
+  // Error tracking
+  error_message String?
+  error_details Json?
+  
+  // Indexes
+  @@index([batch_id])
+  @@index([source])
+  @@index([source_type])
+  @@index([status])
+  @@index([started_at])
+  @@index([completed_at])
+  @@map("processing_batches")
+}
+
+
+
+// Search Sessions - Track search queries and results for analytics
+model SearchSession {
+  id        String   @id @default(cuid())
+  created_at DateTime @default(now())
+
+  // Search parameters
+  query           String
+  search_type     SearchType
+  limit_requested Int        @default(10)
+  threshold       Decimal    @db.Decimal(3, 2) // 0.00 to 1.00
+  
+  // Filters applied
+  types_filter   TripleType[]
+  sources_filter String[]
+  
+  // Results
+  results_count    Int
+  max_similarity   Decimal? @db.Decimal(3, 2)
+  avg_similarity   Decimal? @db.Decimal(3, 2)
+  response_time_ms Int
+  
+  // Context
+  source      String?
+  source_type String? // "thread", "file", "manual", "api", etc.
+  agent_id    String?
+  
+  // Indexes
+  @@index([query])
+  @@index([search_type])
+  @@index([created_at])
+  @@index([source])
+  @@index([source_type])
+  @@map("search_sessions")
+}
+
+// Enums
+enum TripleType {
+  ENTITY_ENTITY
+  ENTITY_EVENT
+  EVENT_EVENT
+  EMOTIONAL_CONTEXT
+
+  @@map("triple_type")
+}
+
+enum AbstractionLevel {
+  HIGH
+  MEDIUM
+  LOW
+
+  @@map("abstraction_level")
+}
+
+enum EntityType {
+  ENTITY
+  EVENT
+  RELATION
+
+  @@map("entity_type")
+}
+
+enum BatchStatus {
+  PENDING
+  PROCESSING
+  COMPLETED
+  FAILED
+  CANCELLED
+
+  @@map("batch_status")
+}
+
+
+enum SearchType {
+  ENTITY
+  RELATIONSHIP
+  SEMANTIC
+  CONCEPT
+  FUSION
+
+  @@map("search_type")
+}

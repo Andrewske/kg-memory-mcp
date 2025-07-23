@@ -1,0 +1,28 @@
+{
+	"name": "knowledge-graph-mcp-examples",
+	"version": "1.0.0",
+	"description": "HTTP client examples for Knowledge Graph MCP Server",
+	"type": "module",
+	"scripts": {
+		"install:deps": "npm install eventsource && cd python && pip install requests aiohttp asyncio tenacity sseclient-py",
+		"test:simple": "node javascript/simple-client.js",
+		"test:advanced": "node javascript/advanced-client.js",
+		"test:sse": "node javascript/sse-client.js",
+		"test:python-simple": "cd python && python simple_client.py",
+		"test:python-advanced": "cd python && python advanced_client.py",
+		"test:curl": "cd curl && bash examples.sh",
+		"serve:web": "python -m http.server 8080 --directory web",
+		"test:all": "npm run test:simple && npm run test:python-simple && npm run test:curl"
+	},
+	"dependencies": {
+		"eventsource": "^2.0.2"
+	},
+	"keywords": [
+		"mcp",
+		"knowledge-graph",
+		"http-client",
+		"examples"
+	],
+	"author": "Knowledge Graph MCP Server",
+	"license": "MIT"
+}

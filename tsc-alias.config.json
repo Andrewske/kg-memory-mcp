@@ -1,0 +1,12 @@
+{
+	"resolveFullPaths": true,
+	"debug": false,
+	"replacers": {
+		"~/": "./",
+		"~/*": "./*"
+	},
+	"fileExtensions": {
+		".js": [".ts", ".tsx"],
+		".jsx": [".tsx"]
+	}
+}
