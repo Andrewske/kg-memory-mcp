@@ -1,10 +1,9 @@
 // API and transport-related types
 
-import type { AIProvider, DatabaseAdapter, EmbeddingService } from './services';
+import type { AIProvider, EmbeddingService } from './services';
 
 // Transport-specific types
 export interface ToolDependencies {
-	db: DatabaseAdapter;
 	embeddingService: EmbeddingService;
 	aiProvider: AIProvider;
 }
@@ -19,8 +18,7 @@ export interface ToolResult<T = any> {
 	};
 }
 
-export interface RoutesDependencies {
-	db: DatabaseAdapter;
+export interface RoutesDependencies {	
 	embeddingService: EmbeddingService;
 	aiProvider: AIProvider;
 }

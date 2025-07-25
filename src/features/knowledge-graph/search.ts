@@ -1,12 +1,15 @@
-import type { ConceptNode } from '@prisma/client';
+import {
+	searchConceptsByEmbedding as searchConceptsByEmbeddingDB,
+	searchConcepts as searchConceptsDB,
+} from '~/shared/database/concept-operations';
+import { searchByEmbedding as searchByEmbeddingDB } from '~/shared/database/search-operations';
 import type {
-	DatabaseAdapter,
 	KnowledgeGraphConfig,
 	Result,
 	SearchOptions,
 	SearchResult,
 } from '~/shared/types';
-import type { Triple } from '~/shared/types/core';
+import type { Concept, Triple } from '~/shared/types/core';
 import {
 	type FusionSearchResult,
 	type FusionSearchWeights,
@@ -138,7 +141,6 @@ export async function searchByText(
  */
 export async function searchByEmbedding(
 	embedding: number[],
-	db: DatabaseAdapter,
 	config: KnowledgeGraphConfig,
 	options?: SearchOptions
 ): Promise<Result<SearchResult>> {
@@ -149,7 +151,7 @@ export async function searchByEmbedding(
 		console.log(`[SEARCH DEBUG] Searching with topK=${topK}, minScore=${minScore}`);
 
 		// Search triples by embedding with optional temporal filtering
-		const tripleResults = await db.searchByEmbedding(embedding, topK, minScore, options);
+		const tripleResults = await searchByEmbeddingDB(embedding, topK, minScore, options);
 		if (!tripleResults.success) {
 			console.log(`[SEARCH DEBUG] Triple search failed:`, tripleResults.error);
 			return tripleResults;
@@ -158,11 +160,11 @@ export async function searchByEmbedding(
 		console.log(`[SEARCH DEBUG] Found ${tripleResults.data.length} triples`);
 
 		// Search concepts by embedding (only if triples search was successful)
-		let conceptResults: Result<ConceptNode[]> | undefined;
+		let conceptResults: Result<Concept[]> | undefined;
 		if (tripleResults.data.length === 0) {
 			console.log(`[SEARCH DEBUG] No triples found, searching concepts`);
 			// If no triples found, search concepts using the embedding
-			conceptResults = await db.searchConceptsByEmbedding?.(
+			conceptResults = await searchConceptsByEmbeddingDB(
 				embedding,
 				Math.min(topK, 10), // Limit concepts to reasonable number
 				minScore
@@ -170,7 +172,7 @@ export async function searchByEmbedding(
 			// Fallback to text-based concept search if embedding search not available
 			if (!conceptResults) {
 				console.log(`[SEARCH DEBUG] Falling back to text-based concept search`);
-				conceptResults = await db.searchConcepts('', undefined);
+				conceptResults = await searchConceptsDB('', undefined);
 			} else {
 				console.log(
 					`[SEARCH DEBUG] Found ${conceptResults.success ? conceptResults.data.length : 0} concepts via embedding`
@@ -232,9 +234,9 @@ export async function searchByEmbedding(
 export async function searchConcepts(
 	query: string,
 	abstraction?: string
-): Promise<Result<ConceptNode[]>> {
+): Promise<Result<Concept[]>> {
 	try {
-		const result = await searchConcepts(query, abstraction);
+		const result = await searchConceptsDB(query, abstraction);
 		return result;
 	} catch (error) {
 		return {

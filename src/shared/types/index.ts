@@ -34,7 +34,6 @@ export type {
 // Service interface types
 export type {
 	AIProvider,
-	DatabaseAdapter,
 	EmbeddingService,
 	OperationError,
 	Result,

@@ -3,10 +3,20 @@
  * Core AutoSchemaKG functionality that combines multiple search strategies
  */
 
-import { createDatabaseAdapter } from '~/shared/database/database-adapter';
+import {
+	searchConceptsByEmbedding,
+	getConceptualizationsByConcept
+} from '~/shared/database/concept-operations';
+import {
+	searchByEntity as dbSearchByEntity,
+	searchByRelationship as dbSearchByRelationship,
+	searchByEmbedding as dbSearchByEmbedding,
+	searchByConcept as dbSearchByConcept
+} from '~/shared/database/search-operations';
+import { getAllTriples } from '~/shared/database/triple-operations';
 import { env } from '~/shared/env';
 import { createEmbeddingService } from '~/shared/services/embedding-service';
-import type { DatabaseAdapter, EmbeddingService, Result, SearchOptions } from '~/shared/types';
+import type { EmbeddingService, Result, SearchOptions } from '~/shared/types';
 import type { Triple } from '~/shared/types/core';
 
 export interface FusionSearchResult {
@@ -74,12 +84,11 @@ export async function searchFusion(
 			}
 		}
 
-		const db = createDatabaseAdapter();
 		if (enabledTypes.includes('entity')) {
 			if (queryEmbedding) {
 				// Use vector-based entity search
 				searchPromises.push(
-					db.searchByEntityVector(
+					dbSearchByEmbedding(
 						queryEmbedding,
 						topK,
 						options?.threshold || env.MIN_SCORE,
@@ -90,7 +99,7 @@ export async function searchFusion(
 			} else {
 				// Fallback to text-based entity search
 				console.warn('[FUSION SEARCH] Using fallback text-based entity search');
-				searchPromises.push(db.searchByEntity(query, topK, options));
+				searchPromises.push(dbSearchByEntity(query, topK, options));
 				searchTypeNames.push('entity');
 			}
 		}
@@ -99,7 +108,7 @@ export async function searchFusion(
 			if (queryEmbedding) {
 				// Use vector-based relationship search
 				searchPromises.push(
-					db.searchByRelationshipVector(
+					dbSearchByEmbedding(
 						queryEmbedding,
 						topK,
 						options?.threshold || env.MIN_SCORE,
@@ -110,7 +119,7 @@ export async function searchFusion(
 			} else {
 				// Fallback to text-based relationship search
 				console.warn('[FUSION SEARCH] Using fallback text-based relationship search');
-				searchPromises.push(db.searchByRelationship(query, topK, options));
+				searchPromises.push(dbSearchByRelationship(query, topK, options));
 				searchTypeNames.push('relationship');
 			}
 		}
@@ -119,7 +128,7 @@ export async function searchFusion(
 			if (queryEmbedding) {
 				// Use vector-based semantic search
 				searchPromises.push(
-					db.searchByEmbedding(queryEmbedding, topK, options?.threshold || env.MIN_SCORE, options)
+					dbSearchByEmbedding(queryEmbedding, topK, options?.threshold || env.MIN_SCORE, options)
 				);
 				searchTypeNames.push('semantic');
 			} else {
@@ -133,7 +142,6 @@ export async function searchFusion(
 				searchPromises.push(
 					searchByConceptVector(
 						queryEmbedding,
-						db,
 						topK,
 						options?.threshold || env.MIN_SCORE,
 						options
@@ -143,7 +151,7 @@ export async function searchFusion(
 			} else {
 				// Fallback to text-based concept search
 				console.warn('[FUSION SEARCH] Using fallback text-based concept search');
-				searchPromises.push(db.searchByConcept(query, topK, options));
+				searchPromises.push(dbSearchByConcept(query, topK, options));
 				searchTypeNames.push('concept');
 			}
 		}
@@ -292,25 +300,22 @@ function generateTripleKey(triple: Triple): string {
  */
 export async function searchByEntity(
 	query: string,
-	db: DatabaseAdapter,
 	options?: SearchOptions
 ): Promise<Result<Triple[]>> {
 	const topK = options?.limit || env.SEARCH_TOP_K;
-	return db.searchByEntity(query, topK, options);
+	return dbSearchByEntity(query, topK, options);
 }
 
 export async function searchByRelationship(
 	query: string,
-	db: DatabaseAdapter,
 	options?: SearchOptions
 ): Promise<Result<Triple[]>> {
 	const topK = options?.limit || env.SEARCH_TOP_K;
-	return db.searchByRelationship(query, topK, options);
+	return dbSearchByRelationship(query, topK, options);
 }
 
 export async function searchBySemantic(
 	query: string,
-	db: DatabaseAdapter,
 	embeddingService: EmbeddingService,
 	options?: SearchOptions
 ): Promise<Result<Triple[]>> {
@@ -322,16 +327,15 @@ export async function searchBySemantic(
 	const topK = options?.limit || env.SEARCH_TOP_K;
 	const minScore = options?.threshold || env.MIN_SCORE;
 
-	return db.searchByEmbedding(embeddingResult.data, topK, minScore, options);
+	return dbSearchByEmbedding(embeddingResult.data, topK, minScore, options);
 }
 
 export async function searchByConcept(
 	query: string,
-	db: DatabaseAdapter,
 	options?: SearchOptions
 ): Promise<Result<Triple[]>> {
 	const topK = options?.limit || env.SEARCH_TOP_K;
-	return db.searchByConcept(query, topK, options);
+	return dbSearchByConcept(query, topK, options);
 }
 
 /**
@@ -340,7 +344,6 @@ export async function searchByConcept(
  */
 async function searchByConceptVector(
 	embedding: number[],
-	db: DatabaseAdapter,
 	topK: number,
 	minScore: number,
 	options?: SearchOptions
@@ -351,7 +354,7 @@ async function searchByConceptVector(
 		);
 
 		// First, find similar concepts using vector search
-		const conceptSearchResult = await db.searchConceptsByEmbedding(embedding, topK, minScore);
+		const conceptSearchResult = await searchConceptsByEmbedding(embedding, topK, minScore);
 
 		if (!conceptSearchResult.success) {
 			console.log(`[DB DEBUG] Concept vector search failed:`, conceptSearchResult.error);
@@ -380,7 +383,7 @@ async function searchByConceptVector(
 
 		for (const concept of similarConcepts) {
 			// Get conceptualization relationships for this concept
-			const relationships = await db.getConceptualizationsByConcept(concept.concept);
+			const relationships = await getConceptualizationsByConcept(concept.concept);
 			console.log(
 				`[DB DEBUG] Found ${relationships.length} conceptualization relationships for concept "${concept.concept}"`
 			);
@@ -390,7 +393,7 @@ async function searchByConceptVector(
 				const elements = relationships.map(rel => rel.source_element);
 
 				// Find triples that contain any of these elements
-				const triplesResult = await db.getAllTriples();
+				const triplesResult = await getAllTriples();
 				if (triplesResult.success) {
 					const relevantTriples = triplesResult.data.filter(triple =>
 						elements.some(

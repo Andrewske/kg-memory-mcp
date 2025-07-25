@@ -3,7 +3,7 @@
  * Provides shared tool handling logic across different transports
  */
 
-import type { ConceptNode } from '@prisma/client';
+
 import {
 	extractElementsFromTriples,
 	generateConcepts,
@@ -19,6 +19,7 @@ import { createTriples } from '~/shared/database/triple-operations';
 import { env } from '~/shared/env';
 import { createEmbeddingService } from '~/shared/services/embedding-service';
 import type { GraphStats, ToolResult } from '~/shared/types';
+import type { Concept } from '~/shared/types/core';
 
 export type ProcessKnowledgeArgs = {
 	text: string;
@@ -230,7 +231,7 @@ export async function searchKnowledgeGraph(args: {
 export async function searchConceptsTool(args: {
 	query: string;
 	abstraction?: string;
-}): Promise<ToolResult<ConceptNode[]>> {
+}): Promise<ToolResult<Concept[]>> {
 	try {
 		const { query, abstraction } = args;
 

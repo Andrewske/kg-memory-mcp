@@ -4,7 +4,7 @@ import { z } from 'zod';
 import type { ProcessKnowledgeArgs } from '~/server/transport-manager';
 import { env } from '~/shared/env';
 import { createAIProvider } from '~/shared/services/ai-provider-service';
-import type { Triple } from '~/shared/types/core';
+import type { Concept, Triple } from '~/shared/types/core';
 import { trackTokenUsage } from '../../shared/utils/token-tracking';
 import { extractElementsFromTriples, generateConcepts } from '../conceptualization/conceptualize';
 
@@ -49,8 +49,8 @@ export async function extractKnowledgeTriples(data: ProcessKnowledgeArgs) {
 		}
 
 		const { triples } = extractionResult.data;
-		let concepts: ConceptNode[] = [];
-		let conceptualizations: ConceptualizationRelationship[] = [];
+		let concepts: Concept[] = [];
+		let conceptualizations: Pick<ConceptualizationRelationship, 'source_element' | 'triple_type' | 'concept' | 'confidence' | 'context_triples' | 'source' | 'source_type' | 'extracted_at'>[] = [];
 
 		// Generate concepts if requested
 		if (triples.length > 0) {
@@ -60,7 +60,9 @@ export async function extractKnowledgeTriples(data: ProcessKnowledgeArgs) {
 				source_type: data.source_type,
 			});
 
-			if (conceptResult.success) {
+
+
+			if (conceptResult.success && conceptResult.data) {
 				concepts = conceptResult.data.concepts;
 				conceptualizations = conceptResult.data.relationships;
 			}

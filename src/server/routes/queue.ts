@@ -5,7 +5,7 @@ import { addJobToQueue, getJob, updateJobStatus } from '~/shared/services/queue-
 // Queue processing for large jobs
 export async function queueKnowledgeProcessing(data: any): Promise<any> {
 	// Add to queue
-	const jobId = await addJobToQueue(data.text, data);
+	const jobId = await addJobToQueue(data);
 
 	return {
 		jobId,

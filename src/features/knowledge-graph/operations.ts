@@ -7,10 +7,10 @@ import {
 	getTripleCount,
 	getTripleCountByType,
 } from '~/shared/database/stats-operations';
-import { checkExistingTriples, createTriples } from '~/shared/database/triple-operations';
+import { checkExistingTriples, createTriples, getAllTriples } from '~/shared/database/triple-operations';
 import { createVectors } from '~/shared/database/vector-operations';
 import { env } from '~/shared/env';
-import type { DatabaseAdapter, EmbeddingService, GraphStats, Result } from '~/shared/types';
+import type {  EmbeddingService, GraphStats, Result } from '~/shared/types';
 import type { Concept, Triple } from '~/shared/types/core';
 
 export interface EntityEnumerationOptions {
@@ -293,7 +293,6 @@ export function generateConceptId(concept: Concept) {
  */
 export async function enumerateEntities(
 	options: EntityEnumerationOptions,
-	db: DatabaseAdapter
 ): Promise<Result<EntityEnumerationResult[]>> {
 	try {
 		const {
@@ -306,7 +305,7 @@ export async function enumerateEntities(
 		} = options;
 
 		// Get all triples from database
-		const triplesResult = await db.getAllTriples();
+		const triplesResult = await getAllTriples();
 		if (!triplesResult.success) {
 			return triplesResult;
 		}

@@ -11,7 +11,7 @@ import {
 	searchKnowledgeSchema,
 } from '~/server/routes/knowledge-routes';
 import { handleProcessJob } from '~/server/routes/queue';
-import { createDatabaseAdapter } from '~/shared/database/database-adapter';
+import { getAllTriples } from '~/shared/database/triple-operations';
 import { env } from '~/shared/env';
 import { addJobToQueue, handleGetJobStatus } from '~/shared/services/queue-service';
 // Import your existing unified functions
@@ -43,7 +43,7 @@ const createSuccessResponse = (data: any, operation: string) => ({
 	timestamp: new Date().toISOString(),
 });
 
-async function handleSearchKnowledge(body: z.infer<typeof searchKnowledgeSchema>): Promise<any> {
+async function handleSearchKnowledge(body: z.infer<typeof searchKnowledgeSchema>) {
 	// Validate input
 	const validation = validateRequest(searchKnowledgeSchema, body);
 	if (!validation.success) {
@@ -62,7 +62,7 @@ async function handleSearchKnowledge(body: z.infer<typeof searchKnowledgeSchema>
 	return createSuccessResponse(result.data, 'search_knowledge_graph');
 }
 
-async function handleSearchConcepts(body: z.infer<typeof searchConceptsSchema>): Promise<any> {
+async function handleSearchConcepts(body: z.infer<typeof searchConceptsSchema>) {
 	// Validate input
 	const validation = validateRequest(searchConceptsSchema, body);
 	if (!validation.success) {
@@ -81,7 +81,7 @@ async function handleSearchConcepts(body: z.infer<typeof searchConceptsSchema>):
 	return createSuccessResponse(result.data, 'search_concepts');
 }
 
-async function handleGetStats(): Promise<any> {
+async function handleGetStats() {
 	// Use your existing function
 	const result = await getKnowledgeGraphStats();
 
@@ -113,9 +113,8 @@ async function checkDatabaseHealth(): Promise<{
 	responseTime?: string;
 }> {
 	const startTime = Date.now();
-	const db = createDatabaseAdapter();
 	try {
-		await db.getAllTriples();
+		await getAllTriples();
 		const responseTime = Date.now() - startTime;
 		return {
 			status: 'healthy',
