@@ -1,9 +1,9 @@
 {
 	"functions": {
-		"api/[...path].ts": {
+		"src/api/[...path].ts": {
 		  "maxDuration": 60
 		}
-	  },
+	},
 	"buildCommand": "pnpm run build",
 	"installCommand": "pnpm install",
 	"framework": null
