@@ -7,7 +7,7 @@
 [![PostgreSQL](https://img.shields.io/badge/PostgreSQL-Prisma-336791)](https://www.prisma.io/)
 [![OpenAI](https://img.shields.io/badge/AI-OpenAI%20%7C%20Anthropic-412991)](https://openai.com/)
 
-A powerful **Model Context Protocol (MCP)** server that transforms unstructured text into a searchable knowledge graph with AI-powered extraction, conceptualization, and semantic search capabilities.
+A **Model Context Protocol (MCP)** server that transforms unstructured text into a searchable knowledge graph with AI-powered extraction, conceptualization, and semantic search capabilities.
 
 [Features](#features) • [Quick Start](#quick-start) • [Architecture](#architecture) • [API Reference](#api-reference) • [Examples](#examples) • [Contributing](#contributing)
 

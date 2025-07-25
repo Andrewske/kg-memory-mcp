@@ -1,9 +1,9 @@
-import type { Request, Response } from 'express';
+import type { Request, Response, Express } from 'express';
 import { env } from '~/shared/env';
 import { handleMcpRequest } from './http-server';
 
 // Express.js adapter
-export async function createExpressAdapter() {
+export async function createExpressAdapter(): Promise<Express> {
 	const { default: express } = await import('express');
 	const { default: compression } = await import('compression');
 	const { default: helmet } = await import('helmet');
