@@ -146,7 +146,7 @@ export async function searchByRelationshipVector(
 /**
  * Store vectors in the database
  */
-export async function storeVectors(vectors: {
+export async function createVectors(vectors: {
 	entity?: Array<{
 		vector_id: string;
 		text: string;

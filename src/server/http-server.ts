@@ -13,6 +13,7 @@ import {
 import { handleProcessJob } from '~/server/routes/queue';
 import { createDatabaseAdapter } from '~/shared/database/database-adapter';
 import { env } from '~/shared/env';
+import { addJobToQueue, handleGetJobStatus } from '~/shared/services/queue-service';
 // Import your existing unified functions
 import {
 	getKnowledgeGraphStats,
@@ -92,24 +93,17 @@ async function handleGetStats(): Promise<any> {
 }
 
 // Queue processing for large jobs
-async function queueKnowledgeProcessing(
-	data: z.infer<typeof processKnowledgeSchema>
-): Promise<any> {
-	const jobId = `job_${Date.now()}_${Math.random().toString(36).substring(2, 9)}`;
-
-	// TODO: Implement job queue in database if needed
-	// await dependencies.db.addProcessingJob(jobId, jobData);
-
-	// TODO: Integrate with QStash or other queue service if needed
-	// if (env.NODE_ENV === 'production' && env.QSTASH_TOKEN) {
-	//     const { Client } = await import('@upstash/qstash');
-	//     const client = new Client({ token: env.QSTASH_TOKEN });
-	//
-	//     await client.publishJSON({
-	//         url: `${env.HTTP_SERVER_URL}/api/process-job`,
-	//         body: { jobId, data: jobData },
-	//     });
-	// }
+async function queueKnowledgeProcessing(data: z.infer<typeof processKnowledgeSchema>) {
+	try {
+		const jobId = await addJobToQueue(data);
+		return {
+			jobId,
+			message: 'Knowledge processing job queued',
+		};
+	} catch (error) {
+		console.error('Failed to queue knowledge processing job:', error);
+		throw new Error('Failed to queue knowledge processing job');
+	}
 }
 
 // Health check utilities
@@ -203,7 +197,7 @@ function createCorsHeaders(corsOrigins: string | string[]) {
 
 // Main framework-agnostic handler
 export async function handleMcpRequest(req: Request) {
-	const { method, path, body, headers } = req;
+	const { method, path, body, headers, query } = req;
 
 	// Default headers for all responses
 	const defaultHeaders = {
@@ -419,6 +413,15 @@ export async function handleMcpRequest(req: Request) {
 
 			case 'POST /process-job': {
 				const result = await handleProcessJob(body);
+				return { status: 200, body: result, headers: defaultHeaders };
+			}
+
+			case 'GET /job-status': {
+				const jobId = query.jobId as string;
+				if (!jobId) {
+					return { status: 400, body: { error: 'Job ID is required' }, headers: defaultHeaders };
+				}
+				const result = await handleGetJobStatus(jobId);
 				return { status: 200, body: result, headers: defaultHeaders };
 			}
 

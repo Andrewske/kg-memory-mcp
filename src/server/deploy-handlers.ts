@@ -39,7 +39,7 @@ export async function createExpressAdapter() {
 	});
 
 	// Handle all requests through our framework-agnostic handler
-	app.use('*', async (req: Request, res: Response) => {
+	app.use(async (req: Request, res: Response) => {
 		const response = await handleMcpRequest(req);
 
 		if (response.headers) {

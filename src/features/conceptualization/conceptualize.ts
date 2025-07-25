@@ -1,10 +1,17 @@
 import { writeFileSync } from 'node:fs';
+import { Decimal } from '@prisma/client/runtime/library';
 import { z } from 'zod';
+import { mapAbstractionLevel } from '~/shared/database/database-utils';
 import { createAIProvider } from '~/shared/services/ai-provider-service';
-import type { Result } from '~/shared/types';
 import type { Triple } from '~/shared/types/core';
 import { trackTokenUsage } from '../../shared/utils/token-tracking';
-import type { ConceptualizationInput, ConceptualizationOutput } from './types';
+
+export interface ConceptualizationInput {
+	entities: string[];
+	events: string[];
+	relationships: string[];
+	contextTriples: string[];
+}
 
 // Zod schema for concept validation
 const ConceptSchema = z.object({
@@ -19,7 +26,7 @@ const ConceptSchema = z.object({
 	relationships: z.array(
 		z.object({
 			source_element: z.string().min(1),
-			entity_type: z.enum(['entity', 'event', 'relation']),
+			triple_type: z.enum(['ENTITY_ENTITY', 'ENTITY_EVENT', 'EVENT_EVENT', 'EMOTIONAL_CONTEXT']),
 			concept: z.string().min(1),
 			confidence: z.number().min(0).max(1),
 			reasoning: z.string().optional(),
@@ -37,7 +44,7 @@ export async function generateConcepts(
 		source: string;
 		source_type: string;
 	}
-): Promise<Result<ConceptualizationOutput>> {
+) {
 	try {
 		const prompt = createConceptualizationPrompt(input);
 		const aiProvider = createAIProvider();
@@ -79,13 +86,13 @@ export async function generateConcepts(
 		});
 
 		const { concepts: conceptData, relationships: relationshipData } = result.data.data;
-		const now = new Date().toISOString();
+		const now = new Date();
 
 		// Convert to ConceptNode format
 		const concepts = conceptData.map(concept => ({
 			concept: concept.concept,
-			abstraction_level: concept.abstraction_level,
-			confidence: concept.confidence,
+			abstraction_level: mapAbstractionLevel(concept.abstraction_level),
+			confidence: new Decimal(concept.confidence),
 			source: metadata.source,
 			source_type: metadata.source_type,
 			extracted_at: now,
@@ -94,9 +101,9 @@ export async function generateConcepts(
 		// Convert to ConceptualizationRelationship format
 		const conceptualizations = relationshipData.map(rel => ({
 			source_element: rel.source_element,
-			entity_type: rel.entity_type,
+			triple_type: rel.triple_type,
 			concept: rel.concept,
-			confidence: rel.confidence,
+			confidence: new Decimal(rel.confidence),
 			context_triples: input.contextTriples,
 			source: metadata.source,
 			source_type: metadata.source_type,
@@ -126,7 +133,7 @@ export async function generateConcepts(
 /**
  * Extract entities and events from knowledge triples for conceptualization
  */
-export function extractElementsFromTriples(triples: Triple[]): ConceptualizationInput {
+export function extractElementsFromTriples(triples: Triple[]) {
 	const entities = new Set<string>();
 	const events = new Set<string>();
 	const relationships = new Set<string>();

@@ -1,6 +1,6 @@
 // // Core domain types for the Knowledge Graph system
 
-import type { KnowledgeTriple } from '@prisma/client';
+import type { ConceptNode, KnowledgeTriple } from '@prisma/client';
 
 // export type TripleType = 'entity-entity' | 'entity-event' | 'event-event' | 'emotional-context';
 
@@ -64,6 +64,7 @@ import type { KnowledgeTriple } from '@prisma/client';
 // }
 
 export type Triple = Omit<KnowledgeTriple, 'id' | 'created_at' | 'updated_at'>;
+export type Concept = Omit<ConceptNode, 'id' | 'created_at' | 'updated_at'>;
 
 // Token tracking types - aligned with enhanced Prisma schema
 export interface TokenUsage {

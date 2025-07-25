@@ -1,6 +1,6 @@
-import type { ConceptNode, ConceptualizationRelationship } from '@prisma/client';
+import type { ConceptualizationRelationship } from '@prisma/client';
 import type { TemporalFilter } from '~/shared/types';
-import type { Triple } from '~/shared/types/core';
+import type { Concept, Triple } from '~/shared/types/core';
 
 /**
  * Generic ID generation utility using Base64 encoding
@@ -21,7 +21,7 @@ export function generateTripleId(triple: Triple): string {
 /**
  * Generate unique ID for concept node
  */
-export function generateConceptId(concept: ConceptNode): string {
+export function generateConceptId(concept: Concept): string {
 	const key = `${concept.concept}|${concept.abstraction_level}|${concept.source}`;
 	return generateId(key);
 }
@@ -29,7 +29,7 @@ export function generateConceptId(concept: ConceptNode): string {
 /**
  * Generate unique ID for conceptualization relationship
  */
-export function generateConceptualizationId(rel: ConceptualizationRelationship): string {
+export function generateConceptualizationId(rel: Pick<ConceptualizationRelationship, 'source_element' | 'source_type' | 'concept'>): string {
 	const key = `${rel.source_element}|${rel.source_type}|${rel.concept}`;
 	return generateId(key);
 }

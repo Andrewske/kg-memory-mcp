@@ -65,10 +65,9 @@ model ConceptNode {
   confidence        Decimal          @db.Decimal(3, 2) // 0.00 to 1.00
 
   // Metadata
-  source              String
-  source_type         String // "thread", "file", "manual", "api", etc.
-  extracted_at        DateTime
-  processing_batch_id String?
+  source       String
+  source_type  String // "thread", "file", "manual", "api", etc.
+  extracted_at DateTime
 
   // Relationships
   concept_vectors    ConceptVector[]
@@ -81,7 +80,6 @@ model ConceptNode {
   @@index([source])
   @@index([source_type])
   @@index([extracted_at])
-  @@index([processing_batch_id])
   @@map("concept_nodes")
 }
 
@@ -101,10 +99,9 @@ model ConceptualizationRelationship {
   context_triples String[] // Array of triple IDs
 
   // Metadata
-  source              String
-  source_type         String // "thread", "file", "manual", "api", etc.
-  extracted_at        DateTime
-  processing_batch_id String?
+  source       String
+  source_type  String // "thread", "file", "manual", "api", etc.
+  extracted_at DateTime
 
   // Foreign key relationships
   knowledge_triple_id String?
@@ -120,7 +117,6 @@ model ConceptualizationRelationship {
   @@index([concept])
   @@index([source])
   @@index([extracted_at])
-  @@index([processing_batch_id])
   @@map("conceptualization_relationships")
 }
 
@@ -258,8 +254,7 @@ model TokenUsage {
   estimated_cost Decimal? @db.Decimal(10, 6) // Estimated cost in USD
 
   // Processing context
-  processing_batch_id String? // Link to processing batch if applicable
-  tools_used          String[] // Array of tool names used
+  tools_used String[] // Array of tool names used
 
   // Timestamp
   timestamp DateTime @default(now())
@@ -271,55 +266,10 @@ model TokenUsage {
   @@index([provider])
   @@index([model])
   @@index([timestamp])
-  @@index([processing_batch_id])
   @@index([source, source_type]) // Composite index for source filtering
   @@index([provider, model]) // Composite index for cost analysis
   @@index([timestamp, provider]) // Time-series analysis by provider
   @@map("token_usage")
-}
-
-// Processing Batches - Track batch processing operations
-model ProcessingBatch {
-  id         String   @id @default(cuid())
-  created_at DateTime @default(now())
-  updated_at DateTime @updatedAt
-
-  // Batch identification
-  batch_id    String      @unique
-  source      String
-  source_type String // "thread", "file", "manual", "api", etc.
-  status      BatchStatus @default(PENDING)
-
-  // Processing metrics
-  total_items        Int @default(0)
-  processed_items    Int @default(0)
-  failed_items       Int @default(0)
-  triples_extracted  Int @default(0)
-  concepts_generated Int @default(0)
-  duplicates_removed Int @default(0)
-
-  // Timing
-  started_at   DateTime?
-  completed_at DateTime?
-  duration     Int? // milliseconds
-
-  // Configuration
-  extraction_method String?
-  ai_provider       String?
-  ai_model          String?
-
-  // Error tracking
-  error_message String?
-  error_details Json?
-
-  // Indexes
-  @@index([batch_id])
-  @@index([source])
-  @@index([source_type])
-  @@index([status])
-  @@index([started_at])
-  @@index([completed_at])
-  @@map("processing_batches")
 }
 
 // Search Sessions - Track search queries and results for analytics

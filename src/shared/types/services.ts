@@ -69,7 +69,7 @@ export interface DatabaseAdapter {
 	): Promise<Result<Triple[]>>;
 
 	// Concept operations
-	storeConcepts(concepts: ConceptNode[]): Promise<Result<void>>;
+	storeConcepts(concepts: Omit<ConceptNode, 'id' | 'created_at' | 'updated_at'>[]): Promise<Result<void>>;
 	searchConcepts(query: string, abstraction?: string): Promise<Result<ConceptNode[]>>;
 	searchConceptsByEmbedding(
 		embedding: number[],

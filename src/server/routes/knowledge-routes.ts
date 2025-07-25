@@ -20,8 +20,6 @@ export const processKnowledgeSchema = z.object({
 	source: z.string().min(1, 'Source is required'),
 	source_type: z.string().min(1, 'Source type is required'),
 	source_date: z.string().datetime('Source date is required'),
-
-	include_concepts: z.boolean().optional().default(false),
 });
 
 export const searchKnowledgeSchema = z.object({

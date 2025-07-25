@@ -4,24 +4,27 @@
  */
 
 import type { ConceptNode } from '@prisma/client';
+import {
+	extractElementsFromTriples,
+	generateConcepts,
+} from '~/features/conceptualization/conceptualize';
 import { deduplicateTriples } from '~/features/deduplication/deduplicate';
 import { extractKnowledgeTriples } from '~/features/knowledge-extraction/extract';
 import type { FusionSearchResult } from '~/features/knowledge-graph/fusion-search';
 import { searchFusion } from '~/features/knowledge-graph/fusion-search';
-import { getStats, storeTriples } from '~/features/knowledge-graph/operations';
+import { getStats, storeConcepts } from '~/features/knowledge-graph/operations';
 import { searchConcepts } from '~/features/knowledge-graph/search';
-import { createDatabaseAdapter } from '~/shared/database/database-adapter';
+import { createConceptualizations } from '~/shared/database/concept-operations';
+import { createTriples } from '~/shared/database/triple-operations';
 import { env } from '~/shared/env';
 import { createEmbeddingService } from '~/shared/services/embedding-service';
 import type { GraphStats, ToolResult } from '~/shared/types';
-
 
 export type ProcessKnowledgeArgs = {
 	text: string;
 	source: string;
 	source_type: string;
 	source_date: string;
-
 };
 
 /**
@@ -37,15 +40,12 @@ export async function processKnowledge(args: ProcessKnowledgeArgs): Promise<Tool
 			source_type: args.source_type,
 		});
 
-
-
-		const db = createDatabaseAdapter();
 		const embeddingService = createEmbeddingService({
 			model: env.EMBEDDING_MODEL,
 			dimensions: env.EMBEDDING_DIMENSIONS,
 			batchSize: env.BATCH_SIZE,
 		});
-	
+
 		// Extract knowledge
 		console.debug('[ProcessKnowledge] Extracting triples...');
 		const extractionResult = await extractKnowledgeTriples(args);
@@ -60,7 +60,7 @@ export async function processKnowledge(args: ProcessKnowledgeArgs): Promise<Tool
 			};
 		}
 
-		let { triples } = extractionResult.data 
+		let { triples } = extractionResult.data;
 		console.debug(`[ProcessKnowledge] Extracted ${triples.length} triples`);
 
 		// Always deduplicate triples
@@ -69,7 +69,7 @@ export async function processKnowledge(args: ProcessKnowledgeArgs): Promise<Tool
 			const deduplicationResult = await deduplicateTriples(triples, embeddingService);
 			if (deduplicationResult.success) {
 				const originalCount = triples.length;
-				triples = deduplicationResult.data.uniqueTriples;
+				triples = deduplicationResult.data?.uniqueTriples ?? [];
 				console.debug(
 					`[ProcessKnowledge] Deduplicated: ${originalCount} → ${triples.length} triples`
 				);
@@ -78,7 +78,7 @@ export async function processKnowledge(args: ProcessKnowledgeArgs): Promise<Tool
 
 		// Store triples with vector generation
 		console.debug('[ProcessKnowledge] Storing triples...');
-		const storeResult = await storeTriples(triples, db, embeddingService);
+		const storeResult = await createTriples(triples);
 		if (!storeResult.success) {
 			console.error('[ProcessKnowledge] Storage failed:', storeResult.error);
 			return {
@@ -96,43 +96,44 @@ export async function processKnowledge(args: ProcessKnowledgeArgs): Promise<Tool
 				try {
 					console.log(`[Background] Starting conceptualization for ${triples.length} triples...`);
 
-					const { generateConcepts, extractElementsFromTriples } = await import(
-						'~/features/conceptualization/conceptualize'
-					);
 					const conceptInput = extractElementsFromTriples(triples);
 					const conceptualizeResult = await generateConcepts(conceptInput, {
 						source: args.source,
 						source_type: args.source_type,
 					});
 
-					if (conceptualizeResult.success && conceptualizeResult.data.concepts.length > 0) {
-						const { storeConcepts } = await import('~/features/knowledge-graph/operations');
-						const conceptResult = await storeConcepts(
-							conceptualizeResult.data.concepts,
-							db,
-							embeddingService // Enable concept vector generation
+					if (!conceptualizeResult.success || !conceptualizeResult.data) {
+						console.error(
+							`[Background] Failed to conceptualize triples:`,
+							conceptualizeResult.error
 						);
+						return;
+					}
 
-						// Store conceptualization relationships
-						const relationshipResult = await db.storeConceptualizations(
-							conceptualizeResult.data.relationships
+					const { concepts, relationships } = conceptualizeResult.data;
+
+					const conceptResult = await storeConcepts(
+						concepts,
+						embeddingService // Enable concept vector generation
+					);
+
+					// Store conceptualization relationships
+					const relationshipResult = await createConceptualizations(relationships);
+
+					if (conceptResult.success && relationshipResult.success) {
+						const vectorsGenerated = conceptResult.data.vectorsGenerated || 0;
+						console.log(
+							`[Background] Successfully stored ${conceptualizeResult.data.concepts.length} concepts, ${conceptualizeResult.data.relationships.length} relationships, and ${vectorsGenerated} concept vectors`
 						);
-
-						if (conceptResult.success && relationshipResult.success) {
-							const vectorsGenerated = conceptResult.data.vectorsGenerated || 0;
-							console.log(
-								`[Background] Successfully stored ${conceptualizeResult.data.concepts.length} concepts, ${conceptualizeResult.data.relationships.length} relationships, and ${vectorsGenerated} concept vectors`
+					} else {
+						if (!conceptResult.success) {
+							console.error(`[Background] Failed to store concepts:`, conceptResult.error);
+						}
+						if (!relationshipResult.success) {
+							console.error(
+								`[Background] Failed to store conceptualization relationships:`,
+								relationshipResult.error
 							);
-						} else {
-							if (!conceptResult.success) {
-								console.error(`[Background] Failed to store concepts:`, conceptResult.error);
-							}
-							if (!relationshipResult.success) {
-								console.error(
-									`[Background] Failed to store conceptualization relationships:`,
-									relationshipResult.error
-								);
-							}
 						}
 					}
 				} catch (error) {
@@ -232,9 +233,8 @@ export async function searchConceptsTool(args: {
 }): Promise<ToolResult<ConceptNode[]>> {
 	try {
 		const { query, abstraction } = args;
-		const db = createDatabaseAdapter();
 
-		const result = await searchConcepts(query, db, abstraction);
+		const result = await searchConcepts(query, abstraction);
 
 		if (!result.success) {
 			return {
@@ -266,9 +266,7 @@ export async function searchConceptsTool(args: {
  */
 export async function getKnowledgeGraphStats(): Promise<ToolResult<GraphStats>> {
 	try {
-		const db = createDatabaseAdapter();
-
-		const result = await getStats(db);
+		const result = await getStats();
 
 		if (!result.success) {
 			return {

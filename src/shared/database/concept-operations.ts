@@ -1,9 +1,10 @@
 import type {
-	ConceptNode,
+
 	ConceptualizationRelationship,
 	KnowledgeTriple,
 } from '@prisma/client';
 import type { Result } from '~/shared/types';
+import type { Concept } from '~/shared/types/core';
 import { db } from './client';
 import {
 	convertEmbeddingToVector,
@@ -15,7 +16,7 @@ import {
 /**
  * Store concept nodes in the database
  */
-export async function storeConcepts(concepts: ConceptNode[]): Promise<Result<void>> {
+export async function createConcepts(concepts: Concept[]): Promise<Result<void>> {
 	try {
 		const prismaConcepts = concepts.map(concept => ({
 			id: generateConceptId(concept),
@@ -51,7 +52,7 @@ export async function storeConcepts(concepts: ConceptNode[]): Promise<Result<voi
 export async function searchConcepts(
 	query: string,
 	abstraction?: string
-): Promise<Result<ConceptNode[]>> {
+): Promise<Result<Concept[]>> {
 	try {
 		const where: any = {
 			concept: { contains: query, mode: 'insensitive' },
@@ -89,7 +90,7 @@ export async function searchConceptsByEmbedding(
 	embedding: number[],
 	topK: number,
 	minScore: number
-): Promise<Result<ConceptNode[]>> {
+): Promise<Result<Concept[]>> {
 	try {
 		// Convert embedding to pgvector format
 		const vectorString = convertEmbeddingToVector(embedding);
@@ -135,7 +136,7 @@ export async function searchConceptsByEmbedding(
 /**
  * Get concepts by their IDs
  */
-export async function getConceptsByIds(ids: string[]): Promise<ConceptNode[]> {
+export async function getConceptsByIds(ids: string[]): Promise<Concept[]> {
 	try {
 		const concepts = await db.conceptNode.findMany({
 			where: { id: { in: ids } },
@@ -150,8 +151,8 @@ export async function getConceptsByIds(ids: string[]): Promise<ConceptNode[]> {
 /**
  * Store conceptualization relationships
  */
-export async function storeConceptualizations(
-	relationships: ConceptualizationRelationship[]
+export async function createConceptualizations(
+	relationships: Pick<ConceptualizationRelationship, 'source_element' | 'triple_type' | 'concept' | 'confidence' | 'context_triples' | 'source' | 'source_type' | 'extracted_at'>[]
 ): Promise<Result<void>> {
 	try {
 		const prismaRelationships = relationships.map(rel => ({

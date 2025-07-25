@@ -1,9 +1,17 @@
-import type { ConceptNode, TripleType } from '@prisma/client';
+import type { TripleType } from '@prisma/client';
 import { v4 as uuidv4 } from 'uuid';
+import { createConcepts } from '~/shared/database/concept-operations';
+import {
+
+	getConceptCount,
+	getTripleCount,
+	getTripleCountByType,
+} from '~/shared/database/stats-operations';
+import { checkExistingTriples, createTriples } from '~/shared/database/triple-operations';
+import { createVectors } from '~/shared/database/vector-operations';
 import { env } from '~/shared/env';
 import type { DatabaseAdapter, EmbeddingService, GraphStats, Result } from '~/shared/types';
-import type { Triple } from '~/shared/types/core';
-
+import type { Concept, Triple } from '~/shared/types/core';
 
 export interface EntityEnumerationOptions {
 	role?: 'subject' | 'object' | 'both';
@@ -31,7 +39,6 @@ export interface StoreResult {
 	vectorsGenerated?: number;
 }
 
-
 /**
  * Store knowledge triples in the database with automatic vector generation
  * Pure function that takes all dependencies as parameters
@@ -43,7 +50,6 @@ export interface StoreResult {
  */
 export async function storeTriples(
 	triples: Triple[],
-	db: DatabaseAdapter,
 	embeddingService?: EmbeddingService
 ): Promise<Result<StoreResult>> {
 	try {
@@ -55,7 +61,7 @@ export async function storeTriples(
 
 		// Check for existing triples
 		const ids = triplesWithIds.map(t => t.id);
-		const existingIds = await db.checkExistingTriples(ids);
+		const existingIds = await checkExistingTriples(ids);
 
 		// Filter out duplicates
 		const newTriples = triplesWithIds.filter(t => !existingIds.includes(t.id));
@@ -72,9 +78,9 @@ export async function storeTriples(
 		}
 
 		// Store new triples
-		const storeResult = await db.storeTriples(newTriples);
-		if (!storeResult.success) {
-			return storeResult;
+		const createResult = await createTriples(newTriples);
+		if (!createResult.success) {
+			return createResult;
 		}
 
 		// Generate and store vectors for the new triples (if embedding service available)
@@ -93,7 +99,7 @@ export async function storeTriples(
 					`[VECTOR GENERATION] Sample triple: "${newTriples[0]?.subject}" → "${newTriples[0]?.predicate}" → "${newTriples[0]?.object}"`
 				);
 
-				const vectorResult = await generateAndStoreVectors(newTriples, embeddingService, db);
+				const vectorResult = await generateAndStoreVectors(newTriples, embeddingService);
 
 				console.log(`[VECTOR GENERATION] Vector generation result:`, {
 					success: vectorResult.success,
@@ -154,13 +160,12 @@ export async function storeTriples(
  * @param embeddingService - Optional embedding service for vector generation
  */
 export async function storeConcepts(
-	concepts: ConceptNode[],
-	db: DatabaseAdapter,
+	concepts: Concept[],
 	embeddingService?: EmbeddingService
 ): Promise<Result<{ conceptsStored: number; vectorsGenerated?: number }>> {
 	try {
 		// Store concepts first
-		const result = await db.storeConcepts(concepts);
+		const result = await createConcepts(concepts);
 		if (!result.success) {
 			return result;
 		}
@@ -178,7 +183,7 @@ export async function storeConcepts(
 				);
 				console.log(`[CONCEPT VECTOR GENERATION] Sample concept: "${concepts[0]?.concept}"`);
 
-				const vectorResult = await generateAndStoreConceptVectors(concepts, embeddingService, db);
+				const vectorResult = await generateAndStoreConceptVectors(concepts, embeddingService);
 
 				console.log(`[CONCEPT VECTOR GENERATION] Vector generation result:`, {
 					success: vectorResult.success,
@@ -238,12 +243,12 @@ export async function storeConcepts(
 /**
  * Get knowledge graph statistics
  */
-export async function getStats(db: DatabaseAdapter): Promise<Result<GraphStats>> {
+export async function getStats(): Promise<Result<GraphStats>> {
 	try {
 		const [totalTriples, totalConcepts, triplesByType] = await Promise.all([
-			db.getTripleCount(),
-			db.getConceptCount(),
-			db.getTripleCountByType(),
+			getTripleCount(),
+			getConceptCount(),
+			getTripleCountByType(),
 		]);
 
 		return {
@@ -278,7 +283,7 @@ export function generateTripleId(triple: Triple): string {
 /**
  * Generate a deterministic ID for a concept
  */
-export function generateConceptId(concept: ConceptNode): string {
+export function generateConceptId(concept: Concept) {
 	const key = `${concept.concept}|${concept.abstraction_level}|${concept.source}`;
 	return Buffer.from(key).toString('base64').replace(/[+/=]/g, '_');
 }
@@ -352,7 +357,10 @@ export async function enumerateEntities(
 				if (triple.extracted_at.toISOString() > stats.last_seen) {
 					stats.last_seen = triple.extracted_at.toISOString();
 				}
-				if (triple.confidence && (!stats.confidence || triple.confidence.greaterThan(stats.confidence))) {
+				if (
+					triple.confidence &&
+					(!stats.confidence || triple.confidence.greaterThan(stats.confidence))
+				) {
 					stats.confidence = triple.confidence.toNumber();
 				}
 			}
@@ -378,7 +386,10 @@ export async function enumerateEntities(
 				if (triple.extracted_at.toISOString() > stats.last_seen) {
 					stats.last_seen = triple.extracted_at.toISOString();
 				}
-				if (triple.confidence && (!stats.confidence || triple.confidence.greaterThan(stats.confidence))) {
+				if (
+					triple.confidence &&
+					(!stats.confidence || triple.confidence.greaterThan(stats.confidence))
+				) {
 					stats.confidence = triple.confidence.toNumber();
 				}
 			}
@@ -437,8 +448,7 @@ export async function enumerateEntities(
  */
 async function generateAndStoreVectors(
 	triples: Triple[],
-	embeddingService: EmbeddingService,
-	db: DatabaseAdapter
+	embeddingService: EmbeddingService
 ): Promise<Result<{ vectorsStored: number }>> {
 	try {
 		console.log(`[VECTOR DETAIL] Starting vector generation for ${triples.length} triples`);
@@ -633,7 +643,7 @@ async function generateAndStoreVectors(
 		}
 
 		try {
-			const storeResult = await db.storeVectors({
+			const storeResult = await createVectors({
 				entity: entityVectors,
 				relationship: relationshipVectors,
 				semantic: semanticVectors,
@@ -687,9 +697,8 @@ async function generateAndStoreVectors(
  * Creates concept vectors for efficient conceptual similarity search
  */
 async function generateAndStoreConceptVectors(
-	concepts: ConceptNode[],
-	embeddingService: EmbeddingService,
-	db: DatabaseAdapter
+	concepts: Concept[],
+	embeddingService: EmbeddingService
 ): Promise<Result<{ vectorsStored: number }>> {
 	try {
 		console.log(
@@ -791,7 +800,7 @@ async function generateAndStoreConceptVectors(
 		}
 
 		try {
-			const storeResult = await db.storeVectors({
+			const storeResult = await createVectors({
 				concept: conceptVectors,
 			});
 

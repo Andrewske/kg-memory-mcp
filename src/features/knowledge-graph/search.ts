@@ -231,11 +231,10 @@ export async function searchByEmbedding(
  */
 export async function searchConcepts(
 	query: string,
-	db: DatabaseAdapter,
 	abstraction?: string
 ): Promise<Result<ConceptNode[]>> {
 	try {
-		const result = await db.searchConcepts(query, abstraction);
+		const result = await searchConcepts(query, abstraction);
 		return result;
 	} catch (error) {
 		return {

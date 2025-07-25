@@ -14,7 +14,7 @@
 		"mcp": "tsx src/index.ts",
 		"watch": "tsx watch src/index.ts",
 		"server:inspect": "ENABLE_STDIO_TRANSPORT=true npx @modelcontextprotocol/inspector ./node_modules/.bin/tsx src/index.ts",
-		"dev:http": "ENABstdioLE_HTTP_TRANSPORT=true ENABLE_STDIO_TRANSPORT=false tsx src/index.ts",
+		"dev:http": "ENABLE_HTTP_TRANSPORT=true ENABLE_STDIO_TRANSPORT=false tsx src/index.ts",
 		"dev:stdio": "ENABLE_STDIO_TRANSPORT=true ENABLE_HTTP_TRANSPORT=false tsx src/index.ts",
 		"dev:dual": "ENABLE_HTTP_TRANSPORT=true ENABLE_STDIO_TRANSPORT=true tsx src/index.ts",
 		"start:http": "ENABLE_HTTP_TRANSPORT=true ENABLE_STDIO_TRANSPORT=false node dist/index.js",

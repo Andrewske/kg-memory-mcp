@@ -3,17 +3,18 @@
  */
 
 import { JobStatus, type ProcessingJob } from '@prisma/client';
+import type { ProcessKnowledgeArgs } from '~/server/transport-manager';
 import { db } from '~/shared/database/client';
 import { env } from '~/shared/env';
 import { getQStash } from '~/shared/services/qstash';
 
 
-export async function addJobToQueue(text: string, metadata: any): Promise<string> {
+export async function addJobToQueue(body: ProcessKnowledgeArgs): Promise<string> {
 	// Add to database
 	const job = await db.processingJob.create({
 		data: {
-			text,
-			metadata,
+			text: body.text,
+			metadata: { ...body },
 			status: JobStatus.QUEUED,
 		},
 	});
@@ -41,6 +42,12 @@ export async function addJobToQueue(text: string, metadata: any): Promise<string
 
 	return job.id;
 }
+
+export async function handleGetJobStatus(jobId: string) {
+	const job = await getJob(jobId);
+	return job;
+}
+
 
 export async function updateJobStatus(
 	jobId: string,
@@ -76,50 +83,21 @@ export async function updateJobStatus(
 }
 
 export async function getJob(jobId: string): Promise<ProcessingJob | null> {
-	const job = await db.processingJob.findUnique({
+	return await db.processingJob.findUnique({
 		where: { id: jobId },
 	});
 
-	if (!job) return null;
-
-	return {
-		id: job.id,
-		text: job.text,
-		metadata: job.metadata,
-		status: job.status,
-		result: job.result,
-		errorMessage: job.errorMessage,
-		createdAt: job.createdAt,
-		startedAt: job.startedAt,
-		completedAt: job.completedAt,
-		retryCount: job.retryCount,
-		maxRetries: job.maxRetries,
-	};
 }
 
 export async function getJobsByStatus(
 	status: JobStatus,
 	limit: number = 10
 ): Promise<ProcessingJob[]> {
-	const jobs = await db.processingJob.findMany({
+	return await db.processingJob.findMany({
 		where: { status },
 		orderBy: { createdAt: 'asc' },
 		take: limit,
 	});
-
-	return jobs.map(job => ({
-		id: job.id,
-		text: job.text,
-		metadata: job.metadata,
-		status: job.status,
-		result: job.result,
-		errorMessage: job.errorMessage,
-		createdAt: job.createdAt,
-		startedAt: job.startedAt,
-		completedAt: job.completedAt,
-		retryCount: job.retryCount,
-		maxRetries: job.maxRetries,
-	}));
 }
 
 export async function getQueueStats(): Promise<{
@@ -197,26 +175,10 @@ export async function cleanupOldJobs(olderThanDays: number = 30): Promise<number
 	return result.count;
 }
 
-export async function getNextQueuedJob(): Promise<ProcessingJob | null> {
+export async function getNextQueuedJob() {
 	// Get the oldest queued job
-	const job = await db.processingJob.findFirst({
+	return await db.processingJob.findFirst({
 		where: { status: JobStatus.QUEUED },
 		orderBy: { createdAt: 'asc' },
 	});
-
-	if (!job) return null;
-
-	return {
-		id: job.id,
-		text: job.text,
-		metadata: job.metadata,
-		status: job.status,
-		result: job.result,
-		errorMessage: job.errorMessage,
-		createdAt: job.createdAt,
-		startedAt: job.startedAt,
-		completedAt: job.completedAt,
-		retryCount: job.retryCount,
-		maxRetries: job.maxRetries,
-	};
 }

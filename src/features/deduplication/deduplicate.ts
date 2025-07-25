@@ -1,8 +1,26 @@
 
 import { env } from '~/shared/env';
-import type { EmbeddingService, Result } from '~/shared/types';
+import type { EmbeddingService } from '~/shared/types';
 import type { Triple } from '~/shared/types/core';
-import type { DeduplicationResult } from './types';
+
+
+export interface DeduplicationResult {
+	uniqueTriples: Triple[];
+	duplicatesRemoved: number;
+	mergedMetadata: Array<{
+		originalId: string;
+		mergedIntoId: string;
+		reason: 'exact' | 'semantic';
+	}>;
+}
+
+export interface SimilarityScore {
+	triple1Id: string;
+	triple2Id: string;
+	score: number;
+	type: 'exact' | 'semantic';
+}
+
 
 
 /**
@@ -12,7 +30,7 @@ import type { DeduplicationResult } from './types';
 export async function deduplicateTriples(
 	triples: Triple[],
 	embeddingService: EmbeddingService
-): Promise<Result<DeduplicationResult>> {
+) {
 	try {
 		let processedTriples = [...triples];
 		let duplicatesRemoved = 0;

@@ -3,6 +3,9 @@
  * Supports both STDIO and HTTP transports with consistent functional API
  */
 
+// Load environment variables before anything else
+
+
 import { env } from '~/shared/env';
 import { redirectConsoleToFiles } from '~/shared/utils/console-redirect';
 import { startHttpServer } from './server/deploy-handlers';

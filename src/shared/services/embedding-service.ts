@@ -1,4 +1,5 @@
 import { openai } from '@ai-sdk/openai';
+import { Decimal } from '@prisma/client/runtime/library';
 import { embed } from 'ai';
 import tiktoken from 'tiktoken';
 import { storeTokenUsage } from '../database/stats-operations';
@@ -8,9 +9,7 @@ import type { EmbeddingConfig, EmbeddingService, Result } from '../types';
  */
 export function createEmbeddingService(config: EmbeddingConfig): EmbeddingService {
 	return {
-		async embed(
-			text: string
-		): Promise<Result<number[]>> {
+		async embed(text: string): Promise<Result<number[]>> {
 			try {
 				const modelConfig = { ...config };
 
@@ -78,11 +77,16 @@ export function createEmbeddingService(config: EmbeddingConfig): EmbeddingServic
 					input_tokens: totalTokens,
 					output_tokens: 0,
 					total_tokens: totalTokens,
-					estimated_cost: totalTokens * 0.02 / 1000000,
-					timestamp: new Date().toISOString(),
+					estimated_cost: new Decimal((totalTokens * 0.02) / 1000000),
+					timestamp: new Date(),
 					duration_ms: 0,
 					reasoning_tokens: 0,
 					thinking_tokens: 0,
+					cached_read_tokens: 0,
+					cached_write_tokens: 0,
+					reasoning_steps: 0,
+					operation_context: {},
+					tools_used: [],
 				});
 
 				return {

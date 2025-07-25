@@ -6,7 +6,7 @@ import { generateTripleId } from './database-utils';
 /**
  * Store knowledge triples in the database
  */
-export async function storeTriples(triples: Triple[]): Promise<Result<void>> {
+export async function createTriples(triples: Triple[]): Promise<Result<void>> {
 	try {
 		const prismaTriples = triples.map(triple => ({
 			id: generateTripleId(triple),
