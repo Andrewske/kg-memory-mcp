@@ -4,11 +4,7 @@
 		  "maxDuration": 60
 		}
 	  },
-	  "env": {
-		"ENABLE_HTTP_TRANSPORT": "true",
-		"ENABLE_STDIO_TRANSPORT": "false"
-	  },
-	"buildCommand": "pnpm run vercel-build",
+	"buildCommand": "pnpm run build",
 	"installCommand": "pnpm install",
 	"framework": null
 }

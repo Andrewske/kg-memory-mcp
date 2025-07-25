@@ -3,9 +3,12 @@ import { type ProcessKnowledgeArgs, processKnowledge } from '~/server/transport-
 import { addJobToQueue, getJob, updateJobStatus } from '~/shared/services/queue-service';
 
 // Queue processing for large jobs
-export async function queueKnowledgeProcessing(data: any): Promise<any> {
+export async function queueKnowledgeProcessing(data: {
+	jobId: string;
+	jobData: ProcessKnowledgeArgs;
+}) {
 	// Add to queue
-	const jobId = await addJobToQueue(data);
+	const jobId = await addJobToQueue(data.jobData);
 
 	return {
 		jobId,
@@ -16,7 +19,7 @@ export async function queueKnowledgeProcessing(data: any): Promise<any> {
 }
 
 // Handle background job processing (called by QStash)
-export async function handleProcessJob(body: any): Promise<any> {
+export async function handleProcessJob(body: { jobId: string }) {
 	const { jobId } = body;
 
 	if (!jobId) {

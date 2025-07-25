@@ -5,7 +5,6 @@ import type { z } from 'zod';
 import type { AIResponseWithUsage } from '~/shared/types';
 import type { AIConfig } from './config';
 
-
 // Result type for consistent error handling
 export type Result<T> = { success: true; data: T } | { success: false; error: OperationError };
 
@@ -14,8 +13,6 @@ export interface OperationError {
 	message: string;
 	cause?: unknown;
 }
-
-
 
 export interface EmbeddingService {
 	embed(text: string): Promise<Result<number[]>>;

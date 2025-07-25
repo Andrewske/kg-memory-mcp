@@ -3,12 +3,7 @@ import {
 	searchConcepts as searchConceptsDB,
 } from '~/shared/database/concept-operations';
 import { searchByEmbedding as searchByEmbeddingDB } from '~/shared/database/search-operations';
-import type {
-	KnowledgeGraphConfig,
-	Result,
-	SearchOptions,
-	SearchResult,
-} from '~/shared/types';
+import type { KnowledgeGraphConfig, Result, SearchOptions, SearchResult } from '~/shared/types';
 import type { Concept, Triple } from '~/shared/types/core';
 import {
 	type FusionSearchResult,

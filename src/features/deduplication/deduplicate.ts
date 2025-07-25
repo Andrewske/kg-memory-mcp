@@ -1,8 +1,6 @@
-
 import { env } from '~/shared/env';
 import type { EmbeddingService } from '~/shared/types';
 import type { Triple } from '~/shared/types/core';
-
 
 export interface DeduplicationResult {
 	uniqueTriples: Triple[];
@@ -21,16 +19,11 @@ export interface SimilarityScore {
 	type: 'exact' | 'semantic';
 }
 
-
-
 /**
  * Deduplicate knowledge triples using exact and semantic matching
  * Pure function that takes all dependencies as parameters
  */
-export async function deduplicateTriples(
-	triples: Triple[],
-	embeddingService: EmbeddingService
-) {
+export async function deduplicateTriples(triples: Triple[], embeddingService: EmbeddingService) {
 	try {
 		let processedTriples = [...triples];
 		let duplicatesRemoved = 0;
@@ -206,17 +199,15 @@ function generateTripleId(triple: Triple): string {
 	return Buffer.from(key).toString('base64').replace(/[+/=]/g, '_');
 }
 
-function mergeTripleMetadata(
-	existing: Triple,
-	duplicate: Triple
-){
+function mergeTripleMetadata(existing: Triple, duplicate: Triple) {
 	return {
 		...existing,
-		confidence: existing.confidence && duplicate.confidence
-			? existing.confidence.greaterThan(duplicate.confidence)
-				? existing.confidence
-				: duplicate.confidence
-			: existing.confidence || duplicate.confidence,
+		confidence:
+			existing.confidence && duplicate.confidence
+				? existing.confidence.greaterThan(duplicate.confidence)
+					? existing.confidence
+					: duplicate.confidence
+				: existing.confidence || duplicate.confidence,
 		extracted_at:
 			existing.extracted_at > duplicate.extracted_at
 				? existing.extracted_at

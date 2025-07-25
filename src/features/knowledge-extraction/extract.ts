@@ -50,7 +50,17 @@ export async function extractKnowledgeTriples(data: ProcessKnowledgeArgs) {
 
 		const { triples } = extractionResult.data;
 		let concepts: Concept[] = [];
-		let conceptualizations: Pick<ConceptualizationRelationship, 'source_element' | 'triple_type' | 'concept' | 'confidence' | 'context_triples' | 'source' | 'source_type' | 'extracted_at'>[] = [];
+		let conceptualizations: Pick<
+			ConceptualizationRelationship,
+			| 'source_element'
+			| 'triple_type'
+			| 'concept'
+			| 'confidence'
+			| 'context_triples'
+			| 'source'
+			| 'source_type'
+			| 'extracted_at'
+		>[] = [];
 
 		// Generate concepts if requested
 		if (triples.length > 0) {
@@ -59,8 +69,6 @@ export async function extractKnowledgeTriples(data: ProcessKnowledgeArgs) {
 				source: data.source,
 				source_type: data.source_type,
 			});
-
-
 
 			if (conceptResult.success && conceptResult.data) {
 				concepts = conceptResult.data.concepts;

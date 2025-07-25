@@ -8,7 +8,6 @@ import { db } from '~/shared/database/client';
 import { env } from '~/shared/env';
 import { getQStash } from '~/shared/services/qstash';
 
-
 export async function addJobToQueue(body: ProcessKnowledgeArgs): Promise<string> {
 	// Add to database
 	const job = await db.processingJob.create({
@@ -48,7 +47,6 @@ export async function handleGetJobStatus(jobId: string) {
 	return job;
 }
 
-
 export async function updateJobStatus(
 	jobId: string,
 	status: JobStatus,
@@ -86,7 +84,6 @@ export async function getJob(jobId: string): Promise<ProcessingJob | null> {
 	return await db.processingJob.findUnique({
 		where: { id: jobId },
 	});
-
 }
 
 export async function getJobsByStatus(

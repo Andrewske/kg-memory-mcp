@@ -18,7 +18,7 @@ export interface ToolResult<T = any> {
 	};
 }
 
-export interface RoutesDependencies {	
+export interface RoutesDependencies {
 	embeddingService: EmbeddingService;
 	aiProvider: AIProvider;
 }

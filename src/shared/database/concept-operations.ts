@@ -1,16 +1,11 @@
-import type {
-
-	ConceptualizationRelationship,
-	KnowledgeTriple,
-} from '@prisma/client';
+import type { ConceptualizationRelationship, KnowledgeTriple } from '@prisma/client';
 import type { Result } from '~/shared/types';
 import type { Concept } from '~/shared/types/core';
 import { db } from './client';
 import {
 	convertEmbeddingToVector,
 	generateConceptId,
-	generateConceptualizationId
-
+	generateConceptualizationId,
 } from './database-utils';
 
 /**
@@ -69,7 +64,7 @@ export async function searchConcepts(
 
 		return {
 			success: true,
-			data: concepts
+			data: concepts,
 		};
 	} catch (error) {
 		return {
@@ -152,7 +147,17 @@ export async function getConceptsByIds(ids: string[]): Promise<Concept[]> {
  * Store conceptualization relationships
  */
 export async function createConceptualizations(
-	relationships: Pick<ConceptualizationRelationship, 'source_element' | 'triple_type' | 'concept' | 'confidence' | 'context_triples' | 'source' | 'source_type' | 'extracted_at'>[]
+	relationships: Pick<
+		ConceptualizationRelationship,
+		| 'source_element'
+		| 'triple_type'
+		| 'concept'
+		| 'confidence'
+		| 'context_triples'
+		| 'source'
+		| 'source_type'
+		| 'extracted_at'
+	>[]
 ): Promise<Result<void>> {
 	try {
 		const prismaRelationships = relationships.map(rel => ({
@@ -165,7 +170,6 @@ export async function createConceptualizations(
 			source: rel.source,
 			source_type: rel.source_type,
 			extracted_at: new Date(rel.extracted_at),
-			
 		}));
 
 		await db.conceptualizationRelationship.createMany({
@@ -186,7 +190,6 @@ export async function createConceptualizations(
 	}
 }
 
-
 /**
  * Get conceptualization relationships by concept
  */
@@ -198,7 +201,7 @@ export async function getConceptualizationsByConcept(
 			where: { concept },
 		});
 
-		return relationships
+		return relationships;
 	} catch (error) {
 		console.error('Error getting conceptualizations by concept:', error);
 		return [];

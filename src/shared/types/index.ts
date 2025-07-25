@@ -18,9 +18,7 @@ export type {
 	SearchConfig,
 } from './config';
 // Core domain types
-export type {
-	AIResponseWithUsage,
-} from './core';
+export type { AIResponseWithUsage } from './core';
 // Search-related types
 export type {
 	ConceptSearchResult,

@@ -1,3 +1,4 @@
+/** biome-ignore-all lint/suspicious/noExplicitAny: wrapper for console methods */
 import fs from 'node:fs';
 import path from 'node:path';
 import { env } from '~/shared/env';

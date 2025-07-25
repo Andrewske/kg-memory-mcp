@@ -3,7 +3,6 @@
  * Provides shared tool handling logic across different transports
  */
 
-
 import {
 	extractElementsFromTriples,
 	generateConcepts,

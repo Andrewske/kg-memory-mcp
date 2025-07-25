@@ -62,7 +62,9 @@ export async function getTripleCountByType(): Promise<Record<TripleType, number>
 /**
  * Store token usage information
  */
-export async function storeTokenUsage(usage: Omit<TokenUsage, 'id' | 'created_at' | 'updated_at'>): Promise<Result<void>> {
+export async function storeTokenUsage(
+	usage: Omit<TokenUsage, 'id' | 'created_at' | 'updated_at'>
+): Promise<Result<void>> {
 	try {
 		await db.tokenUsage.create({
 			data: {

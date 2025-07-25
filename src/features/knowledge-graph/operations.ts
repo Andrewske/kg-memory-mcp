@@ -2,15 +2,18 @@ import type { TripleType } from '@prisma/client';
 import { v4 as uuidv4 } from 'uuid';
 import { createConcepts } from '~/shared/database/concept-operations';
 import {
-
 	getConceptCount,
 	getTripleCount,
 	getTripleCountByType,
 } from '~/shared/database/stats-operations';
-import { checkExistingTriples, createTriples, getAllTriples } from '~/shared/database/triple-operations';
+import {
+	checkExistingTriples,
+	createTriples,
+	getAllTriples,
+} from '~/shared/database/triple-operations';
 import { createVectors } from '~/shared/database/vector-operations';
 import { env } from '~/shared/env';
-import type {  EmbeddingService, GraphStats, Result } from '~/shared/types';
+import type { EmbeddingService, GraphStats, Result } from '~/shared/types';
 import type { Concept, Triple } from '~/shared/types/core';
 
 export interface EntityEnumerationOptions {
@@ -292,7 +295,7 @@ export function generateConceptId(concept: Concept) {
  * Enumerate entities in the knowledge graph with filtering and sorting
  */
 export async function enumerateEntities(
-	options: EntityEnumerationOptions,
+	options: EntityEnumerationOptions
 ): Promise<Result<EntityEnumerationResult[]>> {
 	try {
 		const {

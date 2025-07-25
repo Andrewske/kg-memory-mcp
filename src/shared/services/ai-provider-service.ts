@@ -10,7 +10,6 @@ import type { AIConfig, AIProvider, AIResponseWithUsage, Result } from '../types
  * Supports both OpenAI and Anthropic models with advanced token extraction
  */
 export function createAIProvider(): AIProvider {
-
 	const defaultConfig = {
 		model: env.AI_MODEL,
 		temperature: env.AI_TEMPERATURE,
@@ -21,7 +20,7 @@ export function createAIProvider(): AIProvider {
 		async generateObject<T>(
 			prompt: string,
 			schema: z.ZodType<T>,
-			overrideConfig?: Partial<AIConfig>,
+			overrideConfig?: Partial<AIConfig>
 		): Promise<Result<AIResponseWithUsage<T>>> {
 			try {
 				const modelConfig = { ...defaultConfig, ...overrideConfig };
@@ -61,7 +60,7 @@ export function createAIProvider(): AIProvider {
 
 		async generateText(
 			prompt: string,
-			overrideConfig?: Partial<AIConfig>,
+			overrideConfig?: Partial<AIConfig>
 		): Promise<Result<AIResponseWithUsage<string>>> {
 			try {
 				const modelConfig = { ...defaultConfig, ...overrideConfig };

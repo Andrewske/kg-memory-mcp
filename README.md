@@ -1,818 +1,628 @@
 # Knowledge Graph MCP Server
 
-A high-performance Model Context Protocol (MCP) server for knowledge graph operations. This server provides comprehensive knowledge graph functionality including AI-powered triple extraction, semantic search, conceptualization, and advanced deduplication with PostgreSQL storage and vector embeddings.
+<div align="center">
+
+[![MCP Protocol](https://img.shields.io/badge/Protocol-MCP-brightgreen)](https://github.com/modelcontextprotocol)
+[![TypeScript](https://img.shields.io/badge/TypeScript-ES2022-blue)](https://www.typescriptlang.org/)
+[![PostgreSQL](https://img.shields.io/badge/PostgreSQL-Prisma-336791)](https://www.prisma.io/)
+[![OpenAI](https://img.shields.io/badge/AI-OpenAI%20%7C%20Anthropic-412991)](https://openai.com/)
+
+A powerful **Model Context Protocol (MCP)** server that transforms unstructured text into a searchable knowledge graph with AI-powered extraction, conceptualization, and semantic search capabilities.
+
+[Features](#features) • [Quick Start](#quick-start) • [Architecture](#architecture) • [API Reference](#api-reference) • [Examples](#examples) • [Contributing](#contributing)
+
+</div>
+
+## Table of Contents
+
+- [Overview](#overview)
+- [Features](#features)
+- [Architecture](#architecture)
+- [Getting Started](#getting-started)
+  - [Prerequisites](#prerequisites)
+  - [Installation](#installation)
+  - [Configuration](#configuration)
+  - [Database Setup](#database-setup)
+- [Usage](#usage)
+  - [Transport Modes](#transport-modes)
+  - [MCP Tools](#mcp-tools)
+  - [HTTP API Endpoints](#http-api-endpoints)
+- [Examples](#examples)
+- [Development](#development)
+- [Security](#security)
+- [Performance](#performance)
+- [Troubleshooting](#troubleshooting)
+- [Contributing](#contributing)
+- [License](#license)
+
+## Overview
+
+The Knowledge Graph MCP Server is a sophisticated system that automatically extracts structured knowledge from text, creating a queryable graph database of entities, relationships, events, and concepts. It supports both traditional MCP communication over STDIO and modern HTTP/REST APIs with Server-Sent Events (SSE).
+
+**Inspiration**: This project was heavily inspired by the groundbreaking work in [AutoSchemaKG](https://github.com/HKUST-KnowComp/AutoSchemaKG), which pioneered autonomous knowledge graph construction with entity-event dual modeling and dynamic schema induction. I've adapted their core insights around multi-stage triple extraction, conceptualization processes, and the critical importance of events as first-class citizens in knowledge representation, while implementing it as a practical MCP server for AI assistant integration.
+
+### What is MCP?
+
+The **Model Context Protocol (MCP)** is an open protocol that standardizes how AI assistants (like Claude) communicate with external tools and data sources. This server implements MCP to provide knowledge graph capabilities to AI systems.
+
+### Key Capabilities
+
+- **🧠 AI-Powered Extraction**: Automatically extracts four types of knowledge triples from text
+- **🔍 Semantic Search**: Multi-modal search using vector embeddings and fusion ranking
+- **📊 Conceptualization**: Generates hierarchical concepts at different abstraction levels
+- **🔄 Deduplication**: Intelligent duplicate detection using semantic similarity
+- **🚀 Dual Transport**: Supports both STDIO (for MCP clients) and HTTP (for web applications)
+- **⚡ Production Ready**: Built with TypeScript, PostgreSQL, and enterprise-grade security
 
 ## Features
 
-- **🚀 Background Processing**: Fast response times with asynchronous conceptualization
-- **🧠 AI-Powered Triple Extraction**: Extract knowledge relationships using OpenAI/Anthropic models
-- **🔍 Semantic Search**: Vector-based similarity search with PostgreSQL and embeddings
-- **📊 Conceptualization**: Generate hierarchical concept abstractions (high/medium/low levels)
-- **🔄 Smart Deduplication**: Advanced duplicate detection with confidence scoring
-- **⚡ High Performance**: Sub-second responses with background processing for heavy operations
-- **🗄️ Robust Storage**: PostgreSQL with Prisma ORM for reliable data persistence
-- **🔧 Pure Functional Architecture**: Stateless design with explicit dependencies
+### Knowledge Extraction
 
-## Installation
+The server extracts four distinct types of knowledge relationships:
+
+1. **Entity-Entity Relationships**: Connections between people, places, organizations
+   - Example: `(Alice, works_for, TechCorp)`
+   
+2. **Entity-Event Relationships**: How entities participate in events
+   - Example: `(Bob, attended, Conference_2024)`
+   
+3. **Event-Event Relationships**: Temporal and causal connections between events
+   - Example: `(Meeting, preceded, Decision)`
+   
+4. **Emotional Context**: Sentiment and emotional states
+   - Example: `(Team, felt_confident_about, Project_Launch)`
+
+### Conceptualization
+
+Automatically generates abstract concepts from extracted knowledge:
+
+- **High Level**: Broad themes and categories (e.g., "collaboration", "innovation")
+- **Medium Level**: Domain-specific concepts (e.g., "software development", "team dynamics")
+- **Low Level**: Specific instances and details (e.g., "sprint planning", "code review")
+
+### Search Capabilities
+
+Advanced fusion search combining multiple strategies:
+
+- **Entity Search**: Find specific entities by name
+- **Relationship Search**: Query by predicate patterns
+- **Semantic Search**: Full-text similarity search
+- **Concept Search**: Abstract concept matching
+- **Fusion Ranking**: Weighted combination of all search types
+
+### Vector Embeddings
+
+- OpenAI `text-embedding-3-small` (1536 dimensions)
+- On-demand generation without caching
+- Efficient batch processing
+- PostgreSQL pgvector for similarity search
+
+### Technology Stack
+
+- **Runtime**: Node.js with ES modules
+- **Language**: TypeScript (ES2022) with strict typing
+- **Database**: PostgreSQL with Prisma ORM
+- **Vector Search**: pgvector extension
+- **AI Providers**: OpenAI & Anthropic via AI SDK
+- **HTTP Server**: Express.js with security middleware
+- **Testing**: Jest with TypeScript support
+- **Package Manager**: pnpm
+
+### Functional Architecture
+
+The codebase follows strict functional programming principles:
+
+- **Pure Functions**: All operations are stateless with explicit dependencies
+- **No Hidden State**: No factories, closures, or implicit mutations
+- **Result Types**: Consistent error handling without exceptions
+- **Explicit Dependencies**: All functions receive required services as parameters
+
+## Getting Started
 
 ### Prerequisites
 
-- Node.js 18+ 
-- PostgreSQL database
-- OpenAI API key (required) and/or Anthropic API key (optional)
+- Node.js 20+ (LTS recommended)
+- PostgreSQL 15+ with pgvector extension
+- pnpm package manager
+- OpenAI or Anthropic API key
 
-### Local Development
+### Installation
 
-```bash
-git clone <repository-url>
-cd full-context-mcp
-pnpm install
-cp .env.example .env
-# Edit .env with your configuration
-pnpm run db:generate
-pnpm run db:migrate
-pnpm run build
-```
+1. **Clone the repository**:
+   ```bash
+   git clone https://github.com/yourusername/kg-memory-mcp.git
+   cd kg-memory-mcp
+   ```
 
-## Configuration
+2. **Install dependencies**:
+   ```bash
+   pnpm install
+   ```
 
-### Required Environment Variables
+3. **Set up environment variables**:
+   ```bash
+   cp .env.example .env
+   # Edit .env with your configuration
+   ```
 
-```bash
+4. **Initialize the database**:
+   ```bash
+   pnpm run db:push
+   ```
+
+### Configuration
+
+Create a `.env` file with the following variables:
+
+```env
 # Database
 DATABASE_URL="postgresql://user:password@localhost:5432/knowledge_graph"
 
-# AI APIs (at least one required)
-OPENAI_API_KEY="your-openai-api-key"          # Required for embeddings
-ANTHROPIC_API_KEY="your-anthropic-api-key"    # Optional alternative
-```
+# AI Provider (choose one)
+OPENAI_API_KEY="sk-..."
+# OR
+ANTHROPIC_API_KEY="sk-ant-..."
 
-### Optional Configuration
+# Transport Configuration
+ENABLE_STDIO_TRANSPORT=true
+ENABLE_HTTP_TRANSPORT=false
 
-```bash
-# AI Provider Settings
-KNOWLEDGE_GRAPH_AI_PROVIDER="openai"                    # openai | anthropic
-KNOWLEDGE_GRAPH_AI_MODEL="gpt-4o-mini"                 # AI model for extraction
-KNOWLEDGE_GRAPH_EMBEDDING_MODEL="text-embedding-3-small" # OpenAI embedding model
-KNOWLEDGE_GRAPH_EMBEDDING_DIMENSIONS=1536               # Embedding dimensions
+# Optional: HTTP Configuration
+HTTP_PORT=3000
+HTTP_BASE_PATH=/api
+HTTP_CORS_ORIGINS=*
 
-# Processing Settings
-KNOWLEDGE_GRAPH_EXTRACTION_MAX_TOKENS=4000              # Max tokens per extraction
-KNOWLEDGE_GRAPH_DEDUP_SIMILARITY_THRESHOLD=0.85         # Deduplication threshold
-KNOWLEDGE_GRAPH_DEDUP_BATCH_SIZE=50                     # Deduplication batch size
-
-# Database Settings
-KG_DB_CONNECTION_TIMEOUT=5000                           # Connection timeout (ms)
-KG_DB_MAX_CONNECTIONS=10                                # Max database connections
+# Optional: Advanced Settings
+AI_PROVIDER=openai              # or 'anthropic'
+AI_MODEL=gpt-4o-mini           # or 'claude-3-haiku'
+EMBEDDING_MODEL=text-embedding-3-small
+EXTRACTION_METHOD=four-stage    # or 'single-pass'
 ```
 
 ### Database Setup
 
+1. **Install PostgreSQL with pgvector**:
+   ```bash
+   # macOS
+   brew install postgresql pgvector
+   
+   # Ubuntu/Debian
+   sudo apt-get install postgresql postgresql-contrib
+   sudo apt-get install postgresql-15-pgvector
+   ```
+
+2. **Create database and enable pgvector**:
+   ```sql
+   CREATE DATABASE knowledge_graph;
+   \c knowledge_graph
+   CREATE EXTENSION IF NOT EXISTS vector;
+   ```
+
+3. **Run Prisma migrations**:
+   ```bash
+   pnpm run db:push
+   ```
+
+4. **Create vector indexes** (optional but recommended):
+   ```sql
+   -- Entity vectors
+   CREATE INDEX idx_entity_vectors_embedding 
+   ON entity_vectors USING ivfflat (embedding vector_cosine_ops);
+   
+   -- Relationship vectors
+   CREATE INDEX idx_relationship_vectors_embedding 
+   ON relationship_vectors USING ivfflat (embedding vector_cosine_ops);
+   
+   -- Semantic vectors
+   CREATE INDEX idx_semantic_vectors_embedding 
+   ON semantic_vectors USING ivfflat (embedding vector_cosine_ops);
+   
+   -- Concept vectors
+   CREATE INDEX idx_concept_vectors_embedding 
+   ON concept_vectors USING ivfflat (embedding vector_cosine_ops);
+   ```
+
+## Usage
+
+### Transport Modes
+
+The server supports two transport modes that can run independently or simultaneously:
+
+#### STDIO Transport (Traditional MCP)
+
+For use with Claude Desktop and other MCP clients:
+
 ```bash
-# Generate Prisma client
-pnpm run db:generate
+# Development
+pnpm run dev:stdio
 
-# Run database migrations
-pnpm run db:migrate
-
-# Optional: Open Prisma Studio
-pnpm run db:studio
+# Production
+pnpm run build
+pnpm run start:stdio
 ```
 
-## Transport Options
+**Claude Desktop Configuration** (`.claude/config.json`):
+```json
+{
+  "mcpServers": {
+    "knowledge-graph": {
+      "command": "node",
+      "args": ["/path/to/kg-memory-mcp/dist/index.js"],
+      "env": {
+        "DATABASE_URL": "postgresql://...",
+        "OPENAI_API_KEY": "sk-...",
+        "ENABLE_STDIO_TRANSPORT": "true",
+        "ENABLE_HTTP_TRANSPORT": "false"
+      }
+    }
+  }
+}
+```
 
-This server supports **dual transport modes** for maximum flexibility:
+#### HTTP Transport (REST API)
 
-### 🔗 STDIO Transport (Default)
-Traditional MCP over stdin/stdout for direct integration with MCP clients like Claude Desktop.
-
-### 🌐 HTTP Transport (Optional)
-RESTful HTTP API with Server-Sent Events (SSE) support for web applications and HTTP-based integrations.
-
-## HTTP Transport Setup
-
-### Quick Start
+For web applications and custom integrations:
 
 ```bash
-# Enable HTTP transport
-export ENABLE_HTTP_TRANSPORT=true
-export HTTP_PORT=3000
-
-# Start with HTTP support
+# Development
 pnpm run dev:http
-# OR for production
-pnpm run build && pnpm run start:http
+
+# Production
+pnpm run build
+pnpm run start:http
 ```
 
-The server will be available at:
-- **REST API**: `http://localhost:3000/api/`
-- **SSE/MCP Endpoint**: `http://localhost:3000/api/mcp`
-- **Health Check**: `http://localhost:3000/api/health`
-- **API Documentation**: `http://localhost:3000/api/openapi.json`
+#### Dual Mode
 
-### HTTP Environment Configuration
-
-Add these variables to your `.env` file:
-
-```bash
-# HTTP Transport (all optional)
-ENABLE_HTTP_TRANSPORT=true              # Enable HTTP server
-HTTP_PORT=3000                          # Server port
-HTTP_BASE_PATH=/api                     # API base path
-HTTP_CORS_ORIGINS=*                     # CORS origins (* for development)
-HTTP_RATE_LIMIT_WINDOW=15               # Rate limit window (minutes)
-HTTP_RATE_LIMIT_MAX=100                 # Max requests per window
-HTTP_ENABLE_SSE=true                    # Enable SSE/MCP endpoint
-```
-
-### Dual Transport Mode
-
-Run both STDIO and HTTP simultaneously:
+Run both transports simultaneously:
 
 ```bash
 # Development
 pnpm run dev:dual
 
 # Production
-pnpm run build && pnpm run start:dual
-```
-
-This allows:
-- **STDIO**: For Claude Desktop and MCP client integration
-- **HTTP**: For web applications and REST API access
-
-### HTTP API Endpoints
-
-#### REST API (Stateless)
-
-| Endpoint | Method | Description |
-|----------|--------|-------------|
-| `/api/process-knowledge` | POST | Extract and store knowledge with background concepts |
-| `/api/search-knowledge` | POST | Search knowledge graph by similarity |
-| `/api/search-concepts` | POST | Search conceptual abstractions |
-| `/api/deduplicate` | POST | Deduplicate knowledge triples |
-| `/api/stats` | GET | Get comprehensive knowledge graph statistics |
-| `/api/entities` | GET | Enumerate unique entities in the graph |
-
-#### Monitoring & Documentation
-
-| Endpoint | Method | Description |
-|----------|--------|-------------|
-| `/api/health` | GET | Health check with database/AI status |
-| `/api/version` | GET | Server version information |
-| `/api/capabilities` | GET | Available MCP tools list |
-| `/api/metrics` | GET | System performance metrics |
-| `/api/openapi.json` | GET | OpenAPI 3.0 specification |
-
-#### MCP over HTTP/SSE
-
-| Endpoint | Method | Description |
-|----------|--------|-------------|
-| `/api/mcp` | GET | Server-Sent Events MCP protocol endpoint |
-
-### HTTP Usage Examples
-
-#### cURL Examples
-
-**Process Knowledge:**
-```bash
-curl -X POST http://localhost:3000/api/process-knowledge \
-  -H "Content-Type: application/json" \
-  -d '{
-    "text": "Alice is a machine learning engineer at Google. She specializes in deep learning and loves PyTorch.",
-    "source": "example_conversation",
-    "include_concepts": true,
-    "deduplicate": true
-  }'
-```
-
-**Search Knowledge:**
-```bash
-curl -X POST http://localhost:3000/api/search-knowledge \
-  -H "Content-Type: application/json" \
-  -d '{
-    "query": "machine learning deep learning",
-    "limit": 10,
-    "threshold": 0.7,
-    "types": ["entity-entity", "entity-event"]
-  }'
-```
-
-**Get Statistics:**
-```bash
-curl http://localhost:3000/api/stats
-```
-
-**Health Check:**
-```bash
-curl http://localhost:3000/api/health
-```
-
-#### Claude Code Integration
-
-Add HTTP transport to Claude Code:
-
-```bash
-claude mcp add --transport http knowledge-graph http://localhost:3000/mcp
-```
-
-### HTTP vs STDIO Comparison
-
-| Feature | STDIO Transport | HTTP Transport |
-|---------|----------------|----------------|
-| **Use Case** | MCP clients, Claude Desktop | Web apps, REST APIs, HTTP clients |
-| **Protocol** | MCP over stdin/stdout | REST + MCP over SSE |
-| **Performance** | Lowest latency | ~5-10ms overhead |
-| **Scalability** | Single client | Multiple concurrent clients |
-| **Web Integration** | Not directly accessible | Direct browser/web access |
-| **Monitoring** | Limited | Rich endpoints (/health, /metrics) |
-| **Documentation** | MCP introspection | OpenAPI specification |
-| **Security** | Process isolation | CORS, rate limiting, headers |
-
-### Production Considerations
-
-**Security:**
-- Rate limiting: 100 requests per 15 minutes (configurable)
-- CORS protection with configurable origins
-- Security headers via Helmet middleware
-- Input validation on all endpoints
-
-**Performance:**
-- Gzip compression for responses
-- Background processing for heavy operations
-- Database connection pooling
-- Efficient vector similarity search
-
-**Monitoring:**
-- Health checks for database and AI services
-- Comprehensive metrics endpoint
-- Request/response logging
-- Error tracking and reporting
-
-## Usage
-
-### Development
-
-```bash
-# Development with hot reload
-pnpm run dev
-
-# Production build and start
 pnpm run build
-pnpm run start
-
-# Run tests
-pnpm run test
-pnpm run test:watch
-
-# Code quality checks
-pnpm run lint
-pnpm run format
-pnpm run check
+pnpm run start:dual
 ```
 
-### As an MCP Server
+### MCP Tools
 
-The server communicates via stdio using the Model Context Protocol. It automatically starts when executed and provides 6 main tools for knowledge graph operations.
+The server exposes two primary tools through the MCP protocol:
 
-**⚡ Performance Note**: The `process_knowledge` tool now features **background processing** for conceptualization, providing immediate responses (~2-5 seconds) while concepts are generated asynchronously.
+#### 1. `process_knowledge`
 
-### Available Tools
+Extract and store knowledge from text:
 
-#### 1. `process_knowledge` 🚀 *NEW: Background Processing*
-
-Extract and store knowledge triples with optional conceptualization. **Features background processing** for fast responses.
-
-**Parameters:**
-- `text` (required): Text content to process
-- `source` (required): Source identifier  
-- `thread_id` (optional): Thread grouping identifier
-- `conversation_date` (optional): ISO date string
-- `processing_batch_id` (optional): Batch processing identifier
-- `include_concepts` (optional): Generate concepts in background (default: false)
-- `deduplicate` (optional): Remove duplicates (default: true)
-
-**Performance:**
-- **Without concepts**: ~2-5 seconds
-- **With concepts**: ~2-5 seconds response + background processing
-- **Background logging**: Monitor conceptualization progress in console
-
-**Example:**
-```json
+```typescript
 {
-  "text": "John is a software engineer at Google. He loves TypeScript and works on AI projects.",
-  "source": "conversation_001", 
-  "include_concepts": true,
-  "deduplicate": true
+  text: string;              // Text to process
+  source: string;            // Source identifier
+  source_type?: string;      // Type: "thread", "file", "manual", "api"
+  source_date?: string;      // ISO date string
+  include_concepts?: boolean; // Generate concepts (async)
 }
 ```
 
-**Response:**
+**Example**:
 ```json
 {
-  "success": true,
-  "data": {
-    "triplesStored": 4,
-    "conceptsStored": "processing in background",
-    "metadata": {...}
-  }
+  "text": "Alice works at TechCorp as a senior engineer. She led the API redesign project in 2024.",
+  "source": "meeting_notes_001",
+  "source_type": "manual",
+  "include_concepts": true
 }
 ```
 
 #### 2. `search_knowledge_graph`
 
-Search for relevant knowledge triples using vector similarity.
+Search using fusion ranking:
 
-**Parameters:**
-- `query` (required): Search query
-- `limit` (optional): Maximum results (default: 10)
-- `threshold` (optional): Similarity threshold (default: 0.0)
-- `types` (optional): Filter by triple types (`entity-entity`, `entity-event`, `event-event`, `emotional-context`)
-- `sources` (optional): Filter by sources
+```typescript
+{
+  query: string;             // Search query
+  limit?: number;            // Max results (default: 10)
+  threshold?: number;        // Similarity threshold (0-1)
+  searchTypes?: string[];    // Enable specific search types
+  weights?: {                // Custom ranking weights
+    entity?: number;
+    relationship?: number;
+    semantic?: number;
+    concept?: number;
+  };
+}
+```
 
-**Example:**
+**Example**:
 ```json
 {
-  "query": "software engineering TypeScript",
-  "limit": 5,
-  "threshold": 0.7,
-  "types": ["entity-entity", "entity-event"]
+  "query": "API redesign project",
+  "limit": 20,
+  "searchTypes": ["entity", "semantic"],
+  "weights": {
+    "entity": 0.4,
+    "semantic": 0.6
+  }
 }
 ```
 
 #### 3. `search_concepts`
 
-Search for concepts in the knowledge graph.
+Search conceptual abstractions:
 
-**Parameters:**
-- `query` (required): Search query
-- `limit` (optional): Maximum results (default: 10)
-- `threshold` (optional): Similarity threshold (default: 0.0)
-
-#### 4. `store_knowledge_triples`
-
-Directly store pre-structured knowledge triples.
-
-**Parameters:**
-- `triples` (required): Array of knowledge triples with required fields:
-  - `subject`, `predicate`, `object` (strings)
-  - `type` (one of: `entity-entity`, `entity-event`, `event-event`, `emotional-context`)
-  - `source` (string)
-  - Optional: `thread_id`, `conversation_date`, `processing_batch_id`, `confidence`
-
-#### 5. `deduplicate_triples`
-
-Deduplicate and normalize knowledge triples.
-
-**Parameters:**
-- `triples` (required): Array of knowledge triples
-
-#### 6. `get_knowledge_graph_stats`
-
-Get comprehensive statistics about the knowledge graph.
-
-**Returns:**
-- Total triples count by type
-- Total concepts count by abstraction level
-- Unique sources and entities
-- Database performance metrics
-- Last updated timestamps
-- Configuration summary
-
-## Knowledge Graph Schema
-
-### Triple Types
-
-The system recognizes four types of knowledge relationships:
-
-#### 1. **Entity-Entity** (`entity-entity`)
-Relationships between people, places, organizations, tools, concepts
-- Examples: "John works at Google", "TypeScript is a programming language"
-
-#### 2. **Entity-Event** (`entity-event`) 
-Relationships between entities and activities/experiences
-- Examples: "John implemented the API", "Google launched the product"
-
-#### 3. **Event-Event** (`event-event`)
-Temporal, causal, or contextual relationships between events
-- Examples: "Learning TypeScript led to joining the team", "The meeting resulted in the decision"
-
-#### 4. **Emotional-Context** (`emotional-context`)
-Emotional states, preferences, mental patterns, attitudes
-- Examples: "John loves TypeScript", "The team feels excited about the project"
-
-### Conceptualization Levels
-
-**Concept Abstraction Hierarchy:**
-- **High**: Abstract domains and fields ("Software Engineering", "Technology")
-- **Medium**: Specific technologies and practices ("Web Development", "TypeScript Programming")
-- **Low**: Concrete tools and instances ("VS Code", "React Components")
-
-### Data Structure
-
-### Data Structures
-
-**Knowledge Triple:**
 ```typescript
-interface KnowledgeTriple {
-  subject: string;                    // Entity or event performing the action
-  predicate: string;                  // Relationship or action
-  object: string;                     // Target entity, event, or attribute
-  type: TripleType;                   // Classification of relationship
-  source: string;                     // Source identifier
-  thread_id?: string;                 // Conversation thread grouping
-  conversation_date?: string;         // ISO date string
-  extracted_at: string;               // Extraction timestamp
-  processing_batch_id?: string;       // Batch processing identifier
-  confidence?: number;                // AI confidence score (0-1)
-}
-
-type TripleType = 
-  | 'entity-entity' 
-  | 'entity-event' 
-  | 'event-event' 
-  | 'emotional-context';
-```
-
-**Concept Node:**
-```typescript
-interface ConceptNode {
-  concept: string;                           // Abstract concept name
-  abstraction_level: 'high' | 'medium' | 'low'; // Hierarchy level
-  confidence: number;                        // AI confidence score (0-1)
-  source: string;                            // Source identifier
-  extracted_at: string;                      // Extraction timestamp
-  processing_batch_id?: string;              // Batch processing identifier
-  reasoning?: string;                        // AI reasoning for concept
+{
+  query: string;                    // Search query
+  abstraction?: "high" | "medium" | "low";  // Filter by level
 }
 ```
 
-**Conceptualization Relationship:**
+
+
+### HTTP API Endpoints
+
+When running in HTTP mode, the following RESTful endpoints are available:
+
+#### Core Endpoints
+
+- `GET /api/` - Service information
+- `GET /api/health` - Health check with dependency status
+- `GET /api/metrics` - Performance metrics
+- `GET /api/capabilities` - MCP capabilities and tool list
+
+#### Knowledge Operations
+
+- `POST /api/process-knowledge` - Extract and store knowledge
+- `POST /api/search-knowledge` - Fusion search
+- `POST /api/search-concepts` - Concept search
+- `GET /api/stats` - Knowledge graph statistics
+
+#### Job Queue (Async Processing)
+
+- `POST /api/process-job` - Queue large extraction job
+- `GET /api/job-status?jobId={id}` - Check job status
+
+#### SSE/MCP Endpoint
+
+- `GET /api/sse` - Server-Sent Events for MCP protocol over HTTP
+
+### Response Format
+
+All API responses follow a consistent format:
+
 ```typescript
-interface ConceptualizationRelationship {
-  source_element: string;              // Original triple element
-  source_type: 'entity' | 'event' | 'relation'; // Element type
-  concept: string;                     // Abstract concept
-  confidence: number;                  // Relationship confidence
-  reasoning?: string;                  // AI reasoning
+{
+  success: boolean;
+  data?: any;           // Response data
+  error?: {
+    message: string;
+    operation: string;
+  };
+  operation: string;    // Operation name
+  timestamp: string;    // ISO timestamp
 }
 ```
 
-## Architecture
+## Examples
 
-### 🏗️ Pure Functional Architecture
+### JavaScript/Node.js
 
-The system follows a **stateless functional design** with explicit dependencies:
+```javascript
+// Simple extraction example
+const response = await fetch('http://localhost:3000/api/process-knowledge', {
+  method: 'POST',
+  headers: { 'Content-Type': 'application/json' },
+  body: JSON.stringify({
+    text: 'The new product launch increased revenue by 25% in Q4 2024.',
+    source: 'quarterly_report',
+    source_type: 'file'
+  })
+});
 
-- **No Hidden State**: All dependencies passed as parameters
-- **Pure Functions**: Predictable inputs/outputs without side effects
-- **No Factory Functions**: Direct function exports instead of `createXOperations`
-- **Database-First**: All persistence handled by PostgreSQL with proper indexes
-- **Explicit Error Handling**: Result types instead of exceptions
-
-### 📁 Project Structure
-
-```
-src/
-├── features/                    # Feature modules (pure functions)
-│   ├── knowledge-extraction/    # AI-powered triple extraction  
-│   ├── conceptualization/       # Concept hierarchy generation
-│   ├── deduplication/           # Smart duplicate detection
-│   └── knowledge-graph/         # Core graph operations & search
-├── shared/                      # Shared infrastructure
-│   ├── database/               # PostgreSQL adapter with Prisma
-│   ├── services/               # AI provider & embedding services
-│   ├── types/                  # TypeScript definitions
-│   └── utils/                  # Utility functions
-└── server/                     # MCP server implementation
-    └── mcp-server.ts          # Lightweight server with direct calls
+const result = await response.json();
+console.log(`Stored ${result.data.triplesStored} triples`);
 ```
 
-### 🗄️ Storage & Performance
+### cURL
 
-**Database:**
-- **PostgreSQL** with Prisma ORM for robust ACID transactions
-- **Vector Storage** for embeddings with similarity search
-- **Optimized Indexes** for fast queries across all triple fields
-- **Migration System** for schema evolution
+```bash
+# Health check
+curl http://localhost:3000/api/health
 
-**Background Processing:**
-- **Asynchronous Conceptualization** using `setImmediate()`
-- **Non-blocking Responses** for immediate user feedback
-- **Error Isolation** preventing background failures from affecting main flow
-- **Progress Logging** for monitoring background tasks
+# Extract knowledge
+curl -X POST http://localhost:3000/api/process-knowledge \
+  -H "Content-Type: application/json" \
+  -d '{
+    "text": "Microsoft acquired GitHub in 2018 for $7.5 billion.",
+    "source": "tech_news",
+    "include_concepts": true
+  }'
 
-### 🔍 Search Strategy
+# Search with fusion
+curl -X POST http://localhost:3000/api/search-knowledge \
+  -H "Content-Type: application/json" \
+  -d '{"query": "Microsoft GitHub acquisition"}'
+```
 
-**Vector-Based Similarity Search:**
-1. **Text Embedding**: Convert queries to OpenAI embeddings
-2. **Cosine Similarity**: Find semantically similar triples
-3. **Multi-field Search**: Search across subject, predicate, object
-4. **Concept Integration**: Include conceptual abstractions
-5. **Threshold Filtering**: Configurable similarity thresholds
-6. **Result Ranking**: Ordered by relevance scores
-
-## Performance & Scaling
-
-### ⚡ Performance Characteristics
-
-**Response Times:**
-- **Knowledge Processing**: 2-5 seconds (immediate) + background conceptualization
-- **Search Queries**: <500ms for typical datasets
-- **Stats Retrieval**: <100ms
-- **Deduplication**: Batched processing with configurable thresholds
-
-**Background Processing Benefits:**
-- ✅ **No Timeout Errors**: Conceptualization runs asynchronously 
-- ✅ **Immediate Feedback**: Users get responses right away
-- ✅ **Resource Efficiency**: Heavy AI operations don't block the server
-- ✅ **Error Resilience**: Background failures don't affect main operations
-
-### 🚀 Optimization Features
-
-**Database Optimizations:**
-- **Connection Pooling**: Configurable max connections
-- **Query Optimization**: Proper indexes on all searchable fields
-- **Batch Operations**: Efficient bulk inserts and updates
-- **Transaction Management**: ACID compliance for data integrity
-
-**AI API Efficiency:**
-- **On-Demand Embeddings**: Generated when needed, stored in database
-- **Configurable Models**: Choose optimal models for your use case
-- **Error Handling**: Robust retry logic and graceful degradation
-- **Rate Limiting**: Built-in AI API throttling protection
-
-### 📈 Scaling Considerations
-
-**Storage:**
-- **PostgreSQL**: Scales to millions of triples with proper indexing
-- **Vector Storage**: Efficient similarity search with configurable dimensions
-- **Backup & Recovery**: Standard PostgreSQL tooling
-
-**Compute:**
-- **Stateless Design**: Easy horizontal scaling
-- **Background Processing**: CPU-intensive tasks don't block responses
-- **Memory Efficiency**: No in-memory caches, database handles persistence
-
-**Monitoring:**
-- **Console Logging**: Background task progress and errors
-- **Database Metrics**: Query performance and connection usage
-- **AI API Usage**: Token consumption and rate limiting
 
 ## Development
 
-### 🛠️ Development Workflow
+### Project Structure
+
+```
+kg-memory-mcp/
+├── src/
+│   ├── features/              # Core feature modules (pure functions)
+│   │   ├── knowledge-extraction/   # AI-powered triple extraction
+│   │   ├── conceptualization/      # Concept generation
+│   │   ├── deduplication/          # Duplicate detection
+│   │   └── knowledge-graph/        # Graph operations & search
+│   ├── server/                # Transport implementations
+│   │   ├── stdio-server.ts    # MCP STDIO transport
+│   │   ├── http-server.ts     # Express HTTP server
+│   │   ├── transport-manager.ts  # Shared tool logic
+│   │   └── routes/            # HTTP endpoints
+│   ├── shared/                # Shared infrastructure
+│   │   ├── database/          # Prisma operations
+│   │   ├── services/          # AI & embedding services
+│   │   ├── types/             # TypeScript definitions
+│   │   └── utils/             # Utilities
+│   └── index.ts              # Entry point
+├── prisma/
+│   └── schema.prisma         # Database schema
+├── examples/                 # Client examples
+├── scripts/                  # Development scripts
+└── tests/                    # Test files
+```
+
+### Development Commands
 
 ```bash
-# Install dependencies
-pnpm install
-
-# Set up environment
-cp .env.example .env
-# Edit .env with your configuration
-
-# Database setup
-pnpm run db:generate    # Generate Prisma client
-pnpm run db:migrate     # Run migrations
-pnpm run db:studio      # Optional: Open Prisma Studio
-
 # Development
-pnpm run dev            # Hot reload development server
-pnpm run build          # TypeScript compilation
-pnpm run start          # Production server
+pnpm run dev          # STDIO mode with hot reload
+pnpm run dev:http     # HTTP mode
+pnpm run dev:dual     # Both transports
 
 # Testing
-pnpm run test           # Run Jest tests
-pnpm run test:watch     # Watch mode
-pnpm run test:unit      # Unit tests only
+pnpm run test         # Run all tests
+pnpm run test:watch   # Watch mode
+pnpm run test:coverage # Coverage report
 
 # Code Quality
-pnpm run lint           # Biome linting
-pnpm run format         # Biome formatting
-pnpm run check          # Full check (lint + typecheck)
+pnpm run lint         # Biome linting
+pnpm run format       # Code formatting
+pnpm run check        # Full quality check
 
-# Testing Integration
-./scripts/test-client.mjs    # Test MCP client integration
+# Database
+pnpm run db:studio    # Prisma Studio GUI
+pnpm run db:push      # Push schema changes
+pnpm run db:migrate   # Create migration
 ```
 
-### 🧪 Testing Strategy
 
-**Unit Tests:**
-- Pure function testing with mock dependencies
-- No database or AI API calls in unit tests
-- Fast execution with Jest
+### Environment Variables for Production
 
-**Integration Tests:**
-- Full flow testing with real database
-- AI API mocking for reproducible results
-- Background processing verification
+```env
+# Required
+DATABASE_URL=postgresql://user:pass@host:5432/db?sslmode=require
+OPENAI_API_KEY=sk-...
 
-**Manual Testing:**
-```bash
-# Use development mode to test path resolution
-pnpm run dev
+# Production Settings
+NODE_ENV=production
+ENABLE_HTTP_TRANSPORT=true
+ENABLE_STDIO_TRANSPORT=false
 
-# Test with MCP inspector
-pnpm run server:inspect
+# Security
+HTTP_CORS_ORIGINS=https://yourdomain.com
+HTTP_RATE_LIMIT_MAX=100
+HTTP_RATE_LIMIT_WINDOW=15
+
+# Performance
+DB_MAX_CONNECTIONS=20
+BATCH_SIZE=64
+SEARCH_TOP_K=20
+
+# Monitoring
+LOG_LEVEL=INFO
+DIAGNOSTIC_MODE=false
 ```
 
-## Integration
+### Deployment Platforms
 
-### 🤖 Claude Desktop Integration
-
-Add to your Claude Desktop MCP configuration:
+#### Vercel
 
 ```json
 {
-  "mcpServers": {
-    "knowledge-graph": {
-      "command": "node",
-      "args": ["path/to/full-context-mcp/dist/index.js"],
-      "env": {
-        "DATABASE_URL": "postgresql://user:password@localhost:5432/knowledge_graph",
-        "OPENAI_API_KEY": "your-openai-api-key",
-        "ANTHROPIC_API_KEY": "your-anthropic-api-key"
-      }
+  "functions": {
+    "api/index.js": {
+      "maxDuration": 60
     }
   }
 }
 ```
 
-**Development Mode (recommended for testing):**
-```json
-{
-  "mcpServers": {
-    "knowledge-graph": {
-      "command": "npx",
-      "args": ["tsx", "path/to/full-context-mcp/src/index.ts"],
-      "env": {
-        "DATABASE_URL": "postgresql://user:password@localhost:5432/knowledge_graph",
-        "OPENAI_API_KEY": "your-openai-api-key"
-      }
-    }
-  }
-}
+#### Railway
+
+```toml
+[deploy]
+startCommand = "pnpm run start:http"
+
+[build]
+builder = "NIXPACKS"
+buildCommand = "pnpm install && pnpm run build"
 ```
 
-### 🔌 Custom MCP Client Integration
+#### AWS Lambda
 
-The server communicates via stdio using the Model Context Protocol:
+Use the provided handler wrapper in `src/server/deploy-handlers.ts`.
 
-```typescript
-import { spawn } from 'child_process';
+## Security
 
-// Start the server
-const server = spawn('npx', ['tsx', 'src/index.ts'], {
-  stdio: ['pipe', 'pipe', 'pipe'],
-  env: {
-    ...process.env,
-    DATABASE_URL: 'your-database-url',
-    OPENAI_API_KEY: 'your-api-key'
-  }
-});
+### Best Practices
 
-// Send MCP requests
-const request = {
-  jsonrpc: '2.0',
-  id: 1,
-  method: 'tools/call',
-  params: {
-    name: 'process_knowledge',
-    arguments: {
-      text: 'Your text here',
-      source: 'your-app',
-      include_concepts: true
-    }
-  }
-};
+1. **API Keys**: Store in environment variables, never commit
+2. **Database**: Use SSL connections in production
+3. **CORS**: Configure specific origins, avoid wildcards
+4. **Rate Limiting**: Implement per-IP limits
+5. **Input Validation**: All inputs validated with Zod schemas
+6. **SQL Injection**: Protected by Prisma ORM
+7. **XSS Prevention**: Content-Type headers enforced
 
-server.stdin.write(JSON.stringify(request) + '\n');
+### Security Headers (HTTP Mode)
+
+The server automatically sets security headers via Helmet:
+- `X-Content-Type-Options: nosniff`
+- `X-Frame-Options: DENY`
+- `X-XSS-Protection: 1; mode=block`
+- `Strict-Transport-Security` (when using HTTPS)
+
+### Performance Tuning
+
+```env
+# Database
+DB_MAX_CONNECTIONS=20        # Increase for high load
+DB_CONNECTION_TIMEOUT=5000   # Milliseconds
+
+# Embeddings
+BATCH_SIZE=64               # Larger batches for throughput
+EMBEDDING_DIMENSIONS=1536    # Or 3072 for large model
+
+# Search
+SEARCH_TOP_K=20             # Initial candidates for reranking
+MIN_SCORE=0.7               # Similarity threshold
 ```
 
-### 🎯 Usage Examples
+### Monitoring
 
-**Extract Knowledge:**
-```bash
-# Process text and generate concepts in background
-curl -X POST localhost:3000/api/mcp \
-  -H "Content-Type: application/json" \
-  -d '{
-    "method": "tools/call",
-    "params": {
-      "name": "process_knowledge",
-      "arguments": {
-        "text": "Sarah is a data scientist at OpenAI. She specializes in machine learning and loves Python programming.",
-        "source": "example",
-        "include_concepts": true
-      }
-    }
-  }'
-```
+- Health endpoint: `/api/health`
+- Metrics endpoint: `/api/metrics`
+- Token usage tracking in database
+- Request duration logging
 
-**Search Knowledge:**
-```bash
-# Search for related information
-curl -X POST localhost:3000/api/mcp \
-  -H "Content-Type: application/json" \
-  -d '{
-    "method": "tools/call",
-    "params": {
-      "name": "search_knowledge_graph",
-      "arguments": {
-        "query": "machine learning Python",
-        "limit": 10,
-        "threshold": 0.7
-      }
-    }
-  }'
-```
 
-## Troubleshooting
+### Debug Mode
 
-### 🐛 Common Issues
+Enable detailed logging:
 
-**Path Resolution Errors:**
-```bash
-# Use development mode to avoid TypeScript path mapping issues
-pnpm run dev
-# OR build first for production
-pnpm run build && pnpm run start
-```
-
-**Database Connection Issues:**
-```bash
-# Check database is running
-psql $DATABASE_URL -c "SELECT 1;"
-
-# Regenerate Prisma client
-pnpm run db:generate
-
-# Reset database if needed
-pnpm run db:reset
-```
-
-**Background Processing Not Working:**
-- Check console logs for `[Background]` messages
-- Verify AI API keys are set correctly
-- Ensure database is accessible for background tasks
-
-**Performance Issues:**
-- Monitor PostgreSQL query performance
-- Check embedding API rate limits
-- Verify proper database indexes are in place
-
-### 📊 Monitoring
-
-**Console Output:**
-```
-[Background] Starting conceptualization for 5 triples...
-[Background] Successfully stored 23 concepts and 15 relationships
-```
-
-**Database Queries:**
-```bash
-# Check triple count
-psql $DATABASE_URL -c "SELECT COUNT(*) FROM triples;"
-
-# Check concept count by level
-psql $DATABASE_URL -c "SELECT abstraction_level, COUNT(*) FROM concepts GROUP BY abstraction_level;"
+```env
+LOG_LEVEL=DEBUG
+DIAGNOSTIC_MODE=true
+LOG_STACK_TRACE=true
 ```
 
 ## Contributing
 
-### 🤝 Development Guidelines
-
-1. **Pure Functions**: All new features should follow the stateless functional architecture
-2. **Explicit Dependencies**: Pass all dependencies as function parameters
-3. **Error Handling**: Use Result types, avoid throwing exceptions
-4. **Testing**: Add unit tests for pure functions, integration tests for full flows
-5. **TypeScript**: Maintain strict typing with comprehensive type definitions
-
-### 🔄 Pull Request Process
-
 1. Fork the repository
-2. Create a feature branch: `git checkout -b feature/your-feature`
-3. Make your changes following the architecture guidelines
-4. Add tests: `pnpm run test`
-5. Run quality checks: `pnpm run check`
-6. Update documentation if needed
-7. Submit a pull request with detailed description
+2. Create a feature branch (`git checkout -b feature/amazing-feature`)
+3. Make your changes following our code style
+4. Add tests for new functionality
+5. Run quality checks (`pnpm run check`)
+6. Commit with descriptive messages
+7. Push to your fork
+8. Open a Pull Request
 
-### 📋 Code Style
 
-- **Biome** for linting and formatting
-- **TypeScript strict mode** with comprehensive typing
-- **Functional programming** patterns preferred
-- **No global state** or hidden mutations
-- **Database-first** approach for all persistence
+---
 
-## License
-
-MIT License - see LICENSE file for details.
-
-## Support
-
-- **Issues**: Use the GitHub issue tracker
-- **Discussions**: GitHub Discussions for questions and ideas
-- **Documentation**: This README and inline code comments
-- **Examples**: See `/scripts/test-client.mjs` for integration examples
+<div align="center">
+Made with ❤️ by the Knowledge Graph MCP Team
+</div>

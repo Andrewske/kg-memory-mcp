@@ -1,4 +1,4 @@
-import  { Decimal } from '@prisma/client/runtime/library';
+import { Decimal } from '@prisma/client/runtime/library';
 import { db } from '../database/client';
 import { env } from '../env';
 import type { AIResponseWithUsage } from '../types';
@@ -10,7 +10,7 @@ export interface TokenTrackingContext {
 	source: string; // The actual identifier (thread_12345, filename.txt, etc.)
 	source_type: string; // "thread", "file", "manual", "api", etc.
 	operation_type: string; // "extraction", "conceptualization", "embedding", "search", "deduplication"
-	operation_context?: Record<string, any>; // Additional operation-specific context
+	operation_context?: Record<string, string | number | boolean | null | undefined>;
 	tools_used?: string[]; // Array of tool names used
 }
 
@@ -45,11 +45,17 @@ export async function trackTokenUsage<T>(
 
 			// Reasoning and context metadata
 			reasoning_steps: aiResponse.reasoning ?? null,
-			operation_context: context.operation_context ?? null,
+			operation_context: context.operation_context,
 
 			// Performance tracking
 			duration_ms: aiResponse.duration_ms || 0,
-			estimated_cost: calculateEstimatedCost(aiResponse.usage) ?? null,
+			estimated_cost:
+				calculateEstimatedCost({
+					promptTokens: aiResponse.usage.promptTokens,
+					completionTokens: aiResponse.usage.completionTokens,
+					thinkingTokens: aiResponse.usage.thinkingTokens ?? 0,
+					reasoningTokens: aiResponse.usage.reasoningTokens ?? 0,
+				}) ?? null,
 
 			// Processing context
 
@@ -60,7 +66,7 @@ export async function trackTokenUsage<T>(
 		};
 
 		// Store the token usage in the database
-		const result = await db.tokenUsage
+		await db.tokenUsage
 			.create({
 				data: {
 					source: tokenUsage.source,
@@ -76,7 +82,7 @@ export async function trackTokenUsage<T>(
 					cached_read_tokens: tokenUsage.cached_read_tokens,
 					cached_write_tokens: tokenUsage.cached_write_tokens,
 					reasoning_steps: tokenUsage.reasoning_steps ?? undefined,
-					operation_context: tokenUsage.operation_context ?? undefined,
+					operation_context: tokenUsage.operation_context,
 					duration_ms: tokenUsage.duration_ms,
 					estimated_cost: tokenUsage.estimated_cost ?? null,
 					tools_used: tokenUsage.tools_used || [],
@@ -111,7 +117,17 @@ export async function trackTokenUsage<T>(
  * Calculate estimated cost based on provider and model pricing
  * Returns cost in USD, or undefined if pricing information is not available
  */
-function calculateEstimatedCost(usage: AIResponseWithUsage<any>['usage']): Decimal | undefined {
+function calculateEstimatedCost({
+	promptTokens,
+	completionTokens,
+	thinkingTokens,
+	reasoningTokens,
+}: {
+	promptTokens: number;
+	completionTokens: number;
+	thinkingTokens: number;
+	reasoningTokens: number;
+}): Decimal | undefined {
 	// Pricing information (as of 2024, subject to change)
 	const pricing: Record<string, { input: number; output: number }> = {
 		// OpenAI pricing (per 1K tokens)
@@ -135,13 +151,13 @@ function calculateEstimatedCost(usage: AIResponseWithUsage<any>['usage']): Decim
 	}
 
 	// Calculate cost based on token usage
-	const inputCost = (usage.promptTokens / 1000) * modelPricing.input;
-	const outputCost = (usage.completionTokens / 1000) * modelPricing.output;
+	const inputCost = (promptTokens / 1000) * modelPricing.input;
+	const outputCost = (completionTokens / 1000) * modelPricing.output;
 
 	// Add thinking/reasoning token costs (usually same as output tokens)
 	const thinkingCost =
-		usage.thinkingTokens && usage.reasoningTokens
-			? ((usage.thinkingTokens + usage.reasoningTokens) / 1000) * modelPricing.output
+		thinkingTokens && reasoningTokens
+			? ((thinkingTokens + reasoningTokens) / 1000) * modelPricing.output
 			: 0;
 
 	return new Decimal(inputCost + outputCost + thinkingCost);

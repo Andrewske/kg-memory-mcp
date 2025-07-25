@@ -29,7 +29,9 @@ export function generateConceptId(concept: Concept): string {
 /**
  * Generate unique ID for conceptualization relationship
  */
-export function generateConceptualizationId(rel: Pick<ConceptualizationRelationship, 'source_element' | 'source_type' | 'concept'>): string {
+export function generateConceptualizationId(
+	rel: Pick<ConceptualizationRelationship, 'source_element' | 'source_type' | 'concept'>
+): string {
 	const key = `${rel.source_element}|${rel.source_type}|${rel.concept}`;
 	return generateId(key);
 }

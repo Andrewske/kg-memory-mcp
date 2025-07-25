@@ -4,14 +4,14 @@
  */
 
 import {
+	getConceptualizationsByConcept,
 	searchConceptsByEmbedding,
-	getConceptualizationsByConcept
 } from '~/shared/database/concept-operations';
 import {
+	searchByConcept as dbSearchByConcept,
+	searchByEmbedding as dbSearchByEmbedding,
 	searchByEntity as dbSearchByEntity,
 	searchByRelationship as dbSearchByRelationship,
-	searchByEmbedding as dbSearchByEmbedding,
-	searchByConcept as dbSearchByConcept
 } from '~/shared/database/search-operations';
 import { getAllTriples } from '~/shared/database/triple-operations';
 import { env } from '~/shared/env';
@@ -88,12 +88,7 @@ export async function searchFusion(
 			if (queryEmbedding) {
 				// Use vector-based entity search
 				searchPromises.push(
-					dbSearchByEmbedding(
-						queryEmbedding,
-						topK,
-						options?.threshold || env.MIN_SCORE,
-						options
-					)
+					dbSearchByEmbedding(queryEmbedding, topK, options?.threshold || env.MIN_SCORE, options)
 				);
 				searchTypeNames.push('entity');
 			} else {
@@ -108,12 +103,7 @@ export async function searchFusion(
 			if (queryEmbedding) {
 				// Use vector-based relationship search
 				searchPromises.push(
-					dbSearchByEmbedding(
-						queryEmbedding,
-						topK,
-						options?.threshold || env.MIN_SCORE,
-						options
-					)
+					dbSearchByEmbedding(queryEmbedding, topK, options?.threshold || env.MIN_SCORE, options)
 				);
 				searchTypeNames.push('relationship');
 			} else {
@@ -140,12 +130,7 @@ export async function searchFusion(
 			if (queryEmbedding) {
 				// Use vector-based concept search
 				searchPromises.push(
-					searchByConceptVector(
-						queryEmbedding,
-						topK,
-						options?.threshold || env.MIN_SCORE,
-						options
-					)
+					searchByConceptVector(queryEmbedding, topK, options?.threshold || env.MIN_SCORE, options)
 				);
 				searchTypeNames.push('concept');
 			} else {

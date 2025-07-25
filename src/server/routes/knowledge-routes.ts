@@ -93,7 +93,6 @@ export function createKnowledgeRoutes(): Router {
 		validateSchema(processKnowledgeSchema),
 		async (req: Request, res: Response) => {
 			try {
-
 				const result = await processKnowledge(req.body);
 
 				if (!result.success) {
