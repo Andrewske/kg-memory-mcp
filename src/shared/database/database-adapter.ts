@@ -1,17 +1,9 @@
 import type {
-	ConceptNode,
-	ConceptualizationRelationship,
-	DatabaseAdapter,
-	DatabaseConfig,
-	KnowledgeTriple,
-	Result,
-	SearchOptions,
-	TemporalFilter,
-	TokenUsage,
-	TripleType,
+
+	DatabaseAdapter
+
 } from '../types';
-import type { EntityType } from '../types/core';
-import { db } from './client';
+
 import * as ConceptOps from './concept-operations';
 import * as SearchOps from './search-operations';
 import * as StatsOps from './stats-operations';
@@ -23,7 +15,7 @@ import * as VectorOps from './vector-operations';
  * Database adapter implementation using Prisma
  * Implements the DatabaseAdapter interface for dependency injection
  */
-export function createDatabaseAdapter(config: DatabaseConfig): DatabaseAdapter {
+export function createDatabaseAdapter(): DatabaseAdapter {
 	return {
 		// Triple operations - delegate to TripleOps module
 		storeTriples: TripleOps.storeTriples,
@@ -50,7 +42,6 @@ export function createDatabaseAdapter(config: DatabaseConfig): DatabaseAdapter {
 		searchConceptsByEmbedding: ConceptOps.searchConceptsByEmbedding,
 		getConceptsByIds: ConceptOps.getConceptsByIds,
 		storeConceptualizations: ConceptOps.storeConceptualizations,
-		getConceptualizationsByElement: ConceptOps.getConceptualizationsByElement,
 		getConceptualizationsByConcept: ConceptOps.getConceptualizationsByConcept,
 		getTriplesByConceptualization: ConceptOps.getTriplesByConceptualization,
 

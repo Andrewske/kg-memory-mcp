@@ -3,17 +3,14 @@
  * Core AutoSchemaKG functionality that combines multiple search strategies
  */
 
-import type {
-	DatabaseAdapter,
-	EmbeddingService,
-	KnowledgeGraphConfig,
-	KnowledgeTriple,
-	Result,
-	SearchOptions,
-} from '~/shared/types';
+import { createDatabaseAdapter } from '~/shared/database/database-adapter';
+import { env } from '~/shared/env';
+import { createEmbeddingService } from '~/shared/services/embedding-service';
+import type { DatabaseAdapter, EmbeddingService, Result, SearchOptions } from '~/shared/types';
+import type { Triple } from '~/shared/types/core';
 
 export interface FusionSearchResult {
-	triple: KnowledgeTriple;
+	triple: Triple;
 	scores: {
 		entity?: number;
 		relationship?: number;
@@ -43,9 +40,6 @@ export const DEFAULT_FUSION_WEIGHTS: FusionSearchWeights = {
  */
 export async function searchFusion(
 	query: string,
-	db: DatabaseAdapter,
-	embeddingService: EmbeddingService,
-	config: KnowledgeGraphConfig,
 	options?: SearchOptions & {
 		weights?: Partial<FusionSearchWeights>;
 		enabledSearchTypes?: ('entity' | 'relationship' | 'semantic' | 'concept')[];
@@ -59,16 +53,20 @@ export async function searchFusion(
 			'semantic',
 			'concept',
 		];
-		const topK = options?.limit || config.search.topK;
+		const topK = options?.limit || env.SEARCH_TOP_K;
 
 		// Run all enabled search types in parallel
-		const searchPromises: Promise<Result<KnowledgeTriple[]>>[] = [];
+		const searchPromises: Promise<Result<Triple[]>>[] = [];
 		const searchTypeNames: string[] = [];
 
 		// Generate embedding once for all vector-based searches
 		let queryEmbedding: number[] | null = null;
 		if (enabledTypes.some(type => ['entity', 'relationship', 'semantic'].includes(type))) {
-			const embeddingResult = await embeddingService.embed(query);
+			const embeddingResult = await createEmbeddingService({
+				model: env.EMBEDDING_MODEL,
+				dimensions: env.EMBEDDING_DIMENSIONS,
+				batchSize: env.BATCH_SIZE,
+			}).embed(query);
 			if (embeddingResult.success) {
 				queryEmbedding = embeddingResult.data;
 			} else {
@@ -76,6 +74,7 @@ export async function searchFusion(
 			}
 		}
 
+		const db = createDatabaseAdapter();
 		if (enabledTypes.includes('entity')) {
 			if (queryEmbedding) {
 				// Use vector-based entity search
@@ -83,7 +82,7 @@ export async function searchFusion(
 					db.searchByEntityVector(
 						queryEmbedding,
 						topK,
-						options?.threshold || config.search.minScore,
+						options?.threshold || env.MIN_SCORE,
 						options
 					)
 				);
@@ -103,7 +102,7 @@ export async function searchFusion(
 					db.searchByRelationshipVector(
 						queryEmbedding,
 						topK,
-						options?.threshold || config.search.minScore,
+						options?.threshold || env.MIN_SCORE,
 						options
 					)
 				);
@@ -120,12 +119,7 @@ export async function searchFusion(
 			if (queryEmbedding) {
 				// Use vector-based semantic search
 				searchPromises.push(
-					db.searchByEmbedding(
-						queryEmbedding,
-						topK,
-						options?.threshold || config.search.minScore,
-						options
-					)
+					db.searchByEmbedding(queryEmbedding, topK, options?.threshold || env.MIN_SCORE, options)
 				);
 				searchTypeNames.push('semantic');
 			} else {
@@ -141,7 +135,7 @@ export async function searchFusion(
 						queryEmbedding,
 						db,
 						topK,
-						options?.threshold || config.search.minScore,
+						options?.threshold || env.MIN_SCORE,
 						options
 					)
 				);
@@ -158,7 +152,7 @@ export async function searchFusion(
 		const searchResults = await Promise.all(searchPromises);
 
 		// Extract successful results
-		const resultSets: KnowledgeTriple[][] = [];
+		const resultSets: Triple[][] = [];
 		const activeSearchTypes: string[] = [];
 
 		for (let i = 0; i < searchResults.length; i++) {
@@ -199,7 +193,7 @@ export async function searchFusion(
  * Combine results from multiple search types using weighted fusion
  */
 function fuseSearchResults(
-	resultSets: KnowledgeTriple[][],
+	resultSets: Triple[][],
 	searchTypes: string[],
 	weights: FusionSearchWeights,
 	topK: number
@@ -208,7 +202,7 @@ function fuseSearchResults(
 	const tripleMap = new Map<
 		string,
 		{
-			triple: KnowledgeTriple;
+			triple: Triple;
 			scores: { [key: string]: number };
 			searchTypes: Set<string>;
 			positions: { [key: string]: number };
@@ -289,7 +283,7 @@ function fuseSearchResults(
 /**
  * Generate a unique key for a triple to detect duplicates across search types
  */
-function generateTripleKey(triple: KnowledgeTriple): string {
+function generateTripleKey(triple: Triple): string {
 	return `${triple.subject}|${triple.predicate}|${triple.object}|${triple.type}`;
 }
 
@@ -299,20 +293,18 @@ function generateTripleKey(triple: KnowledgeTriple): string {
 export async function searchByEntity(
 	query: string,
 	db: DatabaseAdapter,
-	config: KnowledgeGraphConfig,
 	options?: SearchOptions
-): Promise<Result<KnowledgeTriple[]>> {
-	const topK = options?.limit || config.search.topK;
+): Promise<Result<Triple[]>> {
+	const topK = options?.limit || env.SEARCH_TOP_K;
 	return db.searchByEntity(query, topK, options);
 }
 
 export async function searchByRelationship(
 	query: string,
 	db: DatabaseAdapter,
-	config: KnowledgeGraphConfig,
 	options?: SearchOptions
-): Promise<Result<KnowledgeTriple[]>> {
-	const topK = options?.limit || config.search.topK;
+): Promise<Result<Triple[]>> {
+	const topK = options?.limit || env.SEARCH_TOP_K;
 	return db.searchByRelationship(query, topK, options);
 }
 
@@ -320,16 +312,15 @@ export async function searchBySemantic(
 	query: string,
 	db: DatabaseAdapter,
 	embeddingService: EmbeddingService,
-	config: KnowledgeGraphConfig,
 	options?: SearchOptions
-): Promise<Result<KnowledgeTriple[]>> {
+): Promise<Result<Triple[]>> {
 	const embeddingResult = await embeddingService.embed(query);
 	if (!embeddingResult.success) {
 		return embeddingResult;
 	}
 
-	const topK = options?.limit || config.search.topK;
-	const minScore = options?.threshold || config.search.minScore;
+	const topK = options?.limit || env.SEARCH_TOP_K;
+	const minScore = options?.threshold || env.MIN_SCORE;
 
 	return db.searchByEmbedding(embeddingResult.data, topK, minScore, options);
 }
@@ -337,10 +328,9 @@ export async function searchBySemantic(
 export async function searchByConcept(
 	query: string,
 	db: DatabaseAdapter,
-	config: KnowledgeGraphConfig,
 	options?: SearchOptions
-): Promise<Result<KnowledgeTriple[]>> {
-	const topK = options?.limit || config.search.topK;
+): Promise<Result<Triple[]>> {
+	const topK = options?.limit || env.SEARCH_TOP_K;
 	return db.searchByConcept(query, topK, options);
 }
 
@@ -354,7 +344,7 @@ async function searchByConceptVector(
 	topK: number,
 	minScore: number,
 	options?: SearchOptions
-): Promise<Result<KnowledgeTriple[]>> {
+): Promise<Result<Triple[]>> {
 	try {
 		console.log(
 			`[DB DEBUG] searchByConceptVector: topK=${topK}, minScore=${minScore}, embedding length=${embedding.length}`
@@ -386,7 +376,7 @@ async function searchByConceptVector(
 
 		// Find triples connected to these concepts via conceptualization relationships
 		// We'll use a more direct query to find triples linked to these concepts
-		const allTriples: KnowledgeTriple[] = [];
+		const allTriples: Triple[] = [];
 
 		for (const concept of similarConcepts) {
 			// Get conceptualization relationships for this concept

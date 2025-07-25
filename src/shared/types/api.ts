@@ -1,11 +1,9 @@
 // API and transport-related types
 
-import type { KnowledgeGraphConfig } from './config';
 import type { AIProvider, DatabaseAdapter, EmbeddingService } from './services';
 
 // Transport-specific types
 export interface ToolDependencies {
-	config: KnowledgeGraphConfig;
 	db: DatabaseAdapter;
 	embeddingService: EmbeddingService;
 	aiProvider: AIProvider;
@@ -22,7 +20,6 @@ export interface ToolResult<T = any> {
 }
 
 export interface RoutesDependencies {
-	config: KnowledgeGraphConfig;
 	db: DatabaseAdapter;
 	embeddingService: EmbeddingService;
 	aiProvider: AIProvider;

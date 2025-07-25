@@ -9,8 +9,7 @@ import type { EmbeddingConfig, EmbeddingService, Result } from '../types';
 export function createEmbeddingService(config: EmbeddingConfig): EmbeddingService {
 	return {
 		async embed(
-			text: string,
-			context?: { operation_type?: string; thread_id?: string }
+			text: string
 		): Promise<Result<number[]>> {
 			try {
 				const modelConfig = { ...config };
@@ -38,7 +37,7 @@ export function createEmbeddingService(config: EmbeddingConfig): EmbeddingServic
 
 		async embedBatch(
 			texts: string[],
-			context?: { operation_type?: string; thread_id?: string }
+			context?: { source_type?: string; source?: string }
 		): Promise<Result<number[][]>> {
 			try {
 				const modelConfig = { ...config };
@@ -71,15 +70,15 @@ export function createEmbeddingService(config: EmbeddingConfig): EmbeddingServic
 				}
 
 				await storeTokenUsage({
-					source: 'embedding',
-					source_type: 'batch',
+					source: context?.source || 'embedding',
+					source_type: context?.source_type || 'batch',
 					operation_type: 'embed',
 					provider: 'openai',
 					model: modelConfig.model,
 					input_tokens: totalTokens,
 					output_tokens: 0,
 					total_tokens: totalTokens,
-					estimated_cost: totalTokens * 0.02,
+					estimated_cost: totalTokens * 0.02 / 1000000,
 					timestamp: new Date().toISOString(),
 					duration_ms: 0,
 					reasoning_tokens: 0,

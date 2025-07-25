@@ -1,9 +1,9 @@
-import type { KnowledgeTriple, Result, SearchOptions } from '~/shared/types';
+import type { Result, SearchOptions } from '~/shared/types';
+import type { Triple } from '~/shared/types/core';
 import { db } from './client';
 import {
 	buildVectorSearchParams,
 	convertEmbeddingToVector,
-	unmapTripleType,
 	validateEmbeddingDimensions,
 } from './database-utils';
 
@@ -15,7 +15,7 @@ export async function searchByEntityVector(
 	topK: number,
 	minScore: number,
 	options?: SearchOptions
-): Promise<Result<KnowledgeTriple[]>> {
+): Promise<Result<Triple[]>> {
 	try {
 		console.log(
 			`[DB DEBUG] searchByEntityVector: topK=${topK}, minScore=${minScore}, embedding length=${embedding.length}`
@@ -25,7 +25,7 @@ export async function searchByEntityVector(
 		const { whereClause, params } = buildVectorSearchParams(embedding, topK, minScore, {
 			temporal: options?.temporal,
 			sources: options?.sources,
-			types: options?.types,
+			types: options?.types ? [options.types] : undefined,
 		});
 
 		// Perform entity vector similarity search
@@ -58,25 +58,9 @@ export async function searchByEntityVector(
 			};
 		}
 
-		// Map results to KnowledgeTriple format
-		const triples = results.map((row: any) => ({
-			subject: row.subject,
-			predicate: row.predicate,
-			object: row.object,
-			type: unmapTripleType(row.type),
-			source: row.source,
-			source_type: row.source_type,
-			source_date: row.source_date?.toISOString(),
-			extracted_at: row.extracted_at.toISOString(),
-			processing_batch_id: row.processing_batch_id,
-			confidence: row.confidence,
-			// Add similarity score for debugging
-			_similarity: row.similarity,
-		}));
-
 		return {
 			success: true,
-			data: triples,
+			data: results,
 		};
 	} catch (error) {
 		console.error('Entity vector search error:', error);
@@ -99,7 +83,7 @@ export async function searchByRelationshipVector(
 	topK: number,
 	minScore: number,
 	options?: SearchOptions
-): Promise<Result<KnowledgeTriple[]>> {
+): Promise<Result<Triple[]>> {
 	try {
 		console.log(
 			`[DB DEBUG] searchByRelationshipVector: topK=${topK}, minScore=${minScore}, embedding length=${embedding.length}`
@@ -109,7 +93,7 @@ export async function searchByRelationshipVector(
 		const { whereClause, params } = buildVectorSearchParams(embedding, topK, minScore, {
 			temporal: options?.temporal,
 			sources: options?.sources,
-			types: options?.types,
+			types: options?.types ? [options.types] : undefined,
 		});
 
 		// Perform relationship vector similarity search
@@ -142,25 +126,9 @@ export async function searchByRelationshipVector(
 			};
 		}
 
-		// Map results to KnowledgeTriple format
-		const triples = results.map((row: any) => ({
-			subject: row.subject,
-			predicate: row.predicate,
-			object: row.object,
-			type: unmapTripleType(row.type),
-			source: row.source,
-			source_type: row.source_type,
-			source_date: row.source_date?.toISOString(),
-			extracted_at: row.extracted_at.toISOString(),
-			processing_batch_id: row.processing_batch_id,
-			confidence: row.confidence,
-			// Add similarity score for debugging
-			_similarity: row.similarity,
-		}));
-
 		return {
 			success: true,
-			data: triples,
+			data: results,
 		};
 	} catch (error) {
 		console.error('Relationship vector search error:', error);

@@ -1,22 +1,15 @@
+import type { ConceptNode, TripleType } from '@prisma/client';
 import { v4 as uuidv4 } from 'uuid';
-import type {
-	DatabaseAdapter,
-	EmbeddingService,
-	GraphStats,
-	Result,
-} from '~/shared/types';
-import type {
-	ConceptNode,
-	KnowledgeGraphConfig,
-	KnowledgeTriple,
-} from '../../shared/types';
-import type { StoreResult } from './types';
+import { env } from '~/shared/env';
+import type { DatabaseAdapter, EmbeddingService, GraphStats, Result } from '~/shared/types';
+import type { Triple } from '~/shared/types/core';
+
 
 export interface EntityEnumerationOptions {
 	role?: 'subject' | 'object' | 'both';
 	min_occurrence?: number;
 	sources?: string[];
-	types?: Array<'entity-entity' | 'entity-event' | 'event-event' | 'emotional-context'>;
+	types?: Array<TripleType>;
 	limit?: number;
 	sort_by?: 'frequency' | 'alphabetical' | 'recent';
 }
@@ -26,10 +19,18 @@ export interface EntityEnumerationResult {
 	occurrences: number;
 	roles: Array<'subject' | 'object'>;
 	sources: string[];
-	types: Array<'entity-entity' | 'entity-event' | 'event-event' | 'emotional-context'>;
+	types: Array<TripleType>;
 	last_seen: string;
 	confidence?: number;
 }
+
+export interface StoreResult {
+	triplesStored: number;
+	conceptsStored: number;
+	duplicatesSkipped: number;
+	vectorsGenerated?: number;
+}
+
 
 /**
  * Store knowledge triples in the database with automatic vector generation
@@ -41,9 +42,8 @@ export interface EntityEnumerationResult {
  * @param embeddingService - Optional embedding service for vector generation
  */
 export async function storeTriples(
-	triples: KnowledgeTriple[],
+	triples: Triple[],
 	db: DatabaseAdapter,
-	config: KnowledgeGraphConfig,
 	embeddingService?: EmbeddingService
 ): Promise<Result<StoreResult>> {
 	try {
@@ -93,12 +93,7 @@ export async function storeTriples(
 					`[VECTOR GENERATION] Sample triple: "${newTriples[0]?.subject}" → "${newTriples[0]?.predicate}" → "${newTriples[0]?.object}"`
 				);
 
-				const vectorResult = await generateAndStoreVectors(
-					newTriples,
-					embeddingService,
-					db,
-					config
-				);
+				const vectorResult = await generateAndStoreVectors(newTriples, embeddingService, db);
 
 				console.log(`[VECTOR GENERATION] Vector generation result:`, {
 					success: vectorResult.success,
@@ -161,7 +156,6 @@ export async function storeTriples(
 export async function storeConcepts(
 	concepts: ConceptNode[],
 	db: DatabaseAdapter,
-	config: KnowledgeGraphConfig,
 	embeddingService?: EmbeddingService
 ): Promise<Result<{ conceptsStored: number; vectorsGenerated?: number }>> {
 	try {
@@ -184,12 +178,7 @@ export async function storeConcepts(
 				);
 				console.log(`[CONCEPT VECTOR GENERATION] Sample concept: "${concepts[0]?.concept}"`);
 
-				const vectorResult = await generateAndStoreConceptVectors(
-					concepts,
-					embeddingService,
-					db,
-					config
-				);
+				const vectorResult = await generateAndStoreConceptVectors(concepts, embeddingService, db);
 
 				console.log(`[CONCEPT VECTOR GENERATION] Vector generation result:`, {
 					success: vectorResult.success,
@@ -281,7 +270,7 @@ export async function getStats(db: DatabaseAdapter): Promise<Result<GraphStats>>
 /**
  * Generate a deterministic ID for a triple
  */
-export function generateTripleId(triple: KnowledgeTriple): string {
+export function generateTripleId(triple: Triple): string {
 	const key = `${triple.subject}|${triple.predicate}|${triple.object}|${triple.type}`;
 	return Buffer.from(key).toString('base64').replace(/[+/=]/g, '_');
 }
@@ -324,7 +313,7 @@ export async function enumerateEntities(
 				occurrences: number;
 				roles: Set<'subject' | 'object'>;
 				sources: Set<string>;
-				types: Set<'entity-entity' | 'entity-event' | 'event-event' | 'emotional-context'>;
+				types: Set<TripleType>;
 				last_seen: string;
 				confidence?: number;
 			}
@@ -351,7 +340,7 @@ export async function enumerateEntities(
 						roles: new Set(),
 						sources: new Set(),
 						types: new Set(),
-						last_seen: triple.extracted_at,
+						last_seen: triple.extracted_at.toISOString(),
 					});
 				}
 
@@ -360,11 +349,11 @@ export async function enumerateEntities(
 				stats.roles.add('subject');
 				stats.sources.add(triple.source);
 				stats.types.add(triple.type);
-				if (triple.extracted_at > stats.last_seen) {
-					stats.last_seen = triple.extracted_at;
+				if (triple.extracted_at.toISOString() > stats.last_seen) {
+					stats.last_seen = triple.extracted_at.toISOString();
 				}
-				if (triple.confidence && (!stats.confidence || triple.confidence > stats.confidence)) {
-					stats.confidence = triple.confidence;
+				if (triple.confidence && (!stats.confidence || triple.confidence.greaterThan(stats.confidence))) {
+					stats.confidence = triple.confidence.toNumber();
 				}
 			}
 
@@ -377,7 +366,7 @@ export async function enumerateEntities(
 						roles: new Set(),
 						sources: new Set(),
 						types: new Set(),
-						last_seen: triple.extracted_at,
+						last_seen: triple.extracted_at.toISOString(),
 					});
 				}
 
@@ -386,11 +375,11 @@ export async function enumerateEntities(
 				stats.roles.add('object');
 				stats.sources.add(triple.source);
 				stats.types.add(triple.type);
-				if (triple.extracted_at > stats.last_seen) {
-					stats.last_seen = triple.extracted_at;
+				if (triple.extracted_at.toISOString() > stats.last_seen) {
+					stats.last_seen = triple.extracted_at.toISOString();
 				}
-				if (triple.confidence && (!stats.confidence || triple.confidence > stats.confidence)) {
-					stats.confidence = triple.confidence;
+				if (triple.confidence && (!stats.confidence || triple.confidence.greaterThan(stats.confidence))) {
+					stats.confidence = triple.confidence.toNumber();
 				}
 			}
 		}
@@ -447,10 +436,9 @@ export async function enumerateEntities(
  * Creates entity, relationship, and semantic vectors for efficient search
  */
 async function generateAndStoreVectors(
-	triples: KnowledgeTriple[],
+	triples: Triple[],
 	embeddingService: EmbeddingService,
-	db: DatabaseAdapter,
-	config: KnowledgeGraphConfig
+	db: DatabaseAdapter
 ): Promise<Result<{ vectorsStored: number }>> {
 	try {
 		console.log(`[VECTOR DETAIL] Starting vector generation for ${triples.length} triples`);
@@ -480,6 +468,8 @@ async function generateAndStoreVectors(
 		// Collect unique entities and relationships for batch embedding generation
 		const uniqueEntities = new Set<string>();
 		const uniqueRelationships = new Set<string>();
+		const source_type = triples[0].source_type;
+		const source = triples[0].source;
 		const semanticTexts: string[] = [];
 		const tripleIds: string[] = [];
 
@@ -499,7 +489,7 @@ async function generateAndStoreVectors(
 		);
 		console.log(`[VECTOR DETAIL] Sample semantic text: "${semanticTexts[0]}"`);
 
-		const batchSize = config.embeddings?.batchSize || 32;
+		const batchSize = env.BATCH_SIZE;
 		let totalVectors = 0;
 
 		console.log(`[VECTOR DETAIL] Using batch size: ${batchSize}`);
@@ -517,7 +507,10 @@ async function generateAndStoreVectors(
 			);
 
 			try {
-				const embeddings = await embeddingService.embedBatch(batch);
+				const embeddings = await embeddingService.embedBatch(batch, {
+					source_type,
+					source,
+				});
 				console.log(`[VECTOR DETAIL] Entity embeddings result:`, {
 					success: embeddings.success,
 					dataLength: embeddings.success ? embeddings.data.length : 0,
@@ -554,7 +547,10 @@ async function generateAndStoreVectors(
 		const relationshipArray = Array.from(uniqueRelationships);
 		for (let i = 0; i < relationshipArray.length; i += batchSize) {
 			const batch = relationshipArray.slice(i, i + batchSize);
-			const embeddings = await embeddingService.embedBatch(batch);
+			const embeddings = await embeddingService.embedBatch(batch, {
+				source_type,
+				source,
+			});
 
 			if (embeddings.success) {
 				for (let j = 0; j < batch.length; j++) {
@@ -591,7 +587,10 @@ async function generateAndStoreVectors(
 			console.log(`[VECTOR DETAIL] Sample triple ID: "${batchIds[0]}"`);
 
 			try {
-				const embeddings = await embeddingService.embedBatch(batch);
+				const embeddings = await embeddingService.embedBatch(batch, {
+					source_type,
+					source,
+				});
 				console.log(`[VECTOR DETAIL] Semantic embeddings result:`, {
 					success: embeddings.success,
 					dataLength: embeddings.success ? embeddings.data.length : 0,
@@ -690,8 +689,7 @@ async function generateAndStoreVectors(
 async function generateAndStoreConceptVectors(
 	concepts: ConceptNode[],
 	embeddingService: EmbeddingService,
-	db: DatabaseAdapter,
-	config: KnowledgeGraphConfig
+	db: DatabaseAdapter
 ): Promise<Result<{ vectorsStored: number }>> {
 	try {
 		console.log(
@@ -718,7 +716,8 @@ async function generateAndStoreConceptVectors(
 		// Generate concept texts for embedding
 		const conceptTexts: string[] = [];
 		const conceptIds: string[] = [];
-
+		const source_type = concepts[0].source_type;
+		const source = concepts[0].source;
 		for (const concept of concepts) {
 			// Create rich text representation of the concept
 			const conceptText = concept.concept; // Start with the concept name
@@ -729,7 +728,7 @@ async function generateAndStoreConceptVectors(
 		console.log(`[CONCEPT VECTOR DETAIL] Generated concept texts for ${concepts.length} concepts`);
 		console.log(`[CONCEPT VECTOR DETAIL] Sample concept text: "${conceptTexts[0]}"`);
 
-		const batchSize = config.embeddings?.batchSize || 32;
+		const batchSize = env.BATCH_SIZE;
 		console.log(`[CONCEPT VECTOR DETAIL] Using batch size: ${batchSize}`);
 
 		// Generate concept embeddings in batches
@@ -744,7 +743,10 @@ async function generateAndStoreConceptVectors(
 			console.log(`[CONCEPT VECTOR DETAIL] Sample concept ID: "${batchIds[0]}"`);
 
 			try {
-				const embeddings = await embeddingService.embedBatch(batch);
+				const embeddings = await embeddingService.embedBatch(batch, {
+					source_type,
+					source,
+				});
 				console.log(`[CONCEPT VECTOR DETAIL] Concept embeddings result:`, {
 					success: embeddings.success,
 					dataLength: embeddings.success ? embeddings.data.length : 0,

@@ -1,7 +1,7 @@
-import type { KnowledgeTriple } from '../../shared/types';
+import type { Triple } from '~/shared/types/core';
 
 export interface DeduplicationResult {
-	uniqueTriples: KnowledgeTriple[];
+	uniqueTriples: Triple[];
 	duplicatesRemoved: number;
 	mergedMetadata: Array<{
 		originalId: string;

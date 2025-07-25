@@ -1,6 +1,6 @@
 import fs from 'node:fs';
 import path from 'node:path';
-import { env } from '~/shared/config/env';
+import { env } from '~/shared/env';
 
 // Log levels
 const LOG_LEVELS = {

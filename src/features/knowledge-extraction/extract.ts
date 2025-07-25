@@ -1,16 +1,12 @@
+import type { ConceptNode, ConceptualizationRelationship, TripleType } from '@prisma/client';
+import { Decimal } from '@prisma/client/runtime/library';
 import { z } from 'zod';
-import type {
-	AIProvider,
-	KnowledgeGraphConfig,
-	KnowledgeTriple,
-	Result,
-} from '../../shared/types';
+import type { ProcessKnowledgeArgs } from '~/server/transport-manager';
+import { env } from '~/shared/env';
+import { createAIProvider } from '~/shared/services/ai-provider-service';
+import type { Triple } from '~/shared/types/core';
 import { trackTokenUsage } from '../../shared/utils/token-tracking';
-import {
-	extractElementsFromTriples,
-	generateConcepts,
-} from '../conceptualization/conceptualize';
-import type { ExtractedKnowledge, ExtractionMetadata } from './types';
+import { extractElementsFromTriples, generateConcepts } from '../conceptualization/conceptualize';
 
 // Zod schemas for validation
 const TripleSchema = z.object({
@@ -41,44 +37,28 @@ const SinglePassTripleSchema = z.object({
  * Extract knowledge triples from text using AI
  * Pure function that takes all dependencies as parameters
  */
-export async function extractKnowledgeTriples(
-	text: string,
-	metadata: ExtractionMetadata,
-	aiProvider: AIProvider,
-	config: KnowledgeGraphConfig,
-	includeConcepts: boolean = false
-): Promise<Result<ExtractedKnowledge>> {
+export async function extractKnowledgeTriples(data: ProcessKnowledgeArgs) {
 	try {
-		const method = config.extraction.extractionMethod;
+		const method = env.EXTRACTION_METHOD;
 
-		// Extract triples first
-		let extractionResult: Result<ExtractedKnowledge>;
-		if (method === 'single-pass') {
-			extractionResult = await extractSinglePass(text, metadata, aiProvider, config);
-		} else {
-			extractionResult = await extractFourStage(text, metadata, aiProvider, config);
+		const extractionResult =
+			method === 'single-pass' ? await extractSinglePass(data) : await extractFourStage(data);
+
+		if (!extractionResult.success || !extractionResult.data) {
+			throw new Error(extractionResult.error?.message);
 		}
 
-		if (!extractionResult.success) {
-			return extractionResult;
-		}
-
-		let { triples, concepts, conceptualizations } = extractionResult.data;
+		const { triples } = extractionResult.data;
+		let concepts: ConceptNode[] = [];
+		let conceptualizations: ConceptualizationRelationship[] = [];
 
 		// Generate concepts if requested
-		if (includeConcepts && triples.length > 0) {
+		if (triples.length > 0) {
 			const conceptInput = extractElementsFromTriples(triples);
-			const conceptResult = await generateConcepts(
-				conceptInput,
-				{
-					source: metadata.source,
-					source_type: metadata.source_type || 'unknown',
-					entity_type: metadata.entity_type || 'entity',
-					processing_batch_id: metadata.processing_batch_id,
-				},
-				aiProvider,
-				config
-			);
+			const conceptResult = await generateConcepts(conceptInput, {
+				source: data.source,
+				source_type: data.source_type,
+			});
 
 			if (conceptResult.success) {
 				concepts = conceptResult.data.concepts;
@@ -109,63 +89,52 @@ export async function extractKnowledgeTriples(
 /**
  * Single-pass extraction - extract all relationship types at once
  */
-async function extractSinglePass(
-	text: string,
-	metadata: ExtractionMetadata,
-	aiProvider: AIProvider,
-	config: KnowledgeGraphConfig
-): Promise<Result<ExtractedKnowledge>> {
+async function extractSinglePass(data: ProcessKnowledgeArgs) {
 	try {
-		const prompt = createSinglePassPrompt(text, metadata);
+		const prompt = createSinglePassPrompt(data);
+
+		const aiProvider = createAIProvider();
 
 		const result = await aiProvider.generateObject(prompt, SinglePassTripleSchema, undefined, {
 			operation_type: 'extraction',
-			source: metadata.source,
-			source_type: metadata.source_type,
-			source_date: metadata.source_date,
-			processing_batch_id: metadata.processing_batch_id,
+			source: data.source,
+			source_type: data.source_type,
+			source_date: data.source_date,
 		});
 		if (!result.success) {
-			return result;
+			throw new Error(result.error?.message);
 		}
 
 		// Track token usage
-		await trackTokenUsage(
-			result.data,
-			{
-				source: metadata.source,
-				source_type: metadata.source_type || 'unknown',
-				operation_type: 'extraction',
-				processing_batch_id: metadata.processing_batch_id,
-				operation_context: {
-					extraction_method: 'single-pass',
-					text_length: text.length,
-					extracted_triples_count: result.data.data.relationships.length,
-				},
+		await trackTokenUsage(result.data, {
+			source: data.source,
+			source_type: data.source_type || 'unknown',
+			operation_type: 'extraction',
+
+			operation_context: {
+				extraction_method: 'single-pass',
+				text_length: data.text.length,
+				extracted_triples_count: result.data.data.relationships.length,
 			},
-			config.ai
-		);
+		});
 
 		// Convert to KnowledgeTriple format
-		const triples: KnowledgeTriple[] = result.data.data.relationships.map(rel => ({
+		const triples = result.data.data.relationships.map(rel => ({
 			subject: rel.subject,
 			predicate: rel.predicate,
 			object: rel.object,
-			type: mapRelationshipType(rel.relationship_type),
-			source: metadata.source,
-			source_type: metadata.source_type,
-			source_date: metadata.source_date,
-			extracted_at: new Date().toISOString(),
-			processing_batch_id: metadata.processing_batch_id,
-			confidence: rel.confidence,
-		}));
+			type: rel.relationship_type as TripleType,
+			source: data.source,
+			source_type: data.source_type,
+			source_date: new Date(data.source_date),
+			extracted_at: new Date(),
+			confidence: rel.confidence ? new Decimal(rel.confidence) : null,
+		})) as Triple[];
 
 		return {
 			success: true,
 			data: {
 				triples,
-				concepts: [], // Concepts would be extracted separately
-				conceptualizations: [],
 			},
 		};
 	} catch (error) {
@@ -183,25 +152,20 @@ async function extractSinglePass(
 /**
  * Four-stage extraction - extract each relationship type separately
  */
-async function extractFourStage(
-	text: string,
-	metadata: ExtractionMetadata,
-	aiProvider: AIProvider,
-	config: KnowledgeGraphConfig
-): Promise<Result<ExtractedKnowledge>> {
+async function extractFourStage(data: ProcessKnowledgeArgs) {
 	try {
-		const allTriples: KnowledgeTriple[] = [];
-		const types = ['entity-entity', 'entity-event', 'event-event', 'emotional-context'] as const;
+		const allTriples = [];
 
-		for (const type of types) {
-			const result = await extractByType(text, type, metadata, aiProvider, config);
+		for (const type of [
+			'ENTITY_ENTITY',
+			'ENTITY_EVENT',
+			'EVENT_EVENT',
+			'EMOTIONAL_CONTEXT',
+		] as const) {
+			const result = await extractByType(data, type as TripleType);
 			if (result.success) {
-				allTriples.push(...result.data);
+				allTriples.push(...(result.data ?? []));
 			}
-
-			// Add delay between types if configured
-			const delay = config.extraction?.delayBetweenTypes || 1000;
-			await sleep(delay);
 		}
 
 		return {
@@ -227,55 +191,45 @@ async function extractFourStage(
 /**
  * Extract triples for a specific relationship type
  */
-async function extractByType(
-	text: string,
-	type: 'entity-entity' | 'entity-event' | 'event-event' | 'emotional-context',
-	metadata: ExtractionMetadata,
-	aiProvider: AIProvider,
-	config: KnowledgeGraphConfig
-): Promise<Result<KnowledgeTriple[]>> {
+async function extractByType(data: ProcessKnowledgeArgs, type: TripleType) {
 	try {
-		const prompt = createTypeSpecificPrompt(text, type, metadata);
+		const prompt = createTypeSpecificPrompt(data, type);
+
+		const aiProvider = createAIProvider();
 
 		const result = await aiProvider.generateObject(prompt, TripleSchema, undefined, {
 			operation_type: 'extraction',
-			source: metadata.source,
-			source_type: metadata.source_type,
-			processing_batch_id: metadata.processing_batch_id,
+			source: data.source,
+			source_type: data.source_type,
 		});
 		if (!result.success) {
 			return result;
 		}
 
 		// Track token usage
-		await trackTokenUsage(
-			result.data,
-			{
-				source: metadata.source,
-				source_type: metadata.source_type || 'unknown',
-				operation_type: 'extraction',
-				processing_batch_id: metadata.processing_batch_id,
-				operation_context: {
-					extraction_method: 'four-stage',
-					relationship_type: type,
-					text_length: text.length,
-					extracted_triples_count: result.data.data.triples.length,
-				},
+		await trackTokenUsage(result.data, {
+			source: data.source,
+			source_type: data.source_type || 'unknown',
+			operation_type: 'extraction',
+			operation_context: {
+				extraction_method: 'four-stage',
+				relationship_type: type,
+				text_length: data.text.length,
+				extracted_triples_count: result.data.data.triples.length,
 			},
-			config.ai
-		);
+		});
 
-		const triples: KnowledgeTriple[] = result.data.data.triples.map(triple => ({
+		const triples = result.data.data.triples.map(triple => ({
 			subject: triple.subject,
 			predicate: triple.predicate,
 			object: triple.object,
 			type,
-			source: metadata.source,
-			source_type: metadata.source_type,
-			source_date: metadata.source_date,
-			extracted_at: new Date().toISOString(),
-			processing_batch_id: metadata.processing_batch_id,
-			confidence: triple.confidence,
+			source: data.source,
+			source_type: data.source_type,
+			source_date: new Date(data.source_date),
+			extracted_at: new Date(),
+
+			confidence: triple.confidence ? new Decimal(triple.confidence) : null,
 		}));
 
 		return {
@@ -295,9 +249,9 @@ async function extractByType(
 }
 
 // Helper functions
-function createSinglePassPrompt(text: string, metadata?: ExtractionMetadata): string {
-	const temporalContext = metadata?.source_date
-		? `\n\nTemporal Context: This text is from ${new Date(metadata.source_date).toLocaleDateString()}. Pay special attention to temporal relationships and time-sensitive information.`
+function createSinglePassPrompt(data: ProcessKnowledgeArgs): string {
+	const temporalContext = data.source_date
+		? `\n\nTemporal Context: This text is from ${new Date(data.source_date).toLocaleDateString()}. Pay special attention to temporal relationships and time-sensitive information.`
 		: '';
 
 	return `Extract all meaningful relationships from the following text. Identify:
@@ -314,16 +268,12 @@ When extracting event-event relationships, pay special attention to:
 - Conditional relationships ("if", "when", "whenever")
 - Duration and timing ("lasted", "took place over", "occurred at")
 
-Text: ${text}${temporalContext}
+Text: ${data.text}${temporalContext}
 
 Respond with a JSON object containing an array of relationships.`;
 }
 
-function createTypeSpecificPrompt(
-	text: string,
-	type: string,
-	metadata?: ExtractionMetadata
-): string {
+function createTypeSpecificPrompt(data: ProcessKnowledgeArgs, type: string): string {
 	const typeDescriptions: Record<string, string> = {
 		'entity-entity': 'relationships between people, places, things, or concepts',
 		'entity-event': 'how entities are involved in or affected by events',
@@ -331,8 +281,8 @@ function createTypeSpecificPrompt(
 		'emotional-context': 'emotional states, feelings, or contextual information',
 	};
 
-	const temporalContext = metadata?.source_date
-		? `\n\nTemporal Context: This text is from ${new Date(metadata.source_date).toLocaleDateString()}. Consider this temporal context when extracting relationships.`
+	const temporalContext = data.source_date
+		? `\n\nTemporal Context: This text is from ${new Date(data.source_date).toLocaleDateString()}. Consider this temporal context when extracting relationships.`
 		: '';
 
 	const temporalGuidance =
@@ -346,7 +296,7 @@ function createTypeSpecificPrompt(
 
 	return `Extract ${typeDescriptions[type]} from the following text.
 
-Text: ${text}${temporalContext}${temporalGuidance}
+Text: ${data.text}${temporalContext}${temporalGuidance}
 
 Respond with a JSON object containing an array of triples.`;
 }

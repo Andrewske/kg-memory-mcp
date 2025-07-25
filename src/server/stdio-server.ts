@@ -1,137 +1,238 @@
 /**
- * STDIO Server for Knowledge Graph MCP Server
- * Provides MCP protocol over standard input/output
+ * Functional STDIO Server for Knowledge Graph MCP
+ * Provides consistent API with HTTP server
  */
 
 import { Server } from '@modelcontextprotocol/sdk/server/index.js';
 import { StdioServerTransport } from '@modelcontextprotocol/sdk/server/stdio.js';
+import { CallToolRequestSchema, ListToolsRequestSchema } from '@modelcontextprotocol/sdk/types.js';
+
 import {
-	CallToolRequestSchema,
-	ErrorCode,
-	ListToolsRequestSchema,
-	McpError,
-} from '@modelcontextprotocol/sdk/types.js';
-import { env } from '~/shared/config/env';
-import type {
-	AIProvider,
-	DatabaseAdapter,
-	EmbeddingService,
-	KnowledgeGraphConfig,
-} from '~/shared/types';
-// Import unified tool functions
-import { executeToolFunction, TOOL_DEFINITIONS } from './transport-manager';
-export interface StdioServerDependencies {
-	config: KnowledgeGraphConfig;
-	db: DatabaseAdapter;
-	embeddingService: EmbeddingService;
-	aiProvider: AIProvider;
+	processKnowledgeSchema,
+	searchConceptsSchema,
+	searchKnowledgeSchema,
+} from '~/server/routes/knowledge-routes';
+import {
+	getKnowledgeGraphStats,
+	processKnowledge,
+	searchConceptsTool,
+	searchKnowledgeGraph,
+} from '~/server/transport-manager';
+
+import type { ToolResult } from '~/shared/types';
+
+// Server state
+interface StdioServerState {
+	server: Server;
+	transport: StdioServerTransport;
+	isRunning: boolean;
 }
 
-export class KnowledgeGraphStdioServer {
-	private server: Server;
-	private dependencies: StdioServerDependencies;
+let serverState: StdioServerState | null = null;
 
-	constructor(dependencies: StdioServerDependencies) {
-		this.dependencies = dependencies;
-		this.server = new Server(
-			{
-				name: 'knowledge-graph-mcp',
-				version: '1.0.0',
-			},
-			{
-				capabilities: {
-					tools: {},
-				},
-			}
-		);
-
-		this.setupTools();
+export async function startStdioServer(): Promise<{ stop: () => Promise<void> }> {
+	if (serverState?.isRunning) {
+		throw new Error('STDIO server is already running');
 	}
 
-	private setupTools(): void {
-		// Use TOOL_DEFINITIONS from transport-manager for consistency
-		this.server.setRequestHandler(ListToolsRequestSchema, async () => {
-			return {
-				tools: TOOL_DEFINITIONS.map(tool => ({
-					name: tool.name,
-					description: tool.description,
-					inputSchema: tool.inputSchema,
-				})),
-			};
-		});
+	// Create MCP server
+	const server = new Server(
+		{
+			name: 'knowledge-graph-mcp',
+			version: '1.0.0',
+		},
+		{
+			capabilities: {
+				tools: {},
+				resources: {},
+				prompts: {},
+				logging: {},
+			},
+		}
+	);
 
-		// Call tool handler using unified dispatcher
-		this.server.setRequestHandler(CallToolRequestSchema, async request => {
-			const { name, arguments: args } = request.params;
+	// Register tools
+	server.setRequestHandler(ListToolsRequestSchema, async () => {
+		return {
+			tools: [
+				{
+					name: 'process_knowledge',
+					description: 'Extract knowledge triples from text and store them in the knowledge graph',
+					inputSchema: {
+						type: 'object',
+						properties: {
+							text: { type: 'string', description: 'Text to process' },
+							source: { type: 'string', description: 'Source identifier' },
+							thread_id: { type: 'string', description: 'Optional thread ID' },
+							source_date: { type: 'string', description: 'Optional source date (ISO string)' },
+							include_concepts: {
+								type: 'boolean',
+								description: 'Whether to include conceptualization',
+							},
+						},
+						required: ['text', 'source'],
+					},
+				},
+				{
+					name: 'search_knowledge_graph',
+					description: 'Search the knowledge graph using fusion search',
+					inputSchema: {
+						type: 'object',
+						properties: {
+							query: { type: 'string', description: 'Search query' },
+							limit: { type: 'number', description: 'Maximum results to return', default: 10 },
+							threshold: { type: 'number', description: 'Similarity threshold', default: 0.0 },
+							searchTypes: {
+								type: 'array',
+								items: { type: 'string', enum: ['entity', 'relationship', 'semantic', 'concept'] },
+								description: 'Types of search to perform',
+							},
+							weights: {
+								type: 'object',
+								properties: {
+									entity: { type: 'number' },
+									relationship: { type: 'number' },
+									semantic: { type: 'number' },
+									concept: { type: 'number' },
+								},
+								description: 'Weights for different search types',
+							},
+						},
+						required: ['query'],
+					},
+				},
+				{
+					name: 'search_concepts',
+					description: 'Search for concepts in the knowledge graph',
+					inputSchema: {
+						type: 'object',
+						properties: {
+							query: { type: 'string', description: 'Search query' },
+							abstraction: {
+								type: 'string',
+								enum: ['high', 'medium', 'low'],
+								description: 'Abstraction level filter',
+							},
+						},
+						required: ['query'],
+					},
+				},
+				{
+					name: 'get_knowledge_graph_stats',
+					description: 'Get statistics about the knowledge graph',
+					inputSchema: {
+						type: 'object',
+						properties: {},
+					},
+				},
+			],
+		};
+	});
 
-			// Log incoming requests in diagnostic mode
-			if (env.DIAGNOSTIC_MODE) {
-				console.debug('[STDIO Request]', { tool: name, args });
+	// Register tool handlers
+	server.setRequestHandler(CallToolRequestSchema, async request => {
+		const { name, arguments: args } = request.params;
+
+		try {
+			let result: ToolResult;
+
+			switch (name) {
+				case 'process_knowledge': {
+					const parsedArgs = processKnowledgeSchema.parse(args);
+					// Transform to match function signature
+					const transformedArgs = {
+						text: parsedArgs.text,
+						source: parsedArgs.source,
+						source_type: 'thread', // Default source type
+						source_date: parsedArgs.source_date || new Date().toISOString(),
+					};
+					result = await processKnowledge(transformedArgs);
+					break;
+				}
+				case 'search_knowledge_graph':
+					result = await searchKnowledgeGraph(searchKnowledgeSchema.parse(args));
+					break;
+				case 'search_concepts':
+					result = await searchConceptsTool(searchConceptsSchema.parse(args));
+					break;
+				case 'get_knowledge_graph_stats':
+					result = await getKnowledgeGraphStats();
+					break;
+				default:
+					throw new Error(`Unknown tool: ${name}`);
 			}
 
-			try {
-				const { config, db, embeddingService, aiProvider } = this.dependencies;
-
-				console.debug(`[STDIO] Executing tool: ${name}`);
-
-				// Use the unified tool dispatcher
-				const result = await executeToolFunction(name, args, {
-					config,
-					db,
-					embeddingService,
-					aiProvider,
-				});
-
-				if (!result.success) {
-					console.error(`[STDIO Tool Error] ${name}:`, result.error);
-					throw new McpError(ErrorCode.InternalError, result.error?.message || 'Unknown error');
-				}
-
-				// Log successful responses in diagnostic mode
-				if (env.DIAGNOSTIC_MODE) {
-					console.debug('[STDIO Response]', {
-						tool: name,
-						success: true,
-						dataKeys: Object.keys(result.data || {}),
-					});
-				}
-
+			if (!result.success) {
 				return {
+					isError: true,
 					content: [
 						{
 							type: 'text',
-							text: JSON.stringify(result.data, null, 2),
+							text: `Error: ${result.error?.message || 'Unknown error occurred'}`,
 						},
 					],
 				};
-			} catch (error) {
-				console.error(`[STDIO Exception] ${name}:`, error);
-				if (error instanceof McpError) {
-					throw error;
-				}
-				throw new McpError(
-					ErrorCode.InternalError,
-					`Tool execution failed: ${error instanceof Error ? error.message : String(error)}`
-				);
 			}
-		});
-	}
 
-	public async start(): Promise<void> {
-		const transport = new StdioServerTransport();
-		console.debug('[STDIO] Initializing server transport...');
-		await this.server.connect(transport);
-		console.log('🔌 STDIO MCP Server started');
-		console.debug('[STDIO] Server info:', {
-			tools: TOOL_DEFINITIONS.length,
-			logLevel: env.LOG_LEVEL,
-			diagnosticMode: env.DIAGNOSTIC_MODE,
-		});
-	}
+			return {
+				content: [
+					{
+						type: 'text',
+						text: JSON.stringify(result.data, null, 2),
+					},
+				],
+			};
+		} catch (error) {
+			return {
+				isError: true,
+				content: [
+					{
+						type: 'text',
+						text: `Error: ${error instanceof Error ? error.message : 'Unknown error occurred'}`,
+					},
+				],
+			};
+		}
+	});
 
-	public async stop(): Promise<void> {
-		console.debug('[STDIO] Shutting down server...');
-		await this.server.close();
-		console.log('🛑 STDIO MCP Server stopped');
-	}
+	// Create transport
+	const transport = new StdioServerTransport();
+
+	// Start server
+	await server.connect(transport);
+
+	serverState = {
+		server,
+		transport,
+		isRunning: true,
+	};
+
+	console.log('📡 STDIO server connected and ready');
+
+	// Return stop function
+	return {
+		stop: async (): Promise<void> => {
+			if (!serverState?.isRunning) {
+				return;
+			}
+
+			try {
+				await serverState.server.close();
+				serverState.isRunning = false;
+				serverState = null;
+				console.log('📡 STDIO server stopped');
+			} catch (error) {
+				console.error('Error stopping STDIO server:', error);
+				throw error;
+			}
+		},
+	};
+}
+
+// Health check function (can be called externally)
+export function getStdioServerStatus(): { isRunning: boolean; uptime?: number } {
+	return {
+		isRunning: serverState?.isRunning ?? false,
+		uptime: serverState?.isRunning ? process.uptime() : undefined,
+	};
 }

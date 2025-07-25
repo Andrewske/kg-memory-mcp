@@ -2,20 +2,14 @@ import type {
 	ConceptNode,
 	ConceptualizationRelationship,
 	KnowledgeTriple,
-	Result,
-} from '~/shared/types';
-import type { EntityType } from '~/shared/types/core';
+} from '@prisma/client';
+import type { Result } from '~/shared/types';
 import { db } from './client';
 import {
 	convertEmbeddingToVector,
 	generateConceptId,
-	generateConceptualizationId,
-	mapAbstractionLevel,
-	mapEntityType,
-	mapPrismaConcept,
-	mapPrismaConceptualization,
-	mapPrismaTriple,
-	unmapAbstractionLevel,
+	generateConceptualizationId
+
 } from './database-utils';
 
 /**
@@ -26,12 +20,11 @@ export async function storeConcepts(concepts: ConceptNode[]): Promise<Result<voi
 		const prismaConcepts = concepts.map(concept => ({
 			id: generateConceptId(concept),
 			concept: concept.concept,
-			abstraction_level: mapAbstractionLevel(concept.abstraction_level),
+			abstraction_level: concept.abstraction_level,
 			confidence: concept.confidence,
 			source: concept.source,
 			source_type: concept.source_type,
 			extracted_at: new Date(concept.extracted_at),
-			processing_batch_id: concept.processing_batch_id,
 		}));
 
 		await db.conceptNode.createMany({
@@ -65,7 +58,7 @@ export async function searchConcepts(
 		};
 
 		if (abstraction) {
-			where.abstraction_level = mapAbstractionLevel(abstraction as any);
+			where.abstraction_level = abstraction as any;
 		}
 
 		const concepts = await db.conceptNode.findMany({
@@ -75,7 +68,7 @@ export async function searchConcepts(
 
 		return {
 			success: true,
-			data: concepts.map(mapPrismaConcept),
+			data: concepts
 		};
 	} catch (error) {
 		return {
@@ -122,22 +115,9 @@ export async function searchConceptsByEmbedding(
 			};
 		}
 
-		// Map results to ConceptNode format
-		const concepts = results.map((row: any) => ({
-			concept: row.concept,
-			abstraction_level: unmapAbstractionLevel(row.abstraction_level),
-			confidence: row.confidence,
-			source: row.source,
-			source_type: row.source_type,
-			extracted_at: row.extracted_at.toISOString(),
-			processing_batch_id: row.processing_batch_id,
-			// Add similarity score for debugging
-			_similarity: row.similarity,
-		}));
-
 		return {
 			success: true,
-			data: concepts,
+			data: results,
 		};
 	} catch (error) {
 		console.error('Concept embedding search error:', error);
@@ -160,7 +140,7 @@ export async function getConceptsByIds(ids: string[]): Promise<ConceptNode[]> {
 		const concepts = await db.conceptNode.findMany({
 			where: { id: { in: ids } },
 		});
-		return concepts.map(mapPrismaConcept);
+		return concepts;
 	} catch (error) {
 		console.error('Error getting concepts by IDs:', error);
 		return [];
@@ -177,14 +157,14 @@ export async function storeConceptualizations(
 		const prismaRelationships = relationships.map(rel => ({
 			id: generateConceptualizationId(rel),
 			source_element: rel.source_element,
-			entity_type: mapEntityType(rel.entity_type as EntityType),
+			triple_type: rel.triple_type,
 			concept: rel.concept,
 			confidence: rel.confidence,
 			context_triples: rel.context_triples || [],
 			source: rel.source,
 			source_type: rel.source_type,
 			extracted_at: new Date(rel.extracted_at),
-			processing_batch_id: rel.processing_batch_id,
+			
 		}));
 
 		await db.conceptualizationRelationship.createMany({
@@ -205,29 +185,6 @@ export async function storeConceptualizations(
 	}
 }
 
-/**
- * Get conceptualization relationships by source element
- */
-export async function getConceptualizationsByElement(
-	element: string,
-	entityType?: EntityType
-): Promise<ConceptualizationRelationship[]> {
-	try {
-		const where: any = { source_element: element };
-		if (entityType) {
-			where.entity_type = entityType;
-		}
-
-		const relationships = await db.conceptualizationRelationship.findMany({
-			where,
-		});
-
-		return relationships.map(mapPrismaConceptualization);
-	} catch (error) {
-		console.error('Error getting conceptualizations by element:', error);
-		return [];
-	}
-}
 
 /**
  * Get conceptualization relationships by concept
@@ -240,7 +197,7 @@ export async function getConceptualizationsByConcept(
 			where: { concept },
 		});
 
-		return relationships.map(mapPrismaConceptualization);
+		return relationships
 	} catch (error) {
 		console.error('Error getting conceptualizations by concept:', error);
 		return [];
@@ -270,7 +227,7 @@ export async function getTriplesByConceptualization(concept: string): Promise<Kn
 			},
 		});
 
-		return triples.map(mapPrismaTriple);
+		return triples;
 	} catch (error) {
 		console.error('Error getting triples by conceptualization:', error);
 		return [];

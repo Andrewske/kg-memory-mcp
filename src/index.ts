@@ -1,81 +1,20 @@
-#!/usr/bin/env node
 /**
- * Main entry point for the Knowledge Graph MCP Server
- * Supports both STDIO and HTTP transports
+ * Main entry point for Knowledge Graph MCP Server
+ * Supports both STDIO and HTTP transports with consistent functional API
  */
 
-import { config } from 'dotenv';
-// Import service implementations
-import { createDatabaseAdapter } from '~/shared/database/database-adapter';
-import { createAIProvider } from '~/shared/services/ai-provider-service';
-import { createEmbeddingService } from '~/shared/services/embedding-service';
-import type { KnowledgeGraphConfig } from '~/shared/types';
+import { env } from '~/shared/env';
 import { redirectConsoleToFiles } from '~/shared/utils/console-redirect';
-import { createHttpServerConfig, KnowledgeGraphHttpServer } from './server/http-server';
-// Import server implementations
-import { KnowledgeGraphStdioServer } from './server/stdio-server';
+import { startHttpServer } from './server/deploy-handlers';
+import { startStdioServer } from './server/stdio-server';
 
-// Load environment variables
-config();
-
-// Create configuration - simplified for stateless architecture
-const createDefaultConfig = (): KnowledgeGraphConfig => ({
-	embeddings: {
-		model: process.env.KG_EMBEDDING_MODEL || 'text-embedding-3-small',
-		dimensions: parseInt(process.env.KG_EMBEDDING_DIMENSIONS || '1536'),
-		batchSize: parseInt(process.env.KG_BATCH_SIZE || '32'),
-	},
-	search: {
-		topK: parseInt(process.env.KG_SEARCH_TOP_K || '10'),
-		minScore: parseFloat(process.env.KG_MIN_SCORE || '0.7'),
-	},
-	database: {
-		url: process.env.DATABASE_URL || '',
-		maxConnections: parseInt(process.env.KG_DB_MAX_CONNECTIONS || '10'),
-		timeout: parseInt(process.env.KG_DB_CONNECTION_TIMEOUT || '5000'),
-	},
-	extraction: {
-		extractionMethod:
-			(process.env.KG_EXTRACTION_METHOD as 'single-pass' | 'four-stage') || 'four-stage',
-		delayBetweenTypes: parseInt(process.env.KG_DELAY_BETWEEN_TYPES || '2000'),
-		maxChunkTokens: parseInt(process.env.KG_MAX_CHUNK_TOKENS || '1500'),
-		model: process.env.KG_EXTRACTION_MODEL || 'gpt-4o-mini',
-		temperature: parseFloat(process.env.KG_EXTRACTION_TEMPERATURE || '0.1'),
-	},
-	deduplication: {
-		enableSemanticDeduplication: process.env.KG_ENABLE_SEMANTIC_DEDUP === 'true',
-		semanticSimilarityThreshold: parseFloat(process.env.KG_SEMANTIC_THRESHOLD || '0.85'),
-		exactMatchFields: ['subject', 'predicate', 'object', 'type'],
-	},
-	ai: {
-		provider: (process.env.KG_AI_PROVIDER as 'openai' | 'anthropic') || 'openai',
-		model: process.env.KG_AI_MODEL || 'gpt-4o-mini',
-		temperature: parseFloat(process.env.KG_AI_TEMPERATURE || '0.1'),
-		maxTokens: parseInt(process.env.KG_AI_MAX_TOKENS || '4000'),
-	},
-});
-
-// Transport configuration
-interface TransportConfig {
-	enableStdio: boolean;
-	enableHttp: boolean;
+// Server state
+interface ServerState {
+	stdio?: { stop: () => Promise<void> };
+	http?: { stop: () => Promise<void> };
 }
 
-function getTransportConfig(): TransportConfig {
-	const enableHttp = process.env.ENABLE_HTTP_TRANSPORT === 'true';
-	const enableStdio = process.env.ENABLE_STDIO_TRANSPORT !== 'false'; // Default to true
-
-	// If no specific transport is enabled, default to STDIO only
-	if (!enableHttp && !enableStdio) {
-		return { enableStdio: true, enableHttp: false };
-	}
-
-	return { enableStdio, enableHttp };
-}
-
-// Global server instances
-let stdioServer: KnowledgeGraphStdioServer | null = null;
-let httpServer: KnowledgeGraphHttpServer | null = null;
+const servers: ServerState = {};
 
 // Graceful shutdown handler
 async function gracefulShutdown(): Promise<void> {
@@ -83,12 +22,14 @@ async function gracefulShutdown(): Promise<void> {
 
 	const shutdownPromises: Promise<void>[] = [];
 
-	if (stdioServer) {
-		shutdownPromises.push(stdioServer.stop());
+	if (servers.stdio) {
+		console.log('📡 Stopping STDIO server...');
+		shutdownPromises.push(servers.stdio.stop());
 	}
 
-	if (httpServer) {
-		shutdownPromises.push(httpServer.stop());
+	if (servers.http) {
+		console.log('🌐 Stopping HTTP server...');
+		shutdownPromises.push(servers.http.stop());
 	}
 
 	try {
@@ -104,46 +45,52 @@ async function gracefulShutdown(): Promise<void> {
 // Set up signal handlers
 process.on('SIGINT', gracefulShutdown);
 process.on('SIGTERM', gracefulShutdown);
+process.on('uncaughtException', error => {
+	console.error('❌ Uncaught Exception:', error);
+	gracefulShutdown();
+});
+process.on('unhandledRejection', (reason, promise) => {
+	console.error('❌ Unhandled Rejection at:', promise, 'reason:', reason);
+	gracefulShutdown();
+});
 
 // Main server startup
 async function main(): Promise<void> {
 	try {
+		console.log('🚀 Starting Knowledge Graph MCP Server...');
+		console.log(`📡 STDIO Transport: ${env.ENABLE_STDIO_TRANSPORT ? 'enabled' : 'disabled'}`);
+		console.log(`🌐 HTTP Transport: ${env.ENABLE_HTTP_TRANSPORT ? 'enabled' : 'disabled'}`);
+
+		// Validate at least one transport is enabled
+		if (!env.ENABLE_STDIO_TRANSPORT && !env.ENABLE_HTTP_TRANSPORT) {
+			throw new Error('At least one transport (STDIO or HTTP) must be enabled');
+		}
+
 		// Redirect console output to files to prevent STDIO corruption
 		// Only redirect if STDIO transport is enabled
-		const transportConfig = getTransportConfig();
-		if (transportConfig.enableStdio) {
+		if (env.ENABLE_STDIO_TRANSPORT) {
 			redirectConsoleToFiles('./logs');
 		}
 
-		// Initialize shared services
-		const serverConfig = createDefaultConfig();
-		const db = createDatabaseAdapter(serverConfig.database);
-		const embeddingService = createEmbeddingService(serverConfig.embeddings);
-		const aiProvider = createAIProvider(serverConfig.ai);
-
-		const dependencies = {
-			config: serverConfig,
-			db,
-			embeddingService,
-			aiProvider,
-		};
-
-		console.log('🚀 Starting Knowledge Graph MCP Server...');
-		console.log(`📡 STDIO Transport: ${transportConfig.enableStdio ? 'enabled' : 'disabled'}`);
-		console.log(`🌐 HTTP Transport: ${transportConfig.enableHttp ? 'enabled' : 'disabled'}`);
-
-		// Start servers based on configuration
+		// Start servers concurrently
 		const startupPromises: Promise<void>[] = [];
 
-		if (transportConfig.enableStdio) {
-			stdioServer = new KnowledgeGraphStdioServer(dependencies);
-			startupPromises.push(stdioServer.start());
+		if (env.ENABLE_STDIO_TRANSPORT) {
+			startupPromises.push(
+				startStdioServer().then(server => {
+					servers.stdio = server;
+					console.log('📡 STDIO server started');
+				})
+			);
 		}
 
-		if (transportConfig.enableHttp) {
-			const httpConfig = createHttpServerConfig();
-			httpServer = new KnowledgeGraphHttpServer(httpConfig, dependencies);
-			startupPromises.push(httpServer.start());
+		if (env.ENABLE_HTTP_TRANSPORT) {
+			startupPromises.push(
+				startHttpServer().then(server => {
+					servers.http = server;
+					console.log(`🌐 HTTP server started on port ${env.HTTP_PORT}`);
+				})
+			);
 		}
 
 		// Wait for all servers to start
@@ -152,18 +99,25 @@ async function main(): Promise<void> {
 		console.log('✅ All servers started successfully');
 
 		// Log available endpoints
-		if (transportConfig.enableHttp) {
-			const httpConfig = createHttpServerConfig();
+		if (env.ENABLE_HTTP_TRANSPORT) {
 			console.log(
-				`📖 API Documentation: http://localhost:${httpConfig.port}${httpConfig.basePath}/capabilities`
+				`📖 API Documentation: http://localhost:${env.HTTP_PORT}${env.HTTP_BASE_PATH}/capabilities`
 			);
-			console.log(
-				`❤️  Health Check: http://localhost:${httpConfig.port}${httpConfig.basePath}/health`
-			);
+			console.log(`❤️  Health Check: http://localhost:${env.HTTP_PORT}${env.HTTP_BASE_PATH}/health`);
 		}
+
+		if (env.ENABLE_STDIO_TRANSPORT) {
+			console.log('📡 STDIO transport ready for MCP client connections');
+		}
+
+		// Keep the process alive
+		return new Promise(() => {
+			// This promise never resolves, keeping the process running
+			// Shutdown will happen via signal handlers
+		});
 	} catch (error) {
 		console.error('❌ Server failed to start:', error);
-		process.exit(1);
+		await gracefulShutdown();
 	}
 }
 

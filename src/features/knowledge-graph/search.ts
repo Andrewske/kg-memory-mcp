@@ -1,15 +1,12 @@
+import type { ConceptNode } from '@prisma/client';
 import type {
 	DatabaseAdapter,
-	EmbeddingService,
+	KnowledgeGraphConfig,
 	Result,
 	SearchOptions,
 	SearchResult,
 } from '~/shared/types';
-import type {
-	ConceptNode,
-	KnowledgeGraphConfig,
-	KnowledgeTriple,
-} from '../../shared/types';
+import type { Triple } from '~/shared/types/core';
 import {
 	type FusionSearchResult,
 	type FusionSearchWeights,
@@ -23,7 +20,7 @@ import {
 /**
  * Generate temporal metadata from search results
  */
-function generateTemporalMetadata(triples: KnowledgeTriple[]): SearchResult['temporal'] {
+function generateTemporalMetadata(triples: Triple[]): SearchResult['temporal'] {
 	const triplesWithDates = triples.filter(t => t.source_date);
 
 	if (triplesWithDates.length === 0) {
@@ -61,8 +58,6 @@ function generateTemporalMetadata(triples: KnowledgeTriple[]): SearchResult['tem
  */
 export async function searchByText(
 	query: string,
-	db: DatabaseAdapter,
-	embeddingService: EmbeddingService,
 	config: KnowledgeGraphConfig,
 	options?: SearchOptions
 ): Promise<Result<SearchResult>> {
@@ -74,7 +69,7 @@ export async function searchByText(
 		console.log(`[FUSION SEARCH DEBUG] topK=${topK}, minScore=${minScore}`);
 
 		// Use AutoSchemaKG multi-index fusion search strategy
-		const fusionResult = await searchFusion(query, db, embeddingService, config, {
+		const fusionResult = await searchFusion(query, {
 			...options,
 			weights: {
 				entity: 0.25, // Entity-based search
@@ -163,7 +158,7 @@ export async function searchByEmbedding(
 		console.log(`[SEARCH DEBUG] Found ${tripleResults.data.length} triples`);
 
 		// Search concepts by embedding (only if triples search was successful)
-		let conceptResults: Result<ConceptNode[]> | undefined	;
+		let conceptResults: Result<ConceptNode[]> | undefined;
 		if (tripleResults.data.length === 0) {
 			console.log(`[SEARCH DEBUG] No triples found, searching concepts`);
 			// If no triples found, search concepts using the embedding

@@ -20,13 +20,6 @@ export type {
 // Core domain types
 export type {
 	AIResponseWithUsage,
-	ConceptNode,
-	ConceptualizationRelationship,
-	ConversationMetadata,
-	KnowledgeTriple,
-	TokenUsage,
-	TripleType,
-	VectorIndex,
 } from './core';
 // Search-related types
 export type {

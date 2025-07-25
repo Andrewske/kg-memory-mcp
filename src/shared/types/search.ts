@@ -1,13 +1,14 @@
 // Search-related types for the Knowledge Graph system
 
-import type { ConceptNode, KnowledgeTriple } from './core';
+import type { ConceptNode, TripleType } from '@prisma/client';
+import type { Triple } from '~/shared/types/core';
 
 // Unified SearchOptions interface combining both variations
 export interface SearchOptions {
 	limit?: number;
 	threshold?: number;
 	// From shared types
-	types?: Array<'entity-entity' | 'entity-event' | 'event-event' | 'emotional-context'>;
+	types?: TripleType;
 	sources?: string[];
 	source_types?: string[]; // Filter by source type: "thread", "file", "manual", etc.
 	// From feature types - temporal filtering
@@ -25,7 +26,7 @@ export interface TemporalFilter {
 }
 
 export interface TripleSearchResult {
-	triple: KnowledgeTriple;
+	triple: Triple;
 	similarity: number;
 	searchType: 'entity' | 'relationship' | 'semantic';
 }
@@ -39,7 +40,7 @@ export interface ConceptSearchResult {
 // Unified SearchResult interface for knowledge graph operations
 export interface SearchResult {
 	triples: Array<{
-		triple: KnowledgeTriple;
+		triple: Triple;
 		score: number;
 		searchType: 'entity' | 'relationship' | 'semantic' | 'fusion';
 	}>;

@@ -1,4 +1,4 @@
-import type { ConceptNode, ConceptualizationRelationship } from '../../shared/types';
+import type { ConceptNode, ConceptualizationRelationship, TokenUsage } from '../../shared/types';
 
 export interface ConceptualizationInput {
 	entities: string[];
@@ -10,4 +10,5 @@ export interface ConceptualizationInput {
 export interface ConceptualizationOutput {
 	concepts: ConceptNode[];
 	relationships: ConceptualizationRelationship[];
+	tokenUsage: TokenUsage | null;
 }

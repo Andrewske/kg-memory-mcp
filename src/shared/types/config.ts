@@ -7,6 +7,13 @@ export interface KnowledgeGraphConfig {
 	deduplication: DeduplicationConfig;
 	ai: AIConfig;
 	database: DatabaseConfig;
+	http: HttpConfig;
+}
+
+export interface HttpConfig {
+	port: number;
+	basePath: string;
+	corsOrigins: string | string[];
 }
 
 export interface EmbeddingConfig {

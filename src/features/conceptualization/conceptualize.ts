@@ -1,11 +1,8 @@
+import { writeFileSync } from 'node:fs';
 import { z } from 'zod';
-import type { AIProvider, KnowledgeGraphConfig, Result } from '~/shared/types';
-import type { EntityType } from '~/shared/types/core';
-import type {
-	ConceptNode,
-	ConceptualizationRelationship,
-	KnowledgeTriple,
-} from '../../shared/types';
+import { createAIProvider } from '~/shared/services/ai-provider-service';
+import type { Result } from '~/shared/types';
+import type { Triple } from '~/shared/types/core';
 import { trackTokenUsage } from '../../shared/utils/token-tracking';
 import type { ConceptualizationInput, ConceptualizationOutput } from './types';
 
@@ -39,72 +36,71 @@ export async function generateConcepts(
 	metadata: {
 		source: string;
 		source_type: string;
-		entity_type?: EntityType;
-		processing_batch_id?: string;
-	},
-	aiProvider: AIProvider,
-	config: KnowledgeGraphConfig
+	}
 ): Promise<Result<ConceptualizationOutput>> {
 	try {
 		const prompt = createConceptualizationPrompt(input);
+		const aiProvider = createAIProvider();
 
 		const result = await aiProvider.generateObject(prompt, ConceptSchema, undefined, {
 			operation_type: 'conceptualization',
-			source: metadata.source,
-			source_type: metadata.source_type,
-			entity_type: metadata.entity_type,
-			processing_batch_id: metadata.processing_batch_id,
 		});
 
 		if (!result.success) {
 			return result;
 		}
 
+		// Save the raw result as JSON for debugging/auditing
+
+		const debugDir = './logs';
+		try {
+			console.log('Saving conceptualization result as JSON...');
+			// Ensure directory exists
+			const fileName = `${debugDir}/conceptualization-${Date.now()}.json`;
+			writeFileSync(fileName, JSON.stringify(result, null, 2), 'utf-8');
+		} catch (err) {
+			// Non-fatal: log to console if file write fails
+			console.warn('Could not save conceptualization result as JSON:', err);
+		}
+
 		// Track token usage
-		await trackTokenUsage(
-			result.data,
-			{
-				source: metadata.source,
-				source_type: metadata.source_type,
-				operation_type: 'conceptualization',
-				processing_batch_id: metadata.processing_batch_id,
-				operation_context: {
-					entities_count: input.entities.length,
-					events_count: input.events.length,
-					relationships_count: input.relationships.length,
-					context_triples_count: input.contextTriples?.length || 0,
-					generated_concepts_count: result.data.data.concepts.length,
-					generated_relationships_count: result.data.data.relationships.length,
-				},
+		const tokenUsage = await trackTokenUsage(result.data, {
+			source: metadata.source,
+			source_type: metadata.source_type,
+			operation_type: 'conceptualization',
+			operation_context: {
+				entities_count: input.entities.length,
+				events_count: input.events.length,
+				relationships_count: input.relationships.length,
+				context_triples_count: input.contextTriples?.length || 0,
+				generated_concepts_count: result.data.data.concepts.length,
+				generated_relationships_count: result.data.data.relationships.length,
 			},
-			config.ai
-		);
+		});
 
 		const { concepts: conceptData, relationships: relationshipData } = result.data.data;
 		const now = new Date().toISOString();
 
 		// Convert to ConceptNode format
-		const concepts: ConceptNode[] = conceptData.map(concept => ({
+		const concepts = conceptData.map(concept => ({
 			concept: concept.concept,
 			abstraction_level: concept.abstraction_level,
 			confidence: concept.confidence,
 			source: metadata.source,
 			source_type: metadata.source_type,
 			extracted_at: now,
-			processing_batch_id: metadata.processing_batch_id,
 		}));
 
 		// Convert to ConceptualizationRelationship format
-		const conceptualizations: ConceptualizationRelationship[] = relationshipData.map(rel => ({
+		const conceptualizations = relationshipData.map(rel => ({
 			source_element: rel.source_element,
-			entity_type: rel.entity_type as EntityType,
+			entity_type: rel.entity_type,
 			concept: rel.concept,
 			confidence: rel.confidence,
 			context_triples: input.contextTriples,
 			source: metadata.source,
 			source_type: metadata.source_type,
 			extracted_at: now,
-			processing_batch_id: metadata.processing_batch_id,
 		}));
 
 		return {
@@ -112,6 +108,7 @@ export async function generateConcepts(
 			data: {
 				concepts,
 				relationships: conceptualizations,
+				tokenUsage,
 			},
 		};
 	} catch (error) {
@@ -129,7 +126,7 @@ export async function generateConcepts(
 /**
  * Extract entities and events from knowledge triples for conceptualization
  */
-export function extractElementsFromTriples(triples: KnowledgeTriple[]): ConceptualizationInput {
+export function extractElementsFromTriples(triples: Triple[]): ConceptualizationInput {
 	const entities = new Set<string>();
 	const events = new Set<string>();
 	const relationships = new Set<string>();
@@ -142,22 +139,22 @@ export function extractElementsFromTriples(triples: KnowledgeTriple[]): Conceptu
 
 		// Extract entities and events based on triple type
 		switch (triple.type) {
-			case 'entity-entity':
+			case 'ENTITY_ENTITY':
 				entities.add(triple.subject);
 				entities.add(triple.object);
 				relationships.add(triple.predicate);
 				break;
-			case 'entity-event':
+			case 'ENTITY_EVENT':
 				entities.add(triple.subject);
 				events.add(triple.object);
 				relationships.add(triple.predicate);
 				break;
-			case 'event-event':
+			case 'EVENT_EVENT':
 				events.add(triple.subject);
 				events.add(triple.object);
 				relationships.add(triple.predicate);
 				break;
-			case 'emotional-context':
+			case 'EMOTIONAL_CONTEXT':
 				// Treat emotional context as events
 				events.add(triple.subject);
 				events.add(triple.object);
@@ -195,7 +192,7 @@ For each conceptualization relationship, specify:
 Generate concepts that would be useful for organizing and searching this knowledge.`;
 }
 
-function generateTripleId(triple: KnowledgeTriple): string {
+function generateTripleId(triple: Triple): string {
 	const key = `${triple.subject}|${triple.predicate}|${triple.object}|${triple.type}`;
 	return Buffer.from(key).toString('base64').replace(/[+/=]/g, '_');
 }

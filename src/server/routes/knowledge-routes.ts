@@ -5,7 +5,7 @@
 
 import { type Request, type Response, Router } from 'express';
 import { z } from 'zod';
-import type { RoutesDependencies } from '~/shared/types';
+
 // Import unified tool functions
 import {
 	getKnowledgeGraphStats,
@@ -15,16 +15,16 @@ import {
 } from '../transport-manager';
 
 // Zod validation schemas
-const processKnowledgeSchema = z.object({
+export const processKnowledgeSchema = z.object({
 	text: z.string().min(1, 'Text is required'),
 	source: z.string().min(1, 'Source is required'),
-	thread_id: z.string().optional(),
-	source_date: z.string().datetime().optional(),
-	processing_batch_id: z.string().optional(),
+	source_type: z.string().min(1, 'Source type is required'),
+	source_date: z.string().datetime('Source date is required'),
+
 	include_concepts: z.boolean().optional().default(false),
 });
 
-const searchKnowledgeSchema = z.object({
+export const searchKnowledgeSchema = z.object({
 	query: z.string().min(1, 'Query is required'),
 	limit: z.number().int().min(1).max(100).optional().default(10),
 	threshold: z.number().min(0).max(1).optional().default(0.0),
@@ -39,7 +39,7 @@ const searchKnowledgeSchema = z.object({
 		.optional(),
 });
 
-const searchConceptsSchema = z.object({
+export const searchConceptsSchema = z.object({
 	query: z.string().min(1, 'Query is required'),
 	abstraction: z.enum(['high', 'medium', 'low']).optional(),
 });
@@ -86,9 +86,8 @@ const createSuccessResponse = (data: any, operation: string) => ({
 	timestamp: new Date().toISOString(),
 });
 
-export function createKnowledgeRoutes(dependencies: RoutesDependencies): Router {
+export function createKnowledgeRoutes(): Router {
 	const router = Router();
-	const { config, db, embeddingService, aiProvider } = dependencies;
 
 	// POST /process-knowledge - Extract and store knowledge from text
 	router.post(
@@ -96,25 +95,8 @@ export function createKnowledgeRoutes(dependencies: RoutesDependencies): Router 
 		validateSchema(processKnowledgeSchema),
 		async (req: Request, res: Response) => {
 			try {
-				const {
-					text,
-					source,
-					thread_id,
-					source_date,
-					processing_batch_id = `batch_${Date.now()}`,
-					include_concepts = false,
-				} = req.body;
 
-				// Note: metadata is not actually used in the current implementation
-				// but is kept for potential future use
-
-				// Use the unified processKnowledge function
-				const result = await processKnowledge(req.body, {
-					config,
-					db,
-					embeddingService,
-					aiProvider,
-				});
+				const result = await processKnowledge(req.body);
 
 				if (!result.success) {
 					return res.status(500).json(createErrorResponse(result.error, 'process_knowledge'));
@@ -135,12 +117,7 @@ export function createKnowledgeRoutes(dependencies: RoutesDependencies): Router 
 		async (req: Request, res: Response) => {
 			try {
 				// Use the unified searchKnowledgeGraph function
-				const result = await searchKnowledgeGraph(req.body, {
-					config,
-					db,
-					embeddingService,
-					aiProvider,
-				});
+				const result = await searchKnowledgeGraph(req.body);
 
 				if (!result.success) {
 					return res.status(500).json(createErrorResponse(result.error, 'search_knowledge_graph'));
@@ -161,12 +138,7 @@ export function createKnowledgeRoutes(dependencies: RoutesDependencies): Router 
 		async (req: Request, res: Response) => {
 			try {
 				// Use the unified searchConceptsTool function
-				const result = await searchConceptsTool(req.body, {
-					config,
-					db,
-					embeddingService,
-					aiProvider,
-				});
+				const result = await searchConceptsTool(req.body);
 
 				if (!result.success) {
 					return res.status(500).json(createErrorResponse(result.error, 'search_concepts'));
@@ -181,10 +153,9 @@ export function createKnowledgeRoutes(dependencies: RoutesDependencies): Router 
 	);
 
 	// GET /stats - Get knowledge graph statistics
-	router.get('/stats', async (req: Request, res: Response) => {
+	router.get('/stats', async (_req: Request, res: Response) => {
 		try {
-			// Use the unified getKnowledgeGraphStats function
-			const result = await getKnowledgeGraphStats({ config, db, embeddingService, aiProvider });
+			const result = await getKnowledgeGraphStats();
 
 			if (!result.success) {
 				return res.status(500).json(createErrorResponse(result.error, 'get_knowledge_graph_stats'));

@@ -1,5 +1,7 @@
+import  { Decimal } from '@prisma/client/runtime/library';
 import { db } from '../database/client';
-import type { AIConfig, AIResponseWithUsage, Result, TokenUsage } from '../types';
+import { env } from '../env';
+import type { AIResponseWithUsage } from '../types';
 
 /**
  * Context information for token tracking
@@ -8,7 +10,6 @@ export interface TokenTrackingContext {
 	source: string; // The actual identifier (thread_12345, filename.txt, etc.)
 	source_type: string; // "thread", "file", "manual", "api", etc.
 	operation_type: string; // "extraction", "conceptualization", "embedding", "search", "deduplication"
-	processing_batch_id?: string; // Batch ID for grouped processing
 	operation_context?: Record<string, any>; // Additional operation-specific context
 	tools_used?: string[]; // Array of tool names used
 }
@@ -19,18 +20,17 @@ export interface TokenTrackingContext {
  */
 export async function trackTokenUsage<T>(
 	aiResponse: AIResponseWithUsage<T>,
-	context: TokenTrackingContext,
-	config: AIConfig
-): Promise<Result<void>> {
+	context: TokenTrackingContext
+) {
 	try {
 		// Convert AIResponseWithUsage to TokenUsage format
-		const tokenUsage: TokenUsage = {
+		const tokenUsage = {
 			// Context information
 			source: context.source,
 			source_type: context.source_type,
 			operation_type: context.operation_type,
-			provider: config.provider,
-			model: config.model,
+			provider: env.AI_PROVIDER,
+			model: env.AI_MODEL,
 
 			// Standard token counts (required fields)
 			input_tokens: aiResponse.usage.promptTokens,
@@ -38,29 +38,29 @@ export async function trackTokenUsage<T>(
 			total_tokens: aiResponse.usage.totalTokens,
 
 			// Advanced token types (optional)
-			thinking_tokens: aiResponse.usage.thinkingTokens,
-			reasoning_tokens: aiResponse.usage.reasoningTokens,
-			cached_read_tokens: aiResponse.usage.cachedReadTokens,
-			cached_write_tokens: aiResponse.usage.cachedWriteTokens,
+			thinking_tokens: aiResponse.usage.thinkingTokens ?? null,
+			reasoning_tokens: aiResponse.usage.reasoningTokens ?? null,
+			cached_read_tokens: aiResponse.usage.cachedReadTokens ?? null,
+			cached_write_tokens: aiResponse.usage.cachedWriteTokens ?? null,
 
 			// Reasoning and context metadata
-			reasoning_steps: aiResponse.reasoning,
-			operation_context: context.operation_context,
+			reasoning_steps: aiResponse.reasoning ?? null,
+			operation_context: context.operation_context ?? null,
 
 			// Performance tracking
 			duration_ms: aiResponse.duration_ms || 0,
-			estimated_cost: calculateEstimatedCost(aiResponse.usage, config),
+			estimated_cost: calculateEstimatedCost(aiResponse.usage) ?? null,
 
 			// Processing context
-			processing_batch_id: context.processing_batch_id,
+
 			tools_used: context.tools_used || [],
 
 			// Timestamp (will be set by database)
-			timestamp: new Date().toISOString(),
+			timestamp: new Date(),
 		};
 
 		// Store the token usage in the database
-		return await db.tokenUsage
+		const result = await db.tokenUsage
 			.create({
 				data: {
 					source: tokenUsage.source,
@@ -79,13 +79,12 @@ export async function trackTokenUsage<T>(
 					operation_context: tokenUsage.operation_context ?? undefined,
 					duration_ms: tokenUsage.duration_ms,
 					estimated_cost: tokenUsage.estimated_cost ?? null,
-					processing_batch_id: tokenUsage.processing_batch_id,
 					tools_used: tokenUsage.tools_used || [],
 					timestamp: new Date(),
 				},
 			})
 			.then(() => ({ success: true as const, data: undefined }))
-			.catch((error: any) => ({
+			.catch(error => ({
 				success: false as const,
 				error: {
 					type: 'DATABASE_ERROR' as const,
@@ -93,15 +92,18 @@ export async function trackTokenUsage<T>(
 					cause: error,
 				},
 			}));
-	} catch (error) {
-		return {
-			success: false,
-			error: {
-				type: 'TOKEN_TRACKING_ERROR',
-				message: 'Failed to track token usage',
-				cause: error,
-			},
-		};
+
+		return tokenUsage;
+	} catch (_error) {
+		// return {
+		// 	success: false,
+		// 	error: {
+		// 		type: 'TOKEN_TRACKING_ERROR',
+		// 		message: 'Failed to track token usage',
+		// 		cause: error,
+		// 	},
+		// };
+		return null;
 	}
 }
 
@@ -109,10 +111,7 @@ export async function trackTokenUsage<T>(
  * Calculate estimated cost based on provider and model pricing
  * Returns cost in USD, or undefined if pricing information is not available
  */
-function calculateEstimatedCost(
-	usage: AIResponseWithUsage<any>['usage'],
-	config: AIConfig
-): number | undefined {
+function calculateEstimatedCost(usage: AIResponseWithUsage<any>['usage']): Decimal | undefined {
 	// Pricing information (as of 2024, subject to change)
 	const pricing: Record<string, { input: number; output: number }> = {
 		// OpenAI pricing (per 1K tokens)
@@ -130,7 +129,7 @@ function calculateEstimatedCost(
 		'claude-3-haiku-20240307': { input: 0.00025, output: 0.00125 },
 	};
 
-	const modelPricing = pricing[config.model];
+	const modelPricing = pricing[env.AI_MODEL];
 	if (!modelPricing) {
 		return undefined; // Pricing not available for this model
 	}
@@ -145,5 +144,5 @@ function calculateEstimatedCost(
 			? ((usage.thinkingTokens + usage.reasoningTokens) / 1000) * modelPricing.output
 			: 0;
 
-	return inputCost + outputCost + thinkingCost;
+	return new Decimal(inputCost + outputCost + thinkingCost);
 }

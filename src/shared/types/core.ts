@@ -1,69 +1,69 @@
-// Core domain types for the Knowledge Graph system
+// // Core domain types for the Knowledge Graph system
 
-export type TripleType = 'entity-entity' | 'entity-event' | 'event-event' | 'emotional-context';
+import type { KnowledgeTriple } from '@prisma/client';
 
-export interface KnowledgeTriple {
-	subject: string;
-	predicate: string;
-	object: string;
-	type: TripleType;
+// export type TripleType = 'entity-entity' | 'entity-event' | 'event-event' | 'emotional-context';
 
-	// Data lineage fields
-	source: string; // The actual identifier (thread_12345, filename.txt, etc.)
-	source_type: string; // "thread", "file", "manual", "api", etc.
-	source_date: string; // when conversation happened (ISO format)
-	extracted_at: string; // when relationship was extracted (ISO format)
-	processing_batch_id?: string; // batch ID for grouped processing
+// export interface KnowledgeTriple {
+// 	subject: string;
+// 	predicate: string;
+// 	object: string;
+// 	type: TripleType;
 
-	// Quality fields
-	confidence?: number;
-}
+// 	// Data lineage fields
+// 	source: string; // The actual identifier (thread_12345, filename.txt, etc.)
+// 	source_type: string; // "thread", "file", "manual", "api", etc.
+// 	source_date: string; // when conversation happened (ISO format)
+// 	extracted_at: string; // when relationship was extracted (ISO format)
 
-export interface ConceptNode {
-	// Core concept information
-	concept: string; // The conceptual phrase (e.g., "Person", "Technology", "Event")
-	abstraction_level: 'high' | 'medium' | 'low'; // Level of abstraction
-	confidence: number; // Confidence in the conceptualization
+// 	// Quality fields
+// 	confidence?: number;
+// }
 
-	// Metadata
-	source: string; // The actual identifier (thread_12345, filename.txt, etc.)
-	source_type: string; // "thread", "file", "manual", "api", etc.
-	extracted_at: string; // When the concept was extracted
-	processing_batch_id?: string; // Batch ID for grouped processing
-}
+// export interface ConceptNode {
+// 	// Core concept information
+// 	concept: string; // The conceptual phrase (e.g., "Person", "Technology", "Event")
+// 	abstraction_level: 'high' | 'medium' | 'low'; // Level of abstraction
+// 	confidence: number; // Confidence in the conceptualization
 
-export type EntityType = 'entity' | 'event' | 'relation';
+// 	// Metadata
+// 	source: string; // The actual identifier (thread_12345, filename.txt, etc.)
+// 	source_type: string; // "thread", "file", "manual", "api", etc.
+// 	extracted_at: string; // When the concept was extracted
+// }
 
-export interface ConceptualizationRelationship {
-	// The relationship between an entity/event and its concept
-	source_element: string; // The original entity or event
-	entity_type: EntityType; // Type of the source element
-	concept: string; // The concept it maps to
-	confidence: number; // Confidence in the mapping
+// export type EntityType = 'entity' | 'event' | 'relation';
 
-	// Context information
-	context_triples?: string[]; // IDs of related triples that informed this conceptualization
+// export interface ConceptualizationRelationship {
+// 	// The relationship between an entity/event and its concept
+// 	source_element: string; // The original entity or event
+// 	entity_type: EntityType; // Type of the source element
+// 	concept: string; // The concept it maps to
+// 	confidence: number; // Confidence in the mapping
 
-	// Metadata
-	source: string; // The actual identifier (thread_12345, filename.txt, etc.)
-	source_type: string; // "thread", "file", "manual", "api", etc.
-	extracted_at: string; // When the conceptualization was extracted
-	processing_batch_id?: string; // Batch ID for grouped processing
-}
+// 	// Context information
+// 	context_triples?: string[]; // IDs of related triples that informed this conceptualization
 
-export interface ConversationMetadata {
-	source: string; // The actual identifier (thread_12345, filename.txt, etc.)
-	source_type: string; // "thread", "file", "manual", "api", etc.
-	source_date?: string;
-	processing_batch_id?: string;
-}
+// 	// Metadata
+// 	source: string; // The actual identifier (thread_12345, filename.txt, etc.)
+// 	source_type: string; // "thread", "file", "manual", "api", etc.
+// 	extracted_at: string; // When the conceptualization was extracted
+// }
 
-export interface VectorIndex {
-	id: string;
-	text: string;
-	embedding: number[];
-	metadata?: Record<string, any>;
-}
+// export interface ConversationMetadata {
+// 	source: string; // The actual identifier (thread_12345, filename.txt, etc.)
+// 	source_type: string; // "thread", "file", "manual", "api", etc.
+// 	source_date?: string;
+// }
+
+// export interface VectorIndex {
+// 	id: string;
+// 	text: string;
+// 	embedding: number[];
+// 	metadata?: Record<string, any>;
+// }
+
+export type Triple = Omit<KnowledgeTriple, 'id' | 'created_at' | 'updated_at'>;
 
 // Token tracking types - aligned with enhanced Prisma schema
 export interface TokenUsage {
@@ -93,8 +93,7 @@ export interface TokenUsage {
 	duration_ms: number; // Request duration in milliseconds
 	estimated_cost?: number; // Estimated cost in USD
 
-	// Processing context
-	processing_batch_id?: string; // Link to processing batch if applicable
+	// Processing context // Link to processing batch if applicable
 	tools_used?: string[]; // Array of tool names used
 
 	// Timestamp

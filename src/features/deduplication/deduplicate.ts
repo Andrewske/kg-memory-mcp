@@ -1,15 +1,17 @@
-import type { DeduplicationConfig, EmbeddingService, Result } from '~/shared/types';
-import type { KnowledgeTriple } from '../../shared/types';
-import type { DeduplicationResult, SimilarityScore } from './types';
+
+import { env } from '~/shared/env';
+import type { EmbeddingService, Result } from '~/shared/types';
+import type { Triple } from '~/shared/types/core';
+import type { DeduplicationResult } from './types';
+
 
 /**
  * Deduplicate knowledge triples using exact and semantic matching
  * Pure function that takes all dependencies as parameters
  */
 export async function deduplicateTriples(
-	triples: KnowledgeTriple[],
-	embeddingService: EmbeddingService,
-	config: DeduplicationConfig
+	triples: Triple[],
+	embeddingService: EmbeddingService
 ): Promise<Result<DeduplicationResult>> {
 	try {
 		let processedTriples = [...triples];
@@ -28,14 +30,9 @@ export async function deduplicateTriples(
 		mergedMetadata.push(...exactResult.mergedMetadata);
 
 		// Step 2: Remove semantic duplicates if enabled
-		if (config.enableSemanticDeduplication) {
-			const semanticResult = await removeSemanticDuplicates(
-				processedTriples,
-				embeddingService,
-				config
-			);
-
-			if (semanticResult.success) {
+		if (env.ENABLE_SEMANTIC_DEDUP) {
+			const semanticResult = await removeSemanticDuplicates(processedTriples, embeddingService);
+			if (semanticResult.success && semanticResult.data) {
 				processedTriples = semanticResult.data.uniqueTriples;
 				semanticDuplicatesRemoved = semanticResult.data.duplicatesCount;
 				mergedMetadata.push(...semanticResult.data.mergedMetadata);
@@ -65,16 +62,8 @@ export async function deduplicateTriples(
 /**
  * Remove exact duplicate triples based on subject, predicate, object, and type
  */
-export function removeExactDuplicates(triples: KnowledgeTriple[]): {
-	uniqueTriples: KnowledgeTriple[];
-	duplicatesCount: number;
-	mergedMetadata: Array<{
-		originalId: string;
-		mergedIntoId: string;
-		reason: 'exact';
-	}>;
-} {
-	const uniqueMap = new Map<string, KnowledgeTriple>();
+export function removeExactDuplicates(triples: Triple[]) {
+	const uniqueMap = new Map<string, Triple>();
 	const mergedMetadata: Array<{
 		originalId: string;
 		mergedIntoId: string;
@@ -111,33 +100,25 @@ export function removeExactDuplicates(triples: KnowledgeTriple[]): {
  * Remove semantic duplicates using embedding similarity
  */
 export async function removeSemanticDuplicates(
-	triples: KnowledgeTriple[],
-	embeddingService: EmbeddingService,
-	config: DeduplicationConfig
-): Promise<
-	Result<{
-		uniqueTriples: KnowledgeTriple[];
-		duplicatesCount: number;
-		mergedMetadata: Array<{
-			originalId: string;
-			mergedIntoId: string;
-			reason: 'semantic';
-		}>;
-	}>
-> {
+	triples: Triple[],
+	embeddingService: EmbeddingService
+) {
 	try {
 		// Generate embeddings for all triples
 		const tripleTexts = triples.map(
 			triple => `${triple.subject} ${triple.predicate} ${triple.object}`
 		);
 
-		const embeddingResult = await embeddingService.embedBatch(tripleTexts);
+		const embeddingResult = await embeddingService.embedBatch(tripleTexts, {
+			source_type: triples[0].source_type,
+			source: triples[0].source,
+		});
 		if (!embeddingResult.success) {
 			return embeddingResult;
 		}
 
 		const embeddings = embeddingResult.data;
-		const uniqueTriples: KnowledgeTriple[] = [];
+		const uniqueTriples = [];
 		const mergedMetadata: Array<{
 			originalId: string;
 			mergedIntoId: string;
@@ -160,7 +141,7 @@ export async function removeSemanticDuplicates(
 
 				const similarity = calculateCosineSimilarity(currentEmbedding, embeddings[j]);
 
-				if (similarity >= config.semanticSimilarityThreshold) {
+				if (similarity >= env.SEMANTIC_THRESHOLD) {
 					// Merge the similar triple
 					bestMatch = mergeTripleMetadata(bestMatch, triples[j]);
 					processedIndices.add(j);
@@ -198,23 +179,26 @@ export async function removeSemanticDuplicates(
 }
 
 // Helper functions
-function createTripleKey(triple: KnowledgeTriple): string {
+function createTripleKey(triple: Triple) {
 	return `${triple.subject}|${triple.predicate}|${triple.object}|${triple.type}`;
 }
 
-function generateTripleId(triple: KnowledgeTriple): string {
+function generateTripleId(triple: Triple): string {
 	const key = createTripleKey(triple);
 	return Buffer.from(key).toString('base64').replace(/[+/=]/g, '_');
 }
 
 function mergeTripleMetadata(
-	existing: KnowledgeTriple,
-	duplicate: KnowledgeTriple
-): KnowledgeTriple {
-	// Merge metadata, preferring higher confidence and more recent dates
+	existing: Triple,
+	duplicate: Triple
+){
 	return {
 		...existing,
-		confidence: Math.max(existing.confidence || 0, duplicate.confidence || 0),
+		confidence: existing.confidence && duplicate.confidence
+			? existing.confidence.greaterThan(duplicate.confidence)
+				? existing.confidence
+				: duplicate.confidence
+			: existing.confidence || duplicate.confidence,
 		extracted_at:
 			existing.extracted_at > duplicate.extracted_at
 				? existing.extracted_at

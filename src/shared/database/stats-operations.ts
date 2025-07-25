@@ -1,6 +1,6 @@
-import type { Result, TokenUsage, TripleType } from '~/shared/types';
+import type { TokenUsage, TripleType } from '@prisma/client';
+import type { Result } from '~/shared/types';
 import { db } from './client';
-import { unmapTripleType } from './database-utils';
 
 /**
  * Get total count of knowledge triples
@@ -37,25 +37,24 @@ export async function getTripleCountByType(): Promise<Record<TripleType, number>
 		});
 
 		const result: Record<TripleType, number> = {
-			'entity-entity': 0,
-			'entity-event': 0,
-			'event-event': 0,
-			'emotional-context': 0,
+			ENTITY_ENTITY: 0,
+			ENTITY_EVENT: 0,
+			EVENT_EVENT: 0,
+			EMOTIONAL_CONTEXT: 0,
 		};
 
 		counts.forEach(({ type, _count }) => {
-			const mappedType = unmapTripleType(type);
-			result[mappedType] = _count;
+			result[type] = _count;
 		});
 
 		return result;
 	} catch (error) {
 		console.error('Error getting triple count by type:', error);
 		return {
-			'entity-entity': 0,
-			'entity-event': 0,
-			'event-event': 0,
-			'emotional-context': 0,
+			ENTITY_ENTITY: 0,
+			ENTITY_EVENT: 0,
+			EVENT_EVENT: 0,
+			EMOTIONAL_CONTEXT: 0,
 		};
 	}
 }
@@ -83,7 +82,6 @@ export async function storeTokenUsage(usage: TokenUsage): Promise<Result<void>> 
 				operation_context: usage.operation_context ?? undefined,
 				duration_ms: usage.duration_ms,
 				estimated_cost: usage.estimated_cost ?? null,
-				processing_batch_id: usage.processing_batch_id,
 				tools_used: usage.tools_used || [],
 				timestamp: new Date(),
 			},
@@ -149,36 +147,9 @@ export async function getTokenUsage(filters?: {
 			orderBy: { timestamp: 'desc' },
 		});
 
-		const mappedUsage: TokenUsage[] = usageRecords.map(record => ({
-			source: record.source,
-			source_type: record.source_type,
-			operation_type: record.operation_type,
-			provider: record.provider,
-			model: record.model,
-			input_tokens: record.input_tokens,
-			output_tokens: record.output_tokens,
-			total_tokens: record.total_tokens,
-			thinking_tokens: record.thinking_tokens ?? undefined,
-			reasoning_tokens: record.reasoning_tokens ?? undefined,
-			cached_read_tokens: record.cached_read_tokens ?? undefined,
-			cached_write_tokens: record.cached_write_tokens ?? undefined,
-			reasoning_steps: Array.isArray(record.reasoning_steps)
-				? (record.reasoning_steps as any[])
-				: undefined,
-			operation_context:
-				record.operation_context && typeof record.operation_context === 'object'
-					? (record.operation_context as Record<string, any>)
-					: undefined,
-			duration_ms: record.duration_ms,
-			estimated_cost: record.estimated_cost ? Number(record.estimated_cost) : undefined,
-			processing_batch_id: record.processing_batch_id ?? undefined,
-			tools_used: record.tools_used,
-			timestamp: record.timestamp.toISOString(),
-		}));
-
 		return {
 			success: true,
-			data: mappedUsage,
+			data: usageRecords,
 		};
 	} catch (error) {
 		return {

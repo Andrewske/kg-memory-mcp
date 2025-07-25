@@ -1,20 +1,18 @@
-import type { KnowledgeTriple, Result, SearchOptions } from '~/shared/types';
+import type { Result, SearchOptions } from '~/shared/types';
+import type { Triple } from '~/shared/types/core';
 import { db } from './client';
-import {
-	buildTemporalFilter,
-	buildVectorSearchParams,
-	convertTripleTypesForFilter,
-	mapPrismaTriple,
-	unmapTripleType,
-} from './database-utils';
+import { buildTemporalFilter, buildVectorSearchParams } from './database-utils';
 
 /**
  * Search triples by text content
  */
-export async function searchByText(query: string, searchType: string): Promise<Result<KnowledgeTriple[]>> {
+export async function searchByText(
+	query: string,
+	searchType: string
+): Promise<Result<Triple[]>> {
 	try {
 		// Simple text search - in real implementation, this would use full-text search
-		const triples = await db.knowledgeTriple.findMany({
+		const results = await db.knowledgeTriple.findMany({
 			where: {
 				OR: [
 					{ subject: { contains: query, mode: 'insensitive' } },
@@ -27,7 +25,7 @@ export async function searchByText(query: string, searchType: string): Promise<R
 
 		return {
 			success: true,
-			data: triples.map(mapPrismaTriple),
+			data: results,
 		};
 	} catch (error) {
 		return {
@@ -49,7 +47,7 @@ export async function searchByEmbedding(
 	topK: number,
 	minScore: number,
 	options?: SearchOptions
-): Promise<Result<KnowledgeTriple[]>> {
+): Promise<Result<Triple[]>> {
 	try {
 		console.log(
 			`[DB DEBUG] searchByEmbedding: topK=${topK}, minScore=${minScore}, embedding length=${embedding.length}`
@@ -59,7 +57,7 @@ export async function searchByEmbedding(
 		const { whereClause, params } = buildVectorSearchParams(embedding, topK, minScore, {
 			temporal: options?.temporal,
 			sources: options?.sources,
-			types: options?.types,
+			types: options?.types ? [options.types] : undefined,
 		});
 
 		// Perform vector similarity search using semantic vectors
@@ -92,25 +90,9 @@ export async function searchByEmbedding(
 			};
 		}
 
-		// Map results to KnowledgeTriple format
-		const triples = results.map((row: any) => ({
-			subject: row.subject,
-			predicate: row.predicate,
-			object: row.object,
-			type: unmapTripleType(row.type),
-			source: row.source,
-			source_type: row.source_type,
-			source_date: row.source_date?.toISOString(),
-			extracted_at: row.extracted_at.toISOString(),
-			processing_batch_id: row.processing_batch_id,
-			confidence: row.confidence,
-			// Add similarity score for debugging
-			_similarity: row.similarity,
-		}));
-
 		return {
 			success: true,
-			data: triples,
+			data: results,
 		};
 	} catch (error) {
 		console.error('Vector search error:', error);
@@ -132,7 +114,7 @@ export async function searchByEntity(
 	entityQuery: string,
 	topK: number,
 	options?: SearchOptions
-): Promise<Result<KnowledgeTriple[]>> {
+): Promise<Result<Triple[]>> {
 	try {
 		// Build filter conditions
 		const whereConditions: any = {};
@@ -148,7 +130,7 @@ export async function searchByEntity(
 
 		// Add type filtering
 		if (options?.types && options.types.length > 0) {
-			const enumTypes = convertTripleTypesForFilter(options.types);
+			const enumTypes = options.types;
 			whereConditions.type = { in: enumTypes };
 		}
 
@@ -172,7 +154,7 @@ export async function searchByEntity(
 
 		return {
 			success: true,
-			data: triples.map(mapPrismaTriple),
+			data: triples,
 		};
 	} catch (error) {
 		return {
@@ -193,7 +175,7 @@ export async function searchByRelationship(
 	relationshipQuery: string,
 	topK: number,
 	options?: SearchOptions
-): Promise<Result<KnowledgeTriple[]>> {
+): Promise<Result<Triple[]>> {
 	try {
 		// Build filter conditions
 		const whereConditions: any = {};
@@ -209,7 +191,7 @@ export async function searchByRelationship(
 
 		// Add type filtering
 		if (options?.types && options.types.length > 0) {
-			const enumTypes = convertTripleTypesForFilter(options.types);
+			const enumTypes = options.types;
 			whereConditions.type = { in: enumTypes };
 		}
 
@@ -232,7 +214,7 @@ export async function searchByRelationship(
 
 		return {
 			success: true,
-			data: triples.map(mapPrismaTriple),
+			data: triples,
 		};
 	} catch (error) {
 		return {
@@ -253,7 +235,7 @@ export async function searchByConcept(
 	conceptQuery: string,
 	topK: number,
 	options?: SearchOptions
-): Promise<Result<KnowledgeTriple[]>> {
+): Promise<Result<Triple[]>> {
 	try {
 		// Build filter conditions for joins
 		let whereClause = '1=1';
@@ -281,7 +263,7 @@ export async function searchByConcept(
 
 		// Add type filtering
 		if (options?.types && options.types.length > 0) {
-			const enumTypes = convertTripleTypesForFilter(options.types);
+			const enumTypes = options.types;
 			whereClause += ` AND kt.type = ANY($${++paramIndex})`;
 			params.push(enumTypes);
 		}
@@ -310,25 +292,9 @@ export async function searchByConcept(
 			};
 		}
 
-		// Map results to KnowledgeTriple format
-		const triples = results.map((row: any) => ({
-			subject: row.subject,
-			predicate: row.predicate,
-			object: row.object,
-			type: unmapTripleType(row.type),
-			source: row.source,
-			source_type: row.source_type,
-			source_date: row.source_date?.toISOString(),
-			extracted_at: row.extracted_at.toISOString(),
-			processing_batch_id: row.processing_batch_id,
-			confidence: row.confidence,
-			// Add concept confidence for debugging
-			_concept_confidence: row.concept_confidence,
-		}));
-
 		return {
 			success: true,
-			data: triples,
+			data: results,
 		};
 	} catch (error) {
 		console.error('Concept search error:', error);

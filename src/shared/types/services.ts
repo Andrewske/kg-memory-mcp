@@ -1,16 +1,15 @@
 // Service interface types for dependency injection
 
-import type { z } from 'zod';
-import type { AIConfig } from './config';
 import type {
-	AIResponseWithUsage,
 	ConceptNode,
 	ConceptualizationRelationship,
-	EntityType,
-	KnowledgeTriple,
 	TokenUsage,
 	TripleType,
-} from './core';
+} from '@prisma/client';
+import type { z } from 'zod';
+import type { AIResponseWithUsage } from '~/shared/types';
+import type { AIConfig } from './config';
+import type { Triple } from './core';
 import type { SearchOptions } from './search';
 
 // Result type for consistent error handling
@@ -25,35 +24,35 @@ export interface OperationError {
 // Service interfaces for dependency injection
 export interface DatabaseAdapter {
 	// Triple operations
-	storeTriples(triples: KnowledgeTriple[]): Promise<Result<void>>;
+	storeTriples(triples: Triple[]): Promise<Result<void>>;
 	checkExistingTriples(ids: string[]): Promise<string[]>;
 	tripleExists(id: string): Promise<boolean>;
-	getTriplesByIds(ids: string[]): Promise<KnowledgeTriple[]>;
-	getAllTriples(): Promise<Result<KnowledgeTriple[]>>;
-	searchByText(query: string, searchType: string): Promise<Result<KnowledgeTriple[]>>;
+	getTriplesByIds(ids: string[]): Promise<Triple[]>;
+	getAllTriples(): Promise<Result<Triple[]>>;
+	searchByText(query: string, searchType: string): Promise<Result<Triple[]>>;
 	searchByEmbedding(
 		embedding: number[],
 		topK: number,
 		minScore: number,
 		options?: SearchOptions
-	): Promise<Result<KnowledgeTriple[]>>;
+	): Promise<Result<Triple[]>>;
 
 	// Multi-index search methods
 	searchByEntity(
 		entityQuery: string,
 		topK: number,
 		options?: SearchOptions
-	): Promise<Result<KnowledgeTriple[]>>;
+	): Promise<Result<Triple[]>>;
 	searchByRelationship(
 		relationshipQuery: string,
 		topK: number,
 		options?: SearchOptions
-	): Promise<Result<KnowledgeTriple[]>>;
+	): Promise<Result<Triple[]>>;
 	searchByConcept(
 		conceptQuery: string,
 		topK: number,
 		options?: SearchOptions
-	): Promise<Result<KnowledgeTriple[]>>;
+	): Promise<Result<Triple[]>>;
 
 	// Vector-based search methods for fusion search
 	searchByEntityVector(
@@ -61,13 +60,13 @@ export interface DatabaseAdapter {
 		topK: number,
 		minScore: number,
 		options?: SearchOptions
-	): Promise<Result<KnowledgeTriple[]>>;
+	): Promise<Result<Triple[]>>;
 	searchByRelationshipVector(
 		embedding: number[],
 		topK: number,
 		minScore: number,
 		options?: SearchOptions
-	): Promise<Result<KnowledgeTriple[]>>;
+	): Promise<Result<Triple[]>>;
 
 	// Concept operations
 	storeConcepts(concepts: ConceptNode[]): Promise<Result<void>>;
@@ -81,12 +80,9 @@ export interface DatabaseAdapter {
 
 	// Conceptualization relationship operations
 	storeConceptualizations(relationships: ConceptualizationRelationship[]): Promise<Result<void>>;
-	getConceptualizationsByElement(
-		element: string,
-		sourceType?: 'entity' | 'event' | 'relation'
-	): Promise<ConceptualizationRelationship[]>;
+
 	getConceptualizationsByConcept(concept: string): Promise<ConceptualizationRelationship[]>;
-	getTriplesByConceptualization(concept: string): Promise<KnowledgeTriple[]>;
+	getTriplesByConceptualization(concept: string): Promise<Triple[]>;
 
 	// Vector operations
 	storeVectors(vectors: {
@@ -136,13 +132,10 @@ export interface DatabaseAdapter {
 }
 
 export interface EmbeddingService {
-	embed(
-		text: string,
-		context?: { operation_type?: string; thread_id?: string }
-	): Promise<Result<number[]>>;
+	embed(text: string): Promise<Result<number[]>>;
 	embedBatch(
 		texts: string[],
-		context?: { operation_type?: string; thread_id?: string }
+		context?: { source_type?: string; source?: string }
 	): Promise<Result<number[][]>>;
 }
 
@@ -155,9 +148,8 @@ export interface AIProvider {
 			operation_type?: string;
 			source?: string;
 			source_type?: string;
-			entity_type?: EntityType;
+			triple_type?: TripleType;
 			source_date?: string;
-			processing_batch_id?: string;
 		}
 	): Promise<Result<AIResponseWithUsage<T>>>;
 
@@ -167,7 +159,6 @@ export interface AIProvider {
 		context?: {
 			operation_type?: string;
 			thread_id?: string;
-			processing_batch_id?: string;
 		}
 	): Promise<Result<AIResponseWithUsage<string>>>;
 }

@@ -2,26 +2,29 @@ import { anthropic } from '@ai-sdk/anthropic';
 import { openai } from '@ai-sdk/openai';
 import { generateObject, generateText } from 'ai';
 import type { z } from 'zod';
+import { env } from '../env';
 import type { AIConfig, AIProvider, AIResponseWithUsage, Result } from '../types';
 
 /**
  * AI provider service implementation with comprehensive token tracking
  * Supports both OpenAI and Anthropic models with advanced token extraction
  */
-export function createAIProvider(config: AIConfig): AIProvider {
+export function createAIProvider(): AIProvider {
+
+	const defaultConfig = {
+		model: env.AI_MODEL,
+		temperature: env.AI_TEMPERATURE,
+		maxTokens: env.AI_MAX_TOKENS,
+		provider: env.AI_PROVIDER,
+	};
 	return {
 		async generateObject<T>(
 			prompt: string,
 			schema: z.ZodType<T>,
 			overrideConfig?: Partial<AIConfig>,
-			context?: {
-				operation_type?: string;
-				thread_id?: string;
-				processing_batch_id?: string;
-			}
 		): Promise<Result<AIResponseWithUsage<T>>> {
 			try {
-				const modelConfig = { ...config, ...overrideConfig };
+				const modelConfig = { ...defaultConfig, ...overrideConfig };
 				const model = getModel(modelConfig);
 
 				const startTime = Date.now();
@@ -59,14 +62,9 @@ export function createAIProvider(config: AIConfig): AIProvider {
 		async generateText(
 			prompt: string,
 			overrideConfig?: Partial<AIConfig>,
-			context?: {
-				operation_type?: string;
-				thread_id?: string;
-				processing_batch_id?: string;
-			}
 		): Promise<Result<AIResponseWithUsage<string>>> {
 			try {
-				const modelConfig = { ...config, ...overrideConfig };
+				const modelConfig = { ...defaultConfig, ...overrideConfig };
 				const model = getModel(modelConfig);
 
 				const startTime = Date.now();

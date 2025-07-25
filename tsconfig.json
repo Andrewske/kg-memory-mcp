@@ -19,7 +19,7 @@
 			"~/*": ["./src/*"]
 		}
 	},
-	"include": ["src/**/*"],
+	"include": ["src/**/*", "src/api/**/*"],
 	"exclude": ["node_modules", "dist", "prisma", ".ignore"],
 	"tsc-alias": {
 		"resolveFullPaths": true,

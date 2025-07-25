@@ -3,87 +3,70 @@
  * Provides shared tool handling logic across different transports
  */
 
+import type { ConceptNode } from '@prisma/client';
 import { deduplicateTriples } from '~/features/deduplication/deduplicate';
 import { extractKnowledgeTriples } from '~/features/knowledge-extraction/extract';
+import type { FusionSearchResult } from '~/features/knowledge-graph/fusion-search';
 import { searchFusion } from '~/features/knowledge-graph/fusion-search';
 import { getStats, storeTriples } from '~/features/knowledge-graph/operations';
 import { searchConcepts } from '~/features/knowledge-graph/search';
+import { createDatabaseAdapter } from '~/shared/database/database-adapter';
+import { env } from '~/shared/env';
+import { createEmbeddingService } from '~/shared/services/embedding-service';
+import type { GraphStats, ToolResult } from '~/shared/types';
 
-import type { ToolDependencies, ToolResult } from '~/shared/types';
+
+export type ProcessKnowledgeArgs = {
+	text: string;
+	source: string;
+	source_type: string;
+	source_date: string;
+
+};
 
 /**
  * Extract and store knowledge triples from text
  */
-export async function processKnowledge(
-	args: {
-		text: string;
-		source: string;
-		source_type: string;
-		source_date: string;
-		processing_batch_id?: string;
-		include_concepts?: boolean;
-	},
-	dependencies: ToolDependencies
-): Promise<ToolResult> {
+export async function processKnowledge(args: ProcessKnowledgeArgs): Promise<ToolResult> {
 	try {
 		const startTime = Date.now();
-		const {
-			text,
-			source,
-			source_type,
-			source_date,
-			processing_batch_id = `batch_${Date.now()}`,
-			include_concepts = false,
-		} = args;
 
 		console.debug('[ProcessKnowledge] Starting with:', {
-			textLength: text.length,
-			source,
-			source_type,
-			include_concepts,
-			processing_batch_id,
+			textLength: args.text.length,
+			source: args.source,
+			source_type: args.source_type,
 		});
 
-		const metadata = {
-			source,
-			source_type, // Assume thread type for transport-manager
-			source_date,
-			processing_batch_id,
-		};
 
-		const { config, db, embeddingService, aiProvider } = dependencies;
 
+		const db = createDatabaseAdapter();
+		const embeddingService = createEmbeddingService({
+			model: env.EMBEDDING_MODEL,
+			dimensions: env.EMBEDDING_DIMENSIONS,
+			batchSize: env.BATCH_SIZE,
+		});
+	
 		// Extract knowledge
 		console.debug('[ProcessKnowledge] Extracting triples...');
-		const extractionResult = await extractKnowledgeTriples(
-			text,
-			metadata,
-			aiProvider,
-			config,
-			false
-		);
-		if (!extractionResult.success) {
+		const extractionResult = await extractKnowledgeTriples(args);
+		if (!extractionResult.success || !extractionResult.data) {
 			console.error('[ProcessKnowledge] Extraction failed:', extractionResult.error);
 			return {
 				success: false,
 				error: {
-					message: extractionResult.error.message,
+					message: extractionResult.error?.message ?? 'Unknown error',
 					operation: 'knowledge_extraction',
 				},
 			};
 		}
 
-		let { triples } = extractionResult.data;
+		let { triples } = extractionResult.data 
 		console.debug(`[ProcessKnowledge] Extracted ${triples.length} triples`);
 
 		// Always deduplicate triples
 		if (triples.length > 0) {
 			console.debug('[ProcessKnowledge] Deduplicating triples...');
-			const deduplicationResult = await deduplicateTriples(
-				triples,
-				embeddingService,
-				config.deduplication
-			);
+			const deduplicationResult = await deduplicateTriples(triples, embeddingService);
 			if (deduplicationResult.success) {
 				const originalCount = triples.length;
 				triples = deduplicationResult.data.uniqueTriples;
@@ -95,7 +78,7 @@ export async function processKnowledge(
 
 		// Store triples with vector generation
 		console.debug('[ProcessKnowledge] Storing triples...');
-		const storeResult = await storeTriples(triples, db, config, embeddingService);
+		const storeResult = await storeTriples(triples, db, embeddingService);
 		if (!storeResult.success) {
 			console.error('[ProcessKnowledge] Storage failed:', storeResult.error);
 			return {
@@ -108,7 +91,7 @@ export async function processKnowledge(
 		}
 
 		// Queue background conceptualization if requested
-		if (include_concepts && triples.length > 0) {
+		if (triples.length > 0) {
 			setImmediate(async () => {
 				try {
 					console.log(`[Background] Starting conceptualization for ${triples.length} triples...`);
@@ -117,19 +100,16 @@ export async function processKnowledge(
 						'~/features/conceptualization/conceptualize'
 					);
 					const conceptInput = extractElementsFromTriples(triples);
-					const conceptualizeResult = await generateConcepts(
-						conceptInput,
-						metadata,
-						aiProvider,
-						config
-					);
+					const conceptualizeResult = await generateConcepts(conceptInput, {
+						source: args.source,
+						source_type: args.source_type,
+					});
 
 					if (conceptualizeResult.success && conceptualizeResult.data.concepts.length > 0) {
 						const { storeConcepts } = await import('~/features/knowledge-graph/operations');
 						const conceptResult = await storeConcepts(
 							conceptualizeResult.data.concepts,
 							db,
-							config,
 							embeddingService // Enable concept vector generation
 						);
 
@@ -164,15 +144,18 @@ export async function processKnowledge(
 		const duration = Date.now() - startTime;
 		console.debug(`[ProcessKnowledge] Completed in ${duration}ms`, {
 			triplesStored: triples.length,
-			conceptsQueued: include_concepts && triples.length > 0,
+			conceptsQueued: triples.length > 0,
 		});
 
 		return {
 			success: true,
 			data: {
 				triplesStored: triples.length,
-				conceptsStored: include_concepts ? 'processing in background' : 0,
-				metadata,
+				conceptsStored: 'processing in background',
+				metadata: {
+					source: args.source,
+					source_type: args.source_type,
+				},
 			},
 		};
 	} catch (error) {
@@ -190,33 +173,20 @@ export async function processKnowledge(
 /**
  * Search the knowledge graph using fusion search
  */
-export async function searchKnowledgeGraph(
-	args: {
-		query: string;
-		limit?: number;
-		threshold?: number;
-		searchTypes?: ('entity' | 'relationship' | 'semantic' | 'concept')[];
-		weights?: {
-			entity?: number;
-			relationship?: number;
-			semantic?: number;
-			concept?: number;
-		};
-	},
-	dependencies: ToolDependencies
-): Promise<ToolResult> {
+export async function searchKnowledgeGraph(args: {
+	query: string;
+	limit?: number;
+	threshold?: number;
+	searchTypes?: ('entity' | 'relationship' | 'semantic' | 'concept')[];
+	weights?: {
+		entity?: number;
+		relationship?: number;
+		semantic?: number;
+		concept?: number;
+	};
+}): Promise<ToolResult<FusionSearchResult[]>> {
 	try {
 		const { query, limit = 10, threshold = 0.0, searchTypes, weights } = args;
-		const { config, db, embeddingService } = dependencies;
-
-		const searchConfig = {
-			...config,
-			search: {
-				...config.search,
-				topK: limit,
-				minScore: threshold,
-			},
-		};
 
 		const searchOptions = {
 			limit,
@@ -226,7 +196,7 @@ export async function searchKnowledgeGraph(
 		};
 
 		// Use fusion search as default
-		const result = await searchFusion(query, db, embeddingService, searchConfig, searchOptions);
+		const result = await searchFusion(query, searchOptions);
 
 		if (!result.success) {
 			return {
@@ -256,16 +226,13 @@ export async function searchKnowledgeGraph(
 /**
  * Search for concepts in the knowledge graph
  */
-export async function searchConceptsTool(
-	args: {
-		query: string;
-		abstraction?: string;
-	},
-	dependencies: ToolDependencies
-): Promise<ToolResult> {
+export async function searchConceptsTool(args: {
+	query: string;
+	abstraction?: string;
+}): Promise<ToolResult<ConceptNode[]>> {
 	try {
 		const { query, abstraction } = args;
-		const { db } = dependencies;
+		const db = createDatabaseAdapter();
 
 		const result = await searchConcepts(query, db, abstraction);
 
@@ -297,9 +264,9 @@ export async function searchConceptsTool(
 /**
  * Get knowledge graph statistics
  */
-export async function getKnowledgeGraphStats(dependencies: ToolDependencies): Promise<ToolResult> {
+export async function getKnowledgeGraphStats(): Promise<ToolResult<GraphStats>> {
 	try {
-		const { db } = dependencies;
+		const db = createDatabaseAdapter();
 
 		const result = await getStats(db);
 
@@ -331,27 +298,23 @@ export async function getKnowledgeGraphStats(dependencies: ToolDependencies): Pr
 /**
  * Tool dispatcher that maps tool names to functions
  */
-export async function executeToolFunction(
-	toolName: string,
-	args: any,
-	dependencies: ToolDependencies
-): Promise<ToolResult> {
+export async function executeToolFunction(toolName: string, args: any): Promise<ToolResult<any>> {
 	const startTime = Date.now();
 	console.debug(`[ToolDispatcher] Executing ${toolName}...`);
 
 	let result: ToolResult;
 	switch (toolName) {
 		case 'process_knowledge':
-			result = await processKnowledge(args, dependencies);
+			result = await processKnowledge(args);
 			break;
 		case 'search_knowledge_graph':
-			result = await searchKnowledgeGraph(args, dependencies);
+			result = await searchKnowledgeGraph(args);
 			break;
 		case 'search_concepts':
-			result = await searchConceptsTool(args, dependencies);
+			result = await searchConceptsTool(args);
 			break;
 		case 'get_knowledge_graph_stats':
-			result = await getKnowledgeGraphStats(dependencies);
+			result = await getKnowledgeGraphStats();
 			break;
 		default:
 			console.warn(`[ToolDispatcher] Unknown tool requested: ${toolName}`);
@@ -398,10 +361,6 @@ export const TOOL_DEFINITIONS = [
 				source_date: {
 					type: 'string',
 					description: 'Optional source date (ISO format)',
-				},
-				processing_batch_id: {
-					type: 'string',
-					description: 'Optional batch ID for processing',
 				},
 				include_concepts: {
 					type: 'boolean',
