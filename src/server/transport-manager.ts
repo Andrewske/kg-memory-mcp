@@ -60,7 +60,7 @@ export async function processKnowledge(args: ProcessKnowledgeArgs): Promise<Tool
 			};
 		}
 
-		let { triples } = extractionResult.data;
+		let { triples, concepts, conceptualizations } = extractionResult.data;
 		console.debug(`[ProcessKnowledge] Extracted ${triples.length} triples`);
 
 		// Always deduplicate triples
@@ -91,68 +91,69 @@ export async function processKnowledge(args: ProcessKnowledgeArgs): Promise<Tool
 		}
 
 		// Queue background conceptualization if requested
-		if (triples.length > 0) {
-			setImmediate(async () => {
-				try {
-					console.log(`[Background] Starting conceptualization for ${triples.length} triples...`);
+		// if (triples.length > 0) {
+		// 	setImmediate(async () => {
+		// 		try {
+		// 			console.log(`[Background] Starting conceptualization for ${triples.length} triples...`);
 
-					const conceptInput = extractElementsFromTriples(triples);
-					const conceptualizeResult = await generateConcepts(conceptInput, {
-						source: args.source,
-						source_type: args.source_type,
-					});
+		// 			const conceptInput = extractElementsFromTriples(triples);
+		// 			const conceptualizeResult = await generateConcepts(conceptInput, {
+		// 				source: args.source,
+		// 				source_type: args.source_type,
+		// 			});
 
-					if (!conceptualizeResult.success || !conceptualizeResult.data) {
-						console.error(
-							`[Background] Failed to conceptualize triples:`,
-							conceptualizeResult.error
-						);
-						return;
-					}
+		// 			if (!conceptualizeResult.success || !conceptualizeResult.data) {
+		// 				console.error(
+		// 					`[Background] Failed to conceptualize triples:`,
+		// 					conceptualizeResult.error
+		// 				);
+		// 				return;
+		// 			}
 
-					const { concepts, relationships } = conceptualizeResult.data;
+		// 			const { concepts, relationships } = conceptualizeResult.data;
 
-					const conceptResult = await storeConcepts(
-						concepts,
-						embeddingService // Enable concept vector generation
-					);
+		// 			const conceptResult = await storeConcepts(
+		// 				concepts,
+		// 				embeddingService // Enable concept vector generation
+		// 			);
 
-					// Store conceptualization relationships
-					const relationshipResult = await createConceptualizations(relationships);
+		// 			// Store conceptualization relationships
+		// 			const relationshipResult = await createConceptualizations(relationships);
 
-					if (conceptResult.success && relationshipResult.success) {
-						const vectorsGenerated = conceptResult.data.vectorsGenerated || 0;
-						console.log(
-							`[Background] Successfully stored ${conceptualizeResult.data.concepts.length} concepts, ${conceptualizeResult.data.relationships.length} relationships, and ${vectorsGenerated} concept vectors`
-						);
-					} else {
-						if (!conceptResult.success) {
-							console.error(`[Background] Failed to store concepts:`, conceptResult.error);
-						}
-						if (!relationshipResult.success) {
-							console.error(
-								`[Background] Failed to store conceptualization relationships:`,
-								relationshipResult.error
-							);
-						}
-					}
-				} catch (error) {
-					console.error(`[Background] Conceptualization error:`, error);
-				}
-			});
-		}
+		// 			if (conceptResult.success && relationshipResult.success) {
+		// 				const vectorsGenerated = conceptResult.data.vectorsGenerated || 0;
+		// 				console.log(
+		// 					`[Background] Successfully stored ${conceptualizeResult.data.concepts.length} concepts, ${conceptualizeResult.data.relationships.length} relationships, and ${vectorsGenerated} concept vectors`
+		// 				);
+		// 			} else {
+		// 				if (!conceptResult.success) {
+		// 					console.error(`[Background] Failed to store concepts:`, conceptResult.error);
+		// 				}
+		// 				if (!relationshipResult.success) {
+		// 					console.error(
+		// 						`[Background] Failed to store conceptualization relationships:`,
+		// 						relationshipResult.error
+		// 					);
+		// 				}
+		// 			}
+		// 		} catch (error) {
+		// 			console.error(`[Background] Conceptualization error:`, error);
+		// 		}
+		// 	});
+		// }
 
 		const duration = Date.now() - startTime;
 		console.debug(`[ProcessKnowledge] Completed in ${duration}ms`, {
 			triplesStored: triples.length,
-			conceptsQueued: triples.length > 0,
+			conceptsStored: concepts.length,
 		});
 
 		return {
 			success: true,
 			data: {
 				triplesStored: triples.length,
-				conceptsStored: 'processing in background',
+				conceptsStored: concepts.length,
+				conceptualizationsStored: conceptualizations.length,
 				metadata: {
 					source: args.source,
 					source_type: args.source_type,
