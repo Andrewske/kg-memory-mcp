@@ -1,20 +1,21 @@
 import type { TripleType } from '@prisma/client';
 import { v4 as uuidv4 } from 'uuid';
-import { createConcepts } from '~/shared/database/concept-operations';
+import { createConcepts } from '~/shared/database/concept-operations.js';
 import {
 	getConceptCount,
 	getTripleCount,
 	getTripleCountByType,
-} from '~/shared/database/stats-operations';
+} from '~/shared/database/stats-operations.js';
 import {
 	checkExistingTriples,
 	createTriples,
 	getAllTriples,
-} from '~/shared/database/triple-operations';
-import { createVectors } from '~/shared/database/vector-operations';
-import { env } from '~/shared/env';
-import type { EmbeddingService, GraphStats, Result } from '~/shared/types';
-import type { Concept, Triple } from '~/shared/types/core';
+} from '~/shared/database/triple-operations.js';
+import { createVectors } from '~/shared/database/vector-operations.js';
+import { env } from '~/shared/env.js';
+import type { GraphStats } from '~/shared/types/api.js';
+import type { Concept, Triple } from '~/shared/types/core.js';
+import type { EmbeddingService, Result } from '~/shared/types/services.js';
 
 export interface EntityEnumerationOptions {
 	role?: 'subject' | 'object' | 'both';

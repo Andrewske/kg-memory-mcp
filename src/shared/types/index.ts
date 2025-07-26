@@ -6,7 +6,7 @@ export type {
 	RoutesDependencies,
 	ToolDependencies,
 	ToolResult,
-} from './api';
+} from '~/shared/types/api.js';
 // Configuration types
 export type {
 	AIConfig,
@@ -16,9 +16,9 @@ export type {
 	ExtractionConfig,
 	KnowledgeGraphConfig,
 	SearchConfig,
-} from './config';
+} from '~/shared/types/config.js';
 // Core domain types
-export type { AIResponseWithUsage } from './core';
+export type { AIResponseWithUsage } from '~/shared/types/core.js';
 // Search-related types
 export type {
 	ConceptSearchResult,
@@ -28,11 +28,11 @@ export type {
 	SearchResult,
 	TemporalFilter,
 	TripleSearchResult,
-} from './search';
+} from '~/shared/types/search.js';
 // Service interface types
 export type {
 	AIProvider,
 	EmbeddingService,
 	OperationError,
 	Result,
-} from './services';
+} from '~/shared/types/services.js';

@@ -1,11 +1,12 @@
-import type { Result, SearchOptions } from '~/shared/types';
-import type { Triple } from '~/shared/types/core';
-import { db } from './client';
+import { db } from '~/shared/database/client.js';
 import {
 	buildVectorSearchParams,
 	convertEmbeddingToVector,
 	validateEmbeddingDimensions,
-} from './database-utils';
+} from '~/shared/database/database-utils.js';
+import type { Triple } from '~/shared/types/core.js';
+import type { SearchOptions } from '~/shared/types/search.js';
+import type { Result } from '~/shared/types/services.js';
 
 /**
  * Search triples by entity vector similarity

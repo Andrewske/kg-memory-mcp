@@ -6,18 +6,19 @@
 import {
 	getConceptualizationsByConcept,
 	searchConceptsByEmbedding,
-} from '~/shared/database/concept-operations';
+} from '~/shared/database/concept-operations.js';
 import {
 	searchByConcept as dbSearchByConcept,
 	searchByEmbedding as dbSearchByEmbedding,
 	searchByEntity as dbSearchByEntity,
 	searchByRelationship as dbSearchByRelationship,
-} from '~/shared/database/search-operations';
-import { getAllTriples } from '~/shared/database/triple-operations';
-import { env } from '~/shared/env';
-import { createEmbeddingService } from '~/shared/services/embedding-service';
-import type { EmbeddingService, Result, SearchOptions } from '~/shared/types';
-import type { Triple } from '~/shared/types/core';
+} from '~/shared/database/search-operations.js';
+import { getAllTriples } from '~/shared/database/triple-operations.js';
+import { env } from '~/shared/env.js';
+import { createEmbeddingService } from '~/shared/services/embedding-service.js';
+import type { Triple } from '~/shared/types/core.js';
+import type { SearchOptions } from '~/shared/types/search.js';
+import type { EmbeddingService, Result } from '~/shared/types/services.js';
 
 export interface FusionSearchResult {
 	triple: Triple;

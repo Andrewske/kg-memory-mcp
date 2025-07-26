@@ -6,8 +6,8 @@ node_modules/
 examples/
 logs/
 .claude/
-scripts/
 inspect-server.sh
+docs/
 
 # Build output
 dist/

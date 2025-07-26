@@ -1,7 +1,7 @@
 // Search-related types for the Knowledge Graph system
 
 import type { ConceptNode, TripleType } from '@prisma/client';
-import type { Triple } from '~/shared/types/core';
+import type { Triple } from '~/shared/types/core.js';
 
 // Unified SearchOptions interface combining both variations
 export interface SearchOptions {

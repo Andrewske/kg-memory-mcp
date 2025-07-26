@@ -1,0 +1,6 @@
+{
+    "resolveFullPaths": true,
+    "verbose": true,
+    "outDir": "./dist",
+    "declarationDir": "./dist"
+  }

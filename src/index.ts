@@ -5,10 +5,10 @@
 
 // Load environment variables before anything else
 
-import { env } from '~/shared/env';
-import { redirectConsoleToFiles } from '~/shared/utils/console-redirect';
-import { startHttpServer } from './server/deploy-handlers';
-import { startStdioServer } from './server/stdio-server';
+import { startHttpServer } from '~/server/deploy-handlers.js';
+import { startStdioServer } from '~/server/stdio-server.js';
+import { env } from '~/shared/env.js';
+import { redirectConsoleToFiles } from '~/shared/utils/console-redirect.js';
 
 // Server state
 interface ServerState {

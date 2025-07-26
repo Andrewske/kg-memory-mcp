@@ -1,6 +1,6 @@
 import { JobStatus } from '@prisma/client';
-import { type ProcessKnowledgeArgs, processKnowledge } from '~/server/transport-manager';
-import { addJobToQueue, getJob, updateJobStatus } from '~/shared/services/queue-service';
+import { type ProcessKnowledgeArgs, processKnowledge } from '~/server/transport-manager.js';
+import { addJobToQueue, getJob, updateJobStatus } from '~/shared/services/queue-service.js';
 
 // Queue processing for large jobs
 export async function queueKnowledgeProcessing(data: {

@@ -1,10 +1,13 @@
 {
 	"functions": {
-		"src/api/[...path].ts": {
-		  "maxDuration": 60
-		}
+	  "api/[...path].js": {
+		"maxDuration": 60
+	  }
 	},
-	"buildCommand": "pnpm run build",
-	"installCommand": "pnpm install",
-	"framework": null
-}
+	"outputDirectory": "dist",
+	"buildCommand": "npm run build",
+	"env": {
+	  "ENABLE_HTTP_TRANSPORT": "true",
+	  "ENABLE_STDIO_TRANSPORT": "false"
+	}
+  }

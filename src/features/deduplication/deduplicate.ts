@@ -1,6 +1,6 @@
-import { env } from '~/shared/env';
-import type { EmbeddingService } from '~/shared/types';
-import type { Triple } from '~/shared/types/core';
+import { env } from '~/shared/env.js';
+import type { Triple } from '~/shared/types/core.js';
+import type { EmbeddingService } from '~/shared/types/services.js';
 
 export interface DeduplicationResult {
 	uniqueTriples: Triple[];

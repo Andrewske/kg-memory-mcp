@@ -1,11 +1,4 @@
 import {
-	searchConceptsByEmbedding as searchConceptsByEmbeddingDB,
-	searchConcepts as searchConceptsDB,
-} from '~/shared/database/concept-operations';
-import { searchByEmbedding as searchByEmbeddingDB } from '~/shared/database/search-operations';
-import type { KnowledgeGraphConfig, Result, SearchOptions, SearchResult } from '~/shared/types';
-import type { Concept, Triple } from '~/shared/types/core';
-import {
 	type FusionSearchResult,
 	type FusionSearchWeights,
 	searchByConcept as fusionSearchByConcept,
@@ -13,7 +6,16 @@ import {
 	searchByRelationship as fusionSearchByRelationship,
 	searchBySemantic as fusionSearchBySemantic,
 	searchFusion,
-} from './fusion-search';
+} from '~/features/knowledge-graph/fusion-search.js';
+import {
+	searchConceptsByEmbedding as searchConceptsByEmbeddingDB,
+	searchConcepts as searchConceptsDB,
+} from '~/shared/database/concept-operations.js';
+import { searchByEmbedding as searchByEmbeddingDB } from '~/shared/database/search-operations.js';
+import type { KnowledgeGraphConfig } from '~/shared/types/config.js';
+import type { Concept, Triple } from '~/shared/types/core.js';
+import type { SearchOptions, SearchResult } from '~/shared/types/search.js';
+import type { Result } from '~/shared/types/services.js';
 
 /**
  * Generate temporal metadata from search results

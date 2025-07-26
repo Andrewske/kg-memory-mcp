@@ -6,19 +6,19 @@
 import {
 	extractElementsFromTriples,
 	generateConcepts,
-} from '~/features/conceptualization/conceptualize';
-import { deduplicateTriples } from '~/features/deduplication/deduplicate';
-import { extractKnowledgeTriples } from '~/features/knowledge-extraction/extract';
-import type { FusionSearchResult } from '~/features/knowledge-graph/fusion-search';
-import { searchFusion } from '~/features/knowledge-graph/fusion-search';
-import { getStats, storeConcepts } from '~/features/knowledge-graph/operations';
-import { searchConcepts } from '~/features/knowledge-graph/search';
-import { createConceptualizations } from '~/shared/database/concept-operations';
-import { createTriples } from '~/shared/database/triple-operations';
-import { env } from '~/shared/env';
-import { createEmbeddingService } from '~/shared/services/embedding-service';
-import type { GraphStats, ToolResult } from '~/shared/types';
-import type { Concept } from '~/shared/types/core';
+} from '~/features/conceptualization/conceptualize.js';
+import { deduplicateTriples } from '~/features/deduplication/deduplicate.js';
+import { extractKnowledgeTriples } from '~/features/knowledge-extraction/extract.js';
+import type { FusionSearchResult } from '~/features/knowledge-graph/fusion-search.js';
+import { searchFusion } from '~/features/knowledge-graph/fusion-search.js';
+import { getStats, storeConcepts } from '~/features/knowledge-graph/operations.js';
+import { searchConcepts } from '~/features/knowledge-graph/search.js';
+import { createConceptualizations } from '~/shared/database/concept-operations.js';
+import { createTriples } from '~/shared/database/triple-operations.js';
+import { env } from '~/shared/env.js';
+import { createEmbeddingService } from '~/shared/services/embedding-service.js';
+import type { GraphStats, ToolResult } from '~/shared/types/api.js';
+import type { Concept } from '~/shared/types/core.js';
 
 export type ProcessKnowledgeArgs = {
 	text: string;

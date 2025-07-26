@@ -1,12 +1,15 @@
-import type { ConceptNode, ConceptualizationRelationship, TripleType } from '@prisma/client';
+import type { ConceptualizationRelationship, TripleType } from '@prisma/client';
 import { Decimal } from '@prisma/client/runtime/library';
 import { z } from 'zod';
-import type { ProcessKnowledgeArgs } from '~/server/transport-manager';
-import { env } from '~/shared/env';
-import { createAIProvider } from '~/shared/services/ai-provider-service';
-import type { Concept, Triple } from '~/shared/types/core';
-import { trackTokenUsage } from '../../shared/utils/token-tracking';
-import { extractElementsFromTriples, generateConcepts } from '../conceptualization/conceptualize';
+import {
+	extractElementsFromTriples,
+	generateConcepts,
+} from '~/features/conceptualization/conceptualize.js';
+import type { ProcessKnowledgeArgs } from '~/server/transport-manager.js';
+import { env } from '~/shared/env.js';
+import { createAIProvider } from '~/shared/services/ai-provider-service.js';
+import type { Concept, Triple } from '~/shared/types/core.js';
+import { trackTokenUsage } from '~/shared/utils/token-tracking.js';
 
 // Zod schemas for validation
 const TripleSchema = z.object({

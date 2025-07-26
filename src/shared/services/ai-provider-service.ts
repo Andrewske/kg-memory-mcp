@@ -2,8 +2,10 @@ import { anthropic } from '@ai-sdk/anthropic';
 import { openai } from '@ai-sdk/openai';
 import { generateObject, generateText } from 'ai';
 import type { z } from 'zod';
-import { env } from '../env';
-import type { AIConfig, AIProvider, AIResponseWithUsage, Result } from '../types';
+import { env } from '~/shared/env.js';
+import type { AIConfig } from '~/shared/types/config.js';
+import type { AIResponseWithUsage } from '~/shared/types/core.js';
+import type { AIProvider, Result } from '~/shared/types/services.js';
 
 /**
  * AI provider service implementation with comprehensive token tracking

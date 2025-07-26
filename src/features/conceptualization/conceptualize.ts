@@ -1,10 +1,10 @@
 import { writeFileSync } from 'node:fs';
 import { Decimal } from '@prisma/client/runtime/library';
 import { z } from 'zod';
-import { mapAbstractionLevel } from '~/shared/database/database-utils';
-import { createAIProvider } from '~/shared/services/ai-provider-service';
-import type { Triple } from '~/shared/types/core';
-import { trackTokenUsage } from '../../shared/utils/token-tracking';
+import { mapAbstractionLevel } from '~/shared/database/database-utils.js';
+import { createAIProvider } from '~/shared/services/ai-provider-service.js';
+import type { Triple } from '~/shared/types/core.js';
+import { trackTokenUsage } from '~/shared/utils/token-tracking.js';
 
 export interface ConceptualizationInput {
 	entities: string[];

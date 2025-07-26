@@ -3,10 +3,10 @@
  */
 
 import { JobStatus, type ProcessingJob } from '@prisma/client';
-import type { ProcessKnowledgeArgs } from '~/server/transport-manager';
-import { db } from '~/shared/database/client';
-import { env } from '~/shared/env';
-import { getQStash } from '~/shared/services/qstash';
+import type { ProcessKnowledgeArgs } from '~/server/transport-manager.js';
+import { db } from '~/shared/database/client.js';
+import { env } from '~/shared/env.js';
+import { getQStash } from '~/shared/services/qstash.js';
 
 export async function addJobToQueue(body: ProcessKnowledgeArgs): Promise<string> {
 	// Add to database

@@ -11,15 +11,15 @@ import {
 	processKnowledgeSchema,
 	searchConceptsSchema,
 	searchKnowledgeSchema,
-} from '~/server/routes/knowledge-routes';
+} from '~/server/routes/knowledge-routes.js';
 import {
 	getKnowledgeGraphStats,
 	processKnowledge,
 	searchConceptsTool,
 	searchKnowledgeGraph,
-} from '~/server/transport-manager';
+} from '~/server/transport-manager.js';
 
-import type { ToolResult } from '~/shared/types';
+import type { ToolResult } from '~/shared/types/api.js';
 
 // Server state
 interface StdioServerState {

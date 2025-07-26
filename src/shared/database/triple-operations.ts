@@ -1,7 +1,7 @@
-import type { Result } from '~/shared/types';
-import type { Triple } from '~/shared/types/core';
-import { db } from './client';
-import { generateTripleId } from './database-utils';
+import { db } from '~/shared/database/client.js';
+import { generateTripleId } from '~/shared/database/database-utils.js';
+import type { Triple } from '~/shared/types/core.js';
+import type { Result } from '~/shared/types/services.js';
 
 /**
  * Store knowledge triples in the database

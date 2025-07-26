@@ -1,6 +1,6 @@
-import type { Request, Response, Express } from 'express';
-import { env } from '~/shared/env';
-import { handleMcpRequest } from './http-server';
+import type { Express, Request, Response } from 'express';
+import { handleMcpRequest } from '~/server/http-server.js';
+import { env } from '~/shared/env.js';
 
 // Express.js adapter
 export async function createExpressAdapter(): Promise<Express> {

@@ -1,6 +1,6 @@
 import type { ConceptualizationRelationship } from '@prisma/client';
-import type { TemporalFilter } from '~/shared/types';
-import type { Concept, Triple } from '~/shared/types/core';
+import type { Concept, Triple } from '~/shared/types/core.js';
+import type { TemporalFilter } from '~/shared/types/search.js';
 
 /**
  * Generic ID generation utility using Base64 encoding

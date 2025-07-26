@@ -3,23 +3,24 @@
  * Can be deployed to Vercel, Railway, or any platform
  */
 
+import type { VercelRequest } from '@vercel/node';
 import type { Request } from 'express';
 import type { z } from 'zod';
 import {
 	type processKnowledgeSchema,
 	searchConceptsSchema,
 	searchKnowledgeSchema,
-} from '~/server/routes/knowledge-routes';
-import { handleProcessJob } from '~/server/routes/queue';
-import { getAllTriples } from '~/shared/database/triple-operations';
-import { env } from '~/shared/env';
-import { addJobToQueue, handleGetJobStatus } from '~/shared/services/queue-service';
+} from '~/server/routes/knowledge-routes.js';
+import { handleProcessJob } from '~/server/routes/queue.js';
 // Import your existing unified functions
 import {
 	getKnowledgeGraphStats,
 	searchConceptsTool,
 	searchKnowledgeGraph,
-} from './transport-manager';
+} from '~/server/transport-manager.js';
+import { getAllTriples } from '~/shared/database/triple-operations.js';
+import { env } from '~/shared/env.js';
+import { addJobToQueue, handleGetJobStatus } from '~/shared/services/queue-service.js';
 
 // Validation helper
 function validateRequest<T>(
@@ -195,8 +196,13 @@ function createCorsHeaders(corsOrigins: string | string[]) {
 }
 
 // Main framework-agnostic handler
-export async function handleMcpRequest(req: Request) {
-	const { method, path, body, headers, query } = req;
+export async function handleMcpRequest(req: VercelRequest | Request) {
+	// Handle different request types safely
+	const method = req.method;
+	const url = req.url;
+	const body = req.body;
+	const headers = req.headers;
+	const query = req.query;
 
 	// Default headers for all responses
 	const defaultHeaders = {
@@ -225,9 +231,13 @@ export async function handleMcpRequest(req: Request) {
 		);
 	}
 
-	// Remove base path from URL for routing
-	const routePath = path.replace(env.HTTP_BASE_PATH, '') || '/';
+	let routePath = '/';
 
+	if ('query' in req) {
+		routePath = `/${query['...path']}`;
+	} else {
+		routePath = url?.replace(env.HTTP_BASE_PATH, '') || '/';
+	}
 	try {
 		// Route handling
 		switch (`${method} ${routePath}`) {

@@ -1,6 +1,6 @@
 import type { TokenUsage, TripleType } from '@prisma/client';
-import type { Result } from '~/shared/types';
-import { db } from './client';
+import { db } from '~/shared/database/client.js';
+import type { Result } from '~/shared/types/services.js';
 
 /**
  * Get total count of knowledge triples

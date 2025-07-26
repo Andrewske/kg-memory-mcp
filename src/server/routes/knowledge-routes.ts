@@ -12,7 +12,7 @@ import {
 	processKnowledge,
 	searchConceptsTool,
 	searchKnowledgeGraph,
-} from '../transport-manager';
+} from '~/server/transport-manager.js';
 
 // Zod validation schemas
 export const processKnowledgeSchema = z.object({
@@ -44,7 +44,7 @@ export const searchConceptsSchema = z.object({
 
 // Validation middleware
 const validateSchema = (schema: z.ZodSchema) => {
-	return (req: Request, res: Response, next: Function) => {
+	return (req: Request, res: Response, next: () => void) => {
 		try {
 			req.body = schema.parse(req.body);
 			next();

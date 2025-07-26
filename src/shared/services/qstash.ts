@@ -1,5 +1,5 @@
 import { Client } from '@upstash/qstash';
-import { env } from '~/shared/env';
+import { env } from '~/shared/env.js';
 
 let qstashInstance: Client | null = null;
 

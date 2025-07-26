@@ -1,12 +1,12 @@
 import type { ConceptualizationRelationship, KnowledgeTriple } from '@prisma/client';
-import type { Result } from '~/shared/types';
-import type { Concept } from '~/shared/types/core';
-import { db } from './client';
+import { db } from '~/shared/database/client.js';
 import {
 	convertEmbeddingToVector,
 	generateConceptId,
 	generateConceptualizationId,
-} from './database-utils';
+} from '~/shared/database/database-utils.js';
+import type { Concept } from '~/shared/types/core.js';
+import type { Result } from '~/shared/types/services.js';
 
 /**
  * Store concept nodes in the database

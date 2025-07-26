@@ -1,7 +1,7 @@
 import { Decimal } from '@prisma/client/runtime/library';
-import { db } from '../database/client';
-import { env } from '../env';
-import type { AIResponseWithUsage } from '../types';
+import { db } from '~/shared/database/client.js';
+import { env } from '~/shared/env.js';
+import type { AIResponseWithUsage } from '~/shared/types/core.js';
 
 /**
  * Context information for token tracking

@@ -1,6 +1,6 @@
 // API and transport-related types
 
-import type { AIProvider, EmbeddingService } from './services';
+import type { AIProvider, EmbeddingService } from '~/shared/types/services.js';
 
 // Transport-specific types
 export interface ToolDependencies {

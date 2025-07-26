@@ -2,8 +2,9 @@ import { openai } from '@ai-sdk/openai';
 import { Decimal } from '@prisma/client/runtime/library';
 import { embed } from 'ai';
 import tiktoken from 'tiktoken';
-import { storeTokenUsage } from '../database/stats-operations';
-import type { EmbeddingConfig, EmbeddingService, Result } from '../types';
+import { storeTokenUsage } from '~/shared/database/stats-operations.js';
+import type { EmbeddingConfig } from '~/shared/types/config.js';
+import type { EmbeddingService, Result } from '~/shared/types/services.js';
 /**
  * OpenAI embedding service implementation
  */

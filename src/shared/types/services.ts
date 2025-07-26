@@ -2,8 +2,8 @@
 
 import type { TripleType } from '@prisma/client';
 import type { z } from 'zod';
-import type { AIResponseWithUsage } from '~/shared/types';
-import type { AIConfig } from './config';
+import type { AIConfig } from '~/shared/types/config.js';
+import type { AIResponseWithUsage } from '~/shared/types/core.js';
 
 // Result type for consistent error handling
 export type Result<T> = { success: true; data: T } | { success: false; error: OperationError };
