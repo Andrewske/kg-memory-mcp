@@ -72,7 +72,9 @@ export async function searchFusion(
 
 		// Generate embedding once for all vector-based searches
 		let queryEmbedding: number[] | null = null;
-		if (enabledTypes.some(type => ['entity', 'relationship', 'semantic'].includes(type))) {
+		if (
+			enabledTypes.some(type => ['entity', 'relationship', 'semantic', 'concept'].includes(type))
+		) {
 			const embeddingResult = await createEmbeddingService({
 				model: env.EMBEDDING_MODEL,
 				dimensions: env.EMBEDDING_DIMENSIONS,
@@ -86,38 +88,23 @@ export async function searchFusion(
 		}
 
 		if (enabledTypes.includes('entity')) {
-			if (queryEmbedding) {
-				// Use vector-based entity search
-				searchPromises.push(
-					dbSearchByEmbedding(queryEmbedding, topK, options?.threshold || env.MIN_SCORE, options)
-				);
-				searchTypeNames.push('entity');
-			} else {
-				// Fallback to text-based entity search
-				console.warn('[FUSION SEARCH] Using fallback text-based entity search');
-				searchPromises.push(dbSearchByEntity(query, topK, options));
-				searchTypeNames.push('entity');
-			}
+			// Always use text-based entity search for better keyword matching
+			console.log('[FUSION SEARCH] Using text-based entity search');
+			searchPromises.push(dbSearchByEntity(query, topK, options));
+			searchTypeNames.push('entity');
 		}
 
 		if (enabledTypes.includes('relationship')) {
-			if (queryEmbedding) {
-				// Use vector-based relationship search
-				searchPromises.push(
-					dbSearchByEmbedding(queryEmbedding, topK, options?.threshold || env.MIN_SCORE, options)
-				);
-				searchTypeNames.push('relationship');
-			} else {
-				// Fallback to text-based relationship search
-				console.warn('[FUSION SEARCH] Using fallback text-based relationship search');
-				searchPromises.push(dbSearchByRelationship(query, topK, options));
-				searchTypeNames.push('relationship');
-			}
+			// Always use text-based relationship search for better keyword matching
+			console.log('[FUSION SEARCH] Using text-based relationship search');
+			searchPromises.push(dbSearchByRelationship(query, topK, options));
+			searchTypeNames.push('relationship');
 		}
 
 		if (enabledTypes.includes('semantic')) {
 			if (queryEmbedding) {
 				// Use vector-based semantic search
+				console.log('[FUSION SEARCH] Using vector-based semantic search');
 				searchPromises.push(
 					dbSearchByEmbedding(queryEmbedding, topK, options?.threshold || env.MIN_SCORE, options)
 				);
@@ -130,6 +117,7 @@ export async function searchFusion(
 		if (enabledTypes.includes('concept')) {
 			if (queryEmbedding) {
 				// Use vector-based concept search
+				console.log('[FUSION SEARCH] Using vector-based concept search');
 				searchPromises.push(
 					searchByConceptVector(queryEmbedding, topK, options?.threshold || env.MIN_SCORE, options)
 				);

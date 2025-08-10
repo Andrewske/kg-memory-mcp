@@ -204,6 +204,8 @@ export async function handleMcpRequest(req: VercelRequest | Request) {
 	const headers = req.headers;
 	const query = req.query;
 
+	console.log('req', url);
+
 	// Default headers for all responses
 	const defaultHeaders = {
 		'Content-Type': 'application/json',
@@ -233,11 +235,14 @@ export async function handleMcpRequest(req: VercelRequest | Request) {
 
 	let routePath = '/';
 
-	if ('query' in req) {
+	if (query && Object.keys(query).length > 0) {
+		console.log('query', query);
 		routePath = `/${query['...path']}`;
 	} else {
+		console.log('url', url);
 		routePath = url?.replace(env.HTTP_BASE_PATH, '') || '/';
 	}
+	console.log('routePath', routePath);
 	try {
 		// Route handling
 		switch (`${method} ${routePath}`) {

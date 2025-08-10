@@ -185,8 +185,6 @@ async function extractFourStage(data: ProcessKnowledgeArgs) {
 			success: true,
 			data: {
 				triples: allTriples,
-				concepts: [],
-				conceptualizations: [],
 			},
 		};
 	} catch (error) {
@@ -314,23 +312,3 @@ Text: ${data.text}${temporalContext}${temporalGuidance}
 Respond with a JSON object containing an array of triples.`;
 }
 
-function mapRelationshipType(
-	type: string
-): 'entity-entity' | 'entity-event' | 'event-event' | 'emotional-context' {
-	switch (type) {
-		case 'entity-entity':
-			return 'entity-entity';
-		case 'entity-event':
-			return 'entity-event';
-		case 'event-event':
-			return 'event-event';
-		case 'emotional-context':
-			return 'emotional-context';
-		default:
-			return 'entity-entity'; // default fallback
-	}
-}
-
-function sleep(ms: number): Promise<void> {
-	return new Promise(resolve => setTimeout(resolve, ms));
-}

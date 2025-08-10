@@ -11,10 +11,9 @@ import { deduplicateTriples } from '~/features/deduplication/deduplicate.js';
 import { extractKnowledgeTriples } from '~/features/knowledge-extraction/extract.js';
 import type { FusionSearchResult } from '~/features/knowledge-graph/fusion-search.js';
 import { searchFusion } from '~/features/knowledge-graph/fusion-search.js';
-import { getStats, storeConcepts } from '~/features/knowledge-graph/operations.js';
+import { getStats, storeConcepts, storeTriples } from '~/features/knowledge-graph/operations.js';
 import { searchConcepts } from '~/features/knowledge-graph/search.js';
 import { createConceptualizations } from '~/shared/database/concept-operations.js';
-import { createTriples } from '~/shared/database/triple-operations.js';
 import { env } from '~/shared/env.js';
 import { createEmbeddingService } from '~/shared/services/embedding-service.js';
 import type { GraphStats, ToolResult } from '~/shared/types/api.js';
@@ -78,7 +77,7 @@ export async function processKnowledge(args: ProcessKnowledgeArgs): Promise<Tool
 
 		// Store triples with vector generation
 		console.debug('[ProcessKnowledge] Storing triples...');
-		const storeResult = await createTriples(triples);
+		const storeResult = await storeTriples(triples, embeddingService);
 		if (!storeResult.success) {
 			console.error('[ProcessKnowledge] Storage failed:', storeResult.error);
 			return {
@@ -88,6 +87,26 @@ export async function processKnowledge(args: ProcessKnowledgeArgs): Promise<Tool
 					operation: 'knowledge_storage',
 				},
 			};
+		}
+
+		// Store concepts with vector generation
+		if (concepts.length > 0) {
+			console.debug(`[ProcessKnowledge] Storing ${concepts.length} concepts...`);
+			const conceptResult = await storeConcepts(concepts, embeddingService);
+			if (!conceptResult.success) {
+				console.warn('[ProcessKnowledge] Concept storage failed:', conceptResult.error);
+				// Don't fail the entire operation if concept storage fails
+			}
+		}
+
+		// Store conceptualizations
+		if (conceptualizations.length > 0) {
+			console.debug(`[ProcessKnowledge] Storing ${conceptualizations.length} conceptualizations...`);
+			const conceptualizationResult = await createConceptualizations(conceptualizations);
+			if (!conceptualizationResult.success) {
+				console.warn('[ProcessKnowledge] Conceptualization storage failed:', conceptualizationResult.error);
+				// Don't fail the entire operation if conceptualization storage fails
+			}
 		}
 
 		// Queue background conceptualization if requested

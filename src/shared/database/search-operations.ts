@@ -133,10 +133,26 @@ export async function searchByEntity(
 		}
 
 		// Entity search: find triples where entity appears as subject or object
-		whereConditions.OR = [
-			{ subject: { contains: entityQuery, mode: 'insensitive' } },
-			{ object: { contains: entityQuery, mode: 'insensitive' } },
-		];
+		// Split the query into words and search for any of them
+		const searchTerms = entityQuery.trim().split(/\s+/).filter(term => term.length > 0);
+		
+		if (searchTerms.length === 1) {
+			// Single word search - use simple contains
+			whereConditions.OR = [
+				{ subject: { contains: entityQuery, mode: 'insensitive' } },
+				{ object: { contains: entityQuery, mode: 'insensitive' } },
+			];
+		} else {
+			// Multi-word search - search for any of the words
+			const orConditions: any[] = [];
+			for (const term of searchTerms) {
+				orConditions.push(
+					{ subject: { contains: term, mode: 'insensitive' } },
+					{ object: { contains: term, mode: 'insensitive' } }
+				);
+			}
+			whereConditions.OR = orConditions;
+		}
 
 		const triples = await db.knowledgeTriple.findMany({
 			where: whereConditions,
@@ -194,10 +210,25 @@ export async function searchByRelationship(
 		}
 
 		// Relationship search: find triples where relationship appears in predicate
-		whereConditions.predicate = {
-			contains: relationshipQuery,
-			mode: 'insensitive',
-		};
+		// Split the query into words and search for any of them
+		const searchTerms = relationshipQuery.trim().split(/\s+/).filter(term => term.length > 0);
+		
+		if (searchTerms.length === 1) {
+			// Single word search - use simple contains
+			whereConditions.predicate = {
+				contains: relationshipQuery,
+				mode: 'insensitive',
+			};
+		} else {
+			// Multi-word search - search for any of the words in predicate
+			const orConditions: any[] = [];
+			for (const term of searchTerms) {
+				orConditions.push({
+					predicate: { contains: term, mode: 'insensitive' }
+				});
+			}
+			whereConditions.OR = orConditions;
+		}
 
 		const triples = await db.knowledgeTriple.findMany({
 			where: whereConditions,
