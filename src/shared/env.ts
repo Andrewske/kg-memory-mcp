@@ -73,7 +73,7 @@ const envSchema = z.object({
 		.string()
 		.default('1500')
 		.transform(val => parseInt(val)),
-	EXTRACTION_MODEL: z.string().default('gpt-4o-mini'),
+	EXTRACTION_MODEL: z.string().default('gpt-5-nano'),
 	EXTRACTION_TEMPERATURE: z
 		.string()
 		.default('0.1')
@@ -91,7 +91,7 @@ const envSchema = z.object({
 
 	// AI
 	AI_PROVIDER: z.enum(['openai', 'anthropic']).default('openai'),
-	AI_MODEL: z.string().default('gpt-4o-mini'),
+	AI_MODEL: z.string().default('gpt-5-nano'),
 	AI_TEMPERATURE: z
 		.string()
 		.default('0.1')
