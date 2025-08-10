@@ -136,6 +136,7 @@ function calculateEstimatedCost({
 		'gpt-4o': { input: 0.005, output: 0.015 },
 		'gpt-4o-mini': { input: 0.00015, output: 0.0006 },
 		'gpt-3.5-turbo': { input: 0.0015, output: 0.002 },
+		'gpt-5-nano': { input: 0.00005, output: 0.0004 },
 
 		// Anthropic pricing (per 1K tokens)
 		'claude-3-5-sonnet-20241022': { input: 0.003, output: 0.015 },
