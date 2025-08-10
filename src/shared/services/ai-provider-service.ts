@@ -32,9 +32,9 @@ export function createAIProvider(): AIProvider {
 				const response = await generateObject({
 					model,
 					prompt,
-					schema,
+					schema: schema as any, // Type assertion needed for V5 compatibility
 					temperature: modelConfig.temperature,
-					maxTokens: modelConfig.maxTokens,
+					maxOutputTokens: modelConfig.maxTokens,
 				});
 				const endTime = Date.now();
 
@@ -45,7 +45,7 @@ export function createAIProvider(): AIProvider {
 					success: true,
 					data: {
 						...aiResponseWithUsage,
-						data: response.object,
+						data: response.object as T,
 					},
 				};
 			} catch (error) {
@@ -73,7 +73,7 @@ export function createAIProvider(): AIProvider {
 					model,
 					prompt,
 					temperature: modelConfig.temperature,
-					maxTokens: modelConfig.maxTokens,
+					maxOutputTokens: modelConfig.maxTokens,
 				});
 				const endTime = Date.now();
 
@@ -172,9 +172,14 @@ function extractTokenUsage(
 }
 
 function getModel(config: AIConfig) {
+	// Remove provider prefix if present (e.g. "openai/gpt-4" -> "gpt-4")
+	const modelName = config.model.includes('/') 
+		? config.model.split('/')[1] 
+		: config.model;
+	
 	if (config.provider === 'anthropic') {
-		return anthropic(config.model);
+		return anthropic(modelName);
 	} else {
-		return openai(config.model);
+		return openai(modelName);
 	}
 }

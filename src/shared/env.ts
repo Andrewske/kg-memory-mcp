@@ -73,7 +73,7 @@ const envSchema = z.object({
 		.string()
 		.default('1500')
 		.transform(val => parseInt(val)),
-	EXTRACTION_MODEL: z.string().default('gpt-5-nano'),
+	EXTRACTION_MODEL: z.string().default('openai/gpt-5-nano'),
 	EXTRACTION_TEMPERATURE: z
 		.string()
 		.default('0.1')
@@ -91,7 +91,7 @@ const envSchema = z.object({
 
 	// AI
 	AI_PROVIDER: z.enum(['openai', 'anthropic']).default('openai'),
-	AI_MODEL: z.string().default('gpt-5-nano'),
+	AI_MODEL: z.string().default('openai/gpt-5-nano'),
 	AI_TEMPERATURE: z
 		.string()
 		.default('0.1')
@@ -100,6 +100,7 @@ const envSchema = z.object({
 		.string()
 		.default('10000')
 		.transform(val => parseInt(val)),
+	AI_GATEWAY_API_KEY: z.string(),
 
 	// Logging
 	LOG_LEVEL: z.enum(['ERROR', 'WARN', 'INFO', 'DEBUG', 'TRACE']).default('INFO'),
