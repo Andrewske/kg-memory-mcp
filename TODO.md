@@ -1,2 +1,3 @@
 - test didn't do embeddings
 - still long concepts for only 1000 input tokens so I should figure out how I can reduce that.
+- I need better logs for jobs sent in production.

@@ -143,16 +143,8 @@ export class DeduplicationJobHandler implements JobHandler {
 					db.knowledgeTriple.deleteMany({
 						where: { id: { in: duplicateIds } },
 					}),
-					// Delete associated entity vectors
-					db.entityVector.deleteMany({
-						where: { knowledge_triple_id: { in: duplicateIds } },
-					}),
-					// Delete associated relationship vectors
-					db.relationshipVector.deleteMany({
-						where: { knowledge_triple_id: { in: duplicateIds } },
-					}),
-					// Delete associated semantic vectors
-					db.semanticVector.deleteMany({
+					// Delete associated vectors from unified VectorEmbedding table
+					db.vectorEmbedding.deleteMany({
 						where: { knowledge_triple_id: { in: duplicateIds } },
 					}),
 				]);

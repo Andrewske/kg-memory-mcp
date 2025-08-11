@@ -246,181 +246,8 @@ export async function batchStoreKnowledge(
 	}
 }
 
-/**
- * Store triple vectors within an existing transaction
- */
-async function storeTripleVectorsInTransaction(
-	tx: any,
-	triples: (Triple & { id: string })[],
-	embeddingMap: Map<string, number[]>
-): Promise<number> {
-	try {
-		console.log(
-			`[BATCH STORAGE] Transaction: Generating vectors for ${triples.length} triples using embedding map...`
-		);
-
-		const entityVectors: any[] = [];
-		const relationshipVectors: any[] = [];
-		const semanticVectors: any[] = [];
-
-		// Collect unique entities and relationships
-		const uniqueEntities = new Set<string>();
-		const uniqueRelationships = new Set<string>();
-
-		for (const triple of triples) {
-			uniqueEntities.add(triple.subject);
-			uniqueEntities.add(triple.object);
-			uniqueRelationships.add(triple.predicate);
-		}
-
-		console.log(
-			`[BATCH STORAGE] Transaction: Processing ${uniqueEntities.size} entities, ${uniqueRelationships.size} relationships, ${triples.length} semantic texts`
-		);
-
-		// Generate entity vectors using embedding map
-		let lookupMisses = 0;
-		for (const entity of uniqueEntities) {
-			const embedding = embeddingMap.get(entity);
-			if (!embedding) {
-				console.warn(`[BATCH STORAGE] Transaction: ⚠️ Missing embedding for entity: "${entity}"`);
-				lookupMisses++;
-				continue;
-			}
-
-			// Find all triples that contain this entity
-			for (const triple of triples) {
-				if (triple.subject === entity || triple.object === entity) {
-					entityVectors.push({
-						vector_id: uuidv4(),
-						text: entity,
-						embedding: JSON.stringify(embedding),
-						entity_name: entity,
-						knowledge_triple_id: triple.id,
-					});
-				}
-			}
-		}
-
-		// Generate relationship vectors using embedding map
-		for (const relationship of uniqueRelationships) {
-			const embedding = embeddingMap.get(relationship);
-			if (!embedding) {
-				console.warn(
-					`[BATCH STORAGE] Transaction: ⚠️ Missing embedding for relationship: "${relationship}"`
-				);
-				lookupMisses++;
-				continue;
-			}
-
-			// Find all triples that contain this relationship
-			for (const triple of triples) {
-				if (triple.predicate === relationship) {
-					relationshipVectors.push({
-						vector_id: uuidv4(),
-						text: relationship,
-						embedding: JSON.stringify(embedding),
-						knowledge_triple_id: triple.id,
-					});
-				}
-			}
-		}
-
-		// Generate semantic vectors using embedding map
-		for (const triple of triples) {
-			const semanticText = `${triple.subject} ${triple.predicate} ${triple.object}`;
-			const embedding = embeddingMap.get(semanticText);
-			if (!embedding) {
-				console.warn(
-					`[BATCH STORAGE] Transaction: ⚠️ Missing embedding for semantic text: "${semanticText}"`
-				);
-				lookupMisses++;
-				continue;
-			}
-
-			semanticVectors.push({
-				vector_id: uuidv4(),
-				text: semanticText,
-				embedding: JSON.stringify(embedding),
-				knowledge_triple_id: triple.id,
-			});
-		}
-
-		// Store all vectors in batch within transaction
-		const totalVectors = entityVectors.length + relationshipVectors.length + semanticVectors.length;
-		if (totalVectors === 0) {
-			console.warn(
-				`[BATCH STORAGE] Transaction: ⚠️ No vectors to store - all ${lookupMisses} embedding lookups failed`
-			);
-			return 0;
-		}
-
-		// Individual vector creation (createMany doesn't work with vector fields)
-		const vectorPromises = [];
-
-		// Store entity vectors individually
-		for (const vector of entityVectors) {
-			vectorPromises.push(
-				tx.entityVector
-					.create({
-						data: vector,
-					})
-					.catch((error: any) => {
-						console.warn(
-							`[BATCH STORAGE] Failed to store entity vector for "${vector.text}":`,
-							error.message
-						);
-						return null;
-					})
-			);
-		}
-
-		// Store relationship vectors individually
-		for (const vector of relationshipVectors) {
-			vectorPromises.push(
-				tx.relationshipVector
-					.create({
-						data: vector,
-					})
-					.catch((error: any) => {
-						console.warn(
-							`[BATCH STORAGE] Failed to store relationship vector for "${vector.text}":`,
-							error.message
-						);
-						return null;
-					})
-			);
-		}
-
-		// Store semantic vectors individually
-		for (const vector of semanticVectors) {
-			vectorPromises.push(
-				tx.semanticVector
-					.create({
-						data: vector,
-					})
-					.catch((error: any) => {
-						console.warn(
-							`[BATCH STORAGE] Failed to store semantic vector for "${vector.text}":`,
-							error.message
-						);
-						return null;
-					})
-			);
-		}
-
-		// Wait for all vector storage operations
-		await Promise.allSettled(vectorPromises);
-
-		console.log(
-			`[BATCH STORAGE] Transaction: ✅ Stored ${totalVectors} vectors (${entityVectors.length} entity, ${relationshipVectors.length} relationship, ${semanticVectors.length} semantic) with ${lookupMisses} lookup misses`
-		);
-
-		return totalVectors;
-	} catch (error) {
-		console.error(`[BATCH STORAGE] Transaction: ❌ Vector generation failed:`, error);
-		throw error; // Re-throw to rollback transaction
-	}
-}
+// Note: storeTripleVectorsInTransaction has been removed as vectors are now stored post-transaction
+// using the unified VectorEmbedding table via generateAndStoreVectorsPostTransaction
 
 /**
  * Generate and store vectors outside of transaction (due to pgvector compatibility)
@@ -434,9 +261,7 @@ async function generateAndStoreVectorsPostTransaction(
 			`[BATCH STORAGE] Post-transaction: Starting vector generation for ${triples.length} triples using embedding map...`
 		);
 
-		const entityVectors: any[] = [];
-		const relationshipVectors: any[] = [];
-		const semanticVectors: any[] = [];
+		const allVectors: any[] = [];
 
 		// Collect unique entities and relationships
 		const uniqueEntities = new Set<string>();
@@ -467,10 +292,12 @@ async function generateAndStoreVectorsPostTransaction(
 			// Find all triples that contain this entity
 			for (const triple of triples) {
 				if (triple.subject === entity || triple.object === entity) {
-					entityVectors.push({
+					allVectors.push({
+						id: uuidv4(),
 						vector_id: uuidv4(),
 						text: entity,
-						embedding: JSON.stringify(embedding),
+						embedding: `[${embedding.join(',')}]`,
+						vector_type: 'ENTITY',
 						entity_name: entity,
 						knowledge_triple_id: triple.id,
 					});
@@ -492,10 +319,12 @@ async function generateAndStoreVectorsPostTransaction(
 			// Find all triples that contain this relationship
 			for (const triple of triples) {
 				if (triple.predicate === relationship) {
-					relationshipVectors.push({
+					allVectors.push({
+						id: uuidv4(),
 						vector_id: uuidv4(),
 						text: relationship,
-						embedding: JSON.stringify(embedding),
+						embedding: `[${embedding.join(',')}]`,
+						vector_type: 'RELATIONSHIP',
 						knowledge_triple_id: triple.id,
 					});
 				}
@@ -514,16 +343,17 @@ async function generateAndStoreVectorsPostTransaction(
 				continue;
 			}
 
-			semanticVectors.push({
+			allVectors.push({
+				id: uuidv4(),
 				vector_id: uuidv4(),
 				text: semanticText,
-				embedding: JSON.stringify(embedding),
+				embedding: `[${embedding.join(',')}]`,
+				vector_type: 'SEMANTIC',
 				knowledge_triple_id: triple.id,
 			});
 		}
 
-		const totalVectors = entityVectors.length + relationshipVectors.length + semanticVectors.length;
-		if (totalVectors === 0) {
+		if (allVectors.length === 0) {
 			console.warn(
 				`[BATCH STORAGE] Post-transaction: ⚠️ No vectors to store - all ${lookupMisses} embedding lookups failed`
 			);
@@ -535,29 +365,43 @@ async function generateAndStoreVectorsPostTransaction(
 			};
 		}
 
-		// Use the existing vector operations (they handle pgvector properly)
-		const { createVectors } = await import('./vector-operations.js');
-		const storeResult = await createVectors({
-			entity: entityVectors,
-			relationship: relationshipVectors,
-			semantic: semanticVectors,
-		});
+		// Store vectors using the unified VectorEmbedding table
+		console.log(
+			`[BATCH STORAGE] Post-transaction: Storing ${allVectors.length} vectors using unified schema...`
+		);
 
-		if (!storeResult.success) {
-			return {
-				success: false,
-				error: storeResult.error,
-			};
-		}
+		// Use raw SQL to insert vectors because Prisma doesn't handle vector types well
+		const vectorRows = allVectors.map(v => `(
+			'${v.id}', 
+			'${v.vector_id}', 
+			'${v.text.replace(/'/g, "''")}', 
+			'${v.embedding}'::vector, 
+			'${v.vector_type}', 
+			${v.entity_name ? `'${v.entity_name.replace(/'/g, "''")}'` : 'NULL'},
+			'${v.knowledge_triple_id}',
+			NULL,
+			NOW(),
+			NOW()
+		)`).join(',\n');
+
+		const insertQuery = `
+			INSERT INTO vector_embeddings (
+				id, vector_id, text, embedding, vector_type, 
+				entity_name, knowledge_triple_id, concept_node_id,
+				created_at, updated_at
+			) VALUES ${vectorRows}
+		`;
+
+		await db.$executeRawUnsafe(insertQuery);
 
 		console.log(
-			`[BATCH STORAGE] Post-transaction: ✅ Successfully stored ${totalVectors} vectors (${entityVectors.length} entity, ${relationshipVectors.length} relationship, ${semanticVectors.length} semantic) with ${lookupMisses} lookup misses`
+			`[BATCH STORAGE] Post-transaction: ✅ Successfully stored ${allVectors.length} vectors with ${lookupMisses} lookup misses`
 		);
 
 		return {
 			success: true,
 			data: {
-				vectorsStored: totalVectors,
+				vectorsStored: allVectors.length,
 			},
 		};
 	} catch (error) {
@@ -569,68 +413,5 @@ async function generateAndStoreVectorsPostTransaction(
 	}
 }
 
-/**
- * Store concept vectors within an existing transaction
- */
-async function storeConceptVectorsInTransaction(
-	tx: any,
-	concepts: Concept[],
-	embeddingMap: Map<string, number[]>
-): Promise<number> {
-	try {
-		console.log(
-			`[BATCH STORAGE] Transaction: Generating vectors for ${concepts.length} concepts using embedding map...`
-		);
-
-		const conceptVectors: any[] = [];
-		let lookupMisses = 0;
-
-		for (const concept of concepts) {
-			const embedding = embeddingMap.get(concept.concept);
-			if (!embedding) {
-				console.warn(
-					`[BATCH STORAGE] Transaction: ⚠️ Missing embedding for concept: "${concept.concept}"`
-				);
-				lookupMisses++;
-				continue;
-			}
-
-			// Note: We need to find the concept_node_id, but since we're in a transaction
-			// we'd need to query the ConceptNode we just created. For now, we'll skip concept vectors
-			// and add them in a separate operation after the transaction.
-			// This is a design decision to keep the transaction focused on core data storage.
-			conceptVectors.push({
-				id: uuidv4(),
-				vector_id: uuidv4(),
-				text: concept.concept,
-				embedding: JSON.stringify(embedding),
-				role: 'concept',
-				concept_node_id: 'placeholder', // We'll handle this separately
-				created_at: new Date(),
-				updated_at: new Date(),
-			});
-		}
-
-		if (conceptVectors.length === 0) {
-			console.warn(
-				`[BATCH STORAGE] Transaction: ⚠️ No concept vectors to store - all ${lookupMisses} embedding lookups failed`
-			);
-			return 0;
-		}
-
-		// Store concept vectors in batch
-		await tx.conceptVector.createMany({
-			data: conceptVectors,
-			skipDuplicates: true,
-		});
-
-		console.log(
-			`[BATCH STORAGE] Transaction: ✅ Stored ${conceptVectors.length} concept vectors with ${lookupMisses} lookup misses`
-		);
-
-		return conceptVectors.length;
-	} catch (error) {
-		console.error(`[BATCH STORAGE] Transaction: ❌ Concept vector generation failed:`, error);
-		throw error; // Re-throw to rollback transaction
-	}
-}
+// Note: storeConceptVectorsInTransaction has been removed as concept vectors are handled
+// separately in the concept generation job using the unified VectorEmbedding table

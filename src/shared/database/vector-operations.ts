@@ -36,8 +36,9 @@ export async function searchByEntityVector(
 				   (ev.embedding <-> $1::vector) as distance,
 				   (1 - (ev.embedding <-> $1::vector)) as similarity
 			FROM knowledge_triples kt
-			JOIN entity_vectors ev ON kt.id = ev.knowledge_triple_id
-			WHERE ${whereClause}
+			JOIN vector_embeddings ev ON kt.id = ev.knowledge_triple_id
+			WHERE ev.vector_type = 'ENTITY'
+				AND ${whereClause}
 				AND (1 - (ev.embedding <-> $1::vector)) >= $3
 			ORDER BY ev.embedding <-> $1::vector ASC
 			LIMIT $2
@@ -104,8 +105,9 @@ export async function searchByRelationshipVector(
 				   (rv.embedding <-> $1::vector) as distance,
 				   (1 - (rv.embedding <-> $1::vector)) as similarity
 			FROM knowledge_triples kt
-			JOIN relationship_vectors rv ON kt.id = rv.knowledge_triple_id
-			WHERE ${whereClause}
+			JOIN vector_embeddings rv ON kt.id = rv.knowledge_triple_id
+			WHERE rv.vector_type = 'RELATIONSHIP'
+				AND ${whereClause}
 				AND (1 - (rv.embedding <-> $1::vector)) >= $3
 			ORDER BY rv.embedding <-> $1::vector ASC
 			LIMIT $2
@@ -145,7 +147,7 @@ export async function searchByRelationshipVector(
 }
 
 /**
- * Store vectors in the database
+ * Store vectors in the database using the unified VectorEmbedding table
  */
 export async function createVectors(vectors: {
 	entity?: Array<{
@@ -196,147 +198,111 @@ export async function createVectors(vectors: {
 			}
 		}
 
-		const operations: Promise<any>[] = [];
-		console.log(`[VECTOR STORAGE] Starting storage of vectors:`, {
-			entity: vectors.entity?.length || 0,
-			relationship: vectors.relationship?.length || 0,
-			semantic: vectors.semantic?.length || 0,
-			concept: vectors.concept?.length || 0,
-		});
-
-		// Store entity vectors
+		const allVectors: any[] = [];
+		
+		// Prepare entity vectors
 		if (vectors.entity && vectors.entity.length > 0) {
-			const entityVectors = vectors.entity.map(v => ({
-				id: v.vector_id,
-				vector_id: v.vector_id,
-				text: v.text,
-				embedding: convertEmbeddingToVector(v.embedding),
-				entity_name: v.entity_name,
-				knowledge_triple_id: v.knowledge_triple_id,
-			}));
-
-			operations.push(
-				db.$executeRawUnsafe(
-					`
-					INSERT INTO entity_vectors (id, vector_id, text, embedding, entity_name, knowledge_triple_id, created_at, updated_at)
-					VALUES ${entityVectors.map((_, i) => `($${i * 6 + 1}, $${i * 6 + 2}, $${i * 6 + 3}, $${i * 6 + 4}::vector, $${i * 6 + 5}, $${i * 6 + 6}, NOW(), NOW())`).join(', ')}
-					ON CONFLICT (vector_id) DO UPDATE SET
-						text = EXCLUDED.text,
-						embedding = EXCLUDED.embedding,
-						entity_name = EXCLUDED.entity_name,
-						knowledge_triple_id = EXCLUDED.knowledge_triple_id,
-						updated_at = NOW()
-				`,
-					...entityVectors.flatMap(v => [
-						v.id,
-						v.vector_id,
-						v.text,
-						v.embedding,
-						v.entity_name,
-						v.knowledge_triple_id,
-					])
-				)
-			);
+			vectors.entity.forEach(v => {
+				allVectors.push({
+					id: v.vector_id,
+					vector_id: v.vector_id,
+					text: v.text,
+					embedding: convertEmbeddingToVector(v.embedding),
+					vector_type: 'ENTITY',
+					entity_name: v.entity_name,
+					knowledge_triple_id: v.knowledge_triple_id,
+					concept_node_id: null,
+				});
+			});
 		}
 
-		// Store relationship vectors
+		// Prepare relationship vectors
 		if (vectors.relationship && vectors.relationship.length > 0) {
-			const relationshipVectors = vectors.relationship.map(v => ({
-				id: v.vector_id,
-				vector_id: v.vector_id,
-				text: v.text,
-				embedding: convertEmbeddingToVector(v.embedding),
-				knowledge_triple_id: v.knowledge_triple_id,
-			}));
-
-			operations.push(
-				db.$executeRawUnsafe(
-					`
-					INSERT INTO relationship_vectors (id, vector_id, text, embedding, knowledge_triple_id, created_at, updated_at)
-					VALUES ${relationshipVectors.map((_, i) => `($${i * 5 + 1}, $${i * 5 + 2}, $${i * 5 + 3}, $${i * 5 + 4}::vector, $${i * 5 + 5}, NOW(), NOW())`).join(', ')}
-					ON CONFLICT (vector_id) DO UPDATE SET
-						text = EXCLUDED.text,
-						embedding = EXCLUDED.embedding,
-						knowledge_triple_id = EXCLUDED.knowledge_triple_id,
-						updated_at = NOW()
-				`,
-					...relationshipVectors.flatMap(v => [
-						v.id,
-						v.vector_id,
-						v.text,
-						v.embedding,
-						v.knowledge_triple_id,
-					])
-				)
-			);
+			vectors.relationship.forEach(v => {
+				allVectors.push({
+					id: v.vector_id,
+					vector_id: v.vector_id,
+					text: v.text,
+					embedding: convertEmbeddingToVector(v.embedding),
+					vector_type: 'RELATIONSHIP',
+					entity_name: null,
+					knowledge_triple_id: v.knowledge_triple_id,
+					concept_node_id: null,
+				});
+			});
 		}
 
-		// Store semantic vectors
+		// Prepare semantic vectors
 		if (vectors.semantic && vectors.semantic.length > 0) {
-			const semanticVectors = vectors.semantic.map(v => ({
-				id: v.vector_id,
-				vector_id: v.vector_id,
-				text: v.text,
-				embedding: convertEmbeddingToVector(v.embedding),
-				knowledge_triple_id: v.knowledge_triple_id,
-			}));
-
-			operations.push(
-				db.$executeRawUnsafe(
-					`
-					INSERT INTO semantic_vectors (id, vector_id, text, embedding, knowledge_triple_id, created_at, updated_at)
-					VALUES ${semanticVectors.map((_, i) => `($${i * 5 + 1}, $${i * 5 + 2}, $${i * 5 + 3}, $${i * 5 + 4}::vector, $${i * 5 + 5}, NOW(), NOW())`).join(', ')}
-					ON CONFLICT (vector_id) DO UPDATE SET
-						text = EXCLUDED.text,
-						embedding = EXCLUDED.embedding,
-						knowledge_triple_id = EXCLUDED.knowledge_triple_id,
-						updated_at = NOW()
-				`,
-					...semanticVectors.flatMap(v => [
-						v.id,
-						v.vector_id,
-						v.text,
-						v.embedding,
-						v.knowledge_triple_id,
-					])
-				)
-			);
+			vectors.semantic.forEach(v => {
+				allVectors.push({
+					id: v.vector_id,
+					vector_id: v.vector_id,
+					text: v.text,
+					embedding: convertEmbeddingToVector(v.embedding),
+					vector_type: 'SEMANTIC',
+					entity_name: null,
+					knowledge_triple_id: v.knowledge_triple_id,
+					concept_node_id: null,
+				});
+			});
 		}
 
-		// Store concept vectors
+		// Prepare concept vectors
 		if (vectors.concept && vectors.concept.length > 0) {
-			const conceptVectors = vectors.concept.map(v => ({
-				id: v.vector_id,
-				vector_id: v.vector_id,
-				text: v.text,
-				embedding: convertEmbeddingToVector(v.embedding),
-				concept_node_id: v.concept_node_id,
-			}));
-
-			operations.push(
-				db.$executeRawUnsafe(
-					`
-					INSERT INTO concept_vectors (id, vector_id, text, embedding, concept_node_id, created_at, updated_at)
-					VALUES ${conceptVectors.map((_, i) => `($${i * 5 + 1}, $${i * 5 + 2}, $${i * 5 + 3}, $${i * 5 + 4}::vector, $${i * 5 + 5}, NOW(), NOW())`).join(', ')}
-					ON CONFLICT (vector_id) DO UPDATE SET
-						text = EXCLUDED.text,
-						embedding = EXCLUDED.embedding,
-						concept_node_id = EXCLUDED.concept_node_id,
-						updated_at = NOW()
-				`,
-					...conceptVectors.flatMap(v => [
-						v.id,
-						v.vector_id,
-						v.text,
-						v.embedding,
-						v.concept_node_id,
-					])
-				)
-			);
+			vectors.concept.forEach(v => {
+				allVectors.push({
+					id: v.vector_id,
+					vector_id: v.vector_id,
+					text: v.text,
+					embedding: convertEmbeddingToVector(v.embedding),
+					vector_type: 'CONCEPT',
+					entity_name: null,
+					knowledge_triple_id: null,
+					concept_node_id: v.concept_node_id,
+				});
+			});
 		}
 
-		// Execute all operations
-		await Promise.all(operations);
+		console.log(`[VECTOR STORAGE] Storing ${allVectors.length} vectors in unified table`);
+
+		if (allVectors.length > 0) {
+			// Build the VALUES clause for bulk insert
+			const values = allVectors.map((v, i) => {
+				const base = i * 8;
+				return `($${base + 1}, $${base + 2}, $${base + 3}, $${base + 4}::vector, $${base + 5}, $${base + 6}, $${base + 7}, $${base + 8}, NOW(), NOW())`;
+			}).join(', ');
+
+			// Execute bulk insert into unified vector_embeddings table
+			await db.$executeRawUnsafe(
+				`
+				INSERT INTO vector_embeddings (
+					id, vector_id, text, embedding, vector_type, 
+					entity_name, knowledge_triple_id, concept_node_id,
+					created_at, updated_at
+				)
+				VALUES ${values}
+				ON CONFLICT (vector_id) DO UPDATE SET
+					text = EXCLUDED.text,
+					embedding = EXCLUDED.embedding,
+					vector_type = EXCLUDED.vector_type,
+					entity_name = EXCLUDED.entity_name,
+					knowledge_triple_id = EXCLUDED.knowledge_triple_id,
+					concept_node_id = EXCLUDED.concept_node_id,
+					updated_at = NOW()
+				`,
+				...allVectors.flatMap(v => [
+					v.id,
+					v.vector_id,
+					v.text,
+					v.embedding,
+					v.vector_type,
+					v.entity_name,
+					v.knowledge_triple_id,
+					v.concept_node_id,
+				])
+			);
+		}
 
 		return { success: true, data: undefined };
 	} catch (error) {

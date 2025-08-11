@@ -153,6 +153,36 @@ The server exposes 6 main tools (available via both transports):
 - **Vector Indexes**: Create pgvector indexes manually for performance (see README for SQL commands)
 - **Performance**: Use dedicated benchmark scripts to measure extraction, embedding, and search performance
 
+## Important Architecture Details
+
+### Vector Storage (CRITICAL)
+- **Unified Schema**: The project uses a **unified `VectorEmbedding` table** with a `vector_type` field (ENTITY, RELATIONSHIP, SEMANTIC, CONCEPT)
+- **NOT separate tables**: Do NOT use old table names like `entity_vectors`, `relationship_vectors`, etc. - these don't exist
+- **Vector Generation**: Embeddings are generated post-transaction in `generateAndStoreVectorsPostTransaction` 
+- **Embedding Format**: When storing vectors via raw SQL, format as `[${embedding.join(',')}]::vector`
+
+### Job Processing Pipeline
+- **3-Stage Pipeline**: Jobs process through EXTRACTION → CONCEPTS → DEDUPLICATION stages
+- **QStash Integration**: Jobs are queued via QStash for background processing
+- **Job Types**: 
+  - `PROCESS_KNOWLEDGE`: Parent tracking job
+  - `EXTRACT_KNOWLEDGE_BATCH`: Handles extraction and embedding generation
+  - `GENERATE_CONCEPTS`: Creates conceptual abstractions
+  - `DEDUPLICATE_KNOWLEDGE`: Removes semantic duplicates
+- **Progress Tracking**: Jobs update progress throughout processing (not just 0% or 100%)
+
+### Common Issues & Solutions
+- **Missing Embeddings**: Check that `generateAndStoreVectorsPostTransaction` is called and using the unified schema
+- **Build Errors with Vectors**: Ensure all vector operations use `vector_embeddings` table, not old separate tables
+- **Path Alias Issues**: Run via `pnpm run dev` scripts, not direct `node` commands
+- **Job Processing**: Jobs are processed asynchronously via QStash - check `/api/process-job` endpoint
+
+### Testing & Debugging
+- **Test Embedding Service**: Use `pnpm run ai-embedding` to test embedding generation in isolation
+- **Check Database State**: Query `vector_embeddings` table directly, check `vector_type` field
+- **Monitor Jobs**: Check `ProcessingJob` table for job status and error messages
+- **Batch Processing**: Default batch size is 32 for embeddings (configurable via `BATCH_SIZE` env var)
+
 ## Environment Setup
 
 ### Required Variables

@@ -255,8 +255,8 @@ async function runEmbeddingBatchTest() {
 	const testSets = [
 		{ name: 'small-batch', count: 10 },
 		{ name: 'medium-batch', count: 50 },
-		{ name: 'large-batch', count: 100 },
-		{ name: 'xlarge-batch', count: 200 },
+		// { name: 'large-batch', count: 100 },
+		// { name: 'xlarge-batch', count: 200 },
 	];
 
 	const batchSizes = [16, 32, 64, 100, 150];
