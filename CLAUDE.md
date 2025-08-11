@@ -37,7 +37,11 @@ pnpm run start:http   # Production HTTP transport
 pnpm run start:dual   # Production dual transport
 
 # Database operations
-- Tell the user when any database operations need to be run. Provide SQL scripts when needed.
+pnpm run db:push      # Push schema changes to database
+pnpm run db:migrate   # Create new migration
+pnpm run db:generate  # Generate Prisma client
+pnpm run db:studio    # Open Prisma Studio GUI
+pnpm run db:reset     # Reset database (caution: deletes all data)
 
 # Code quality
 pnpm run lint         # Biome linting
@@ -46,12 +50,18 @@ pnpm run test         # Jest testing
 pnpm run check        # Full code quality check (lint + type check)
 
 # Testing
-pnpm run test:unit    # Run unit tests
+pnpm run test         # Run all Jest tests
 pnpm run test:watch   # Run tests in watch mode
-pnpm run test:http    # Test HTTP API endpoints
-pnpm run test:mcp     # Test MCP client integration
-scripts/test-client.mjs      # STDIO MCP client testing
-scripts/test-http-client.mjs # HTTP API client testing
+pnpm run test:coverage # Generate coverage report
+
+# Performance testing and benchmarking
+pnpm run benchmark         # Run performance benchmarks
+pnpm run benchmark:full    # Run full benchmark suite
+pnpm run ai-isolation      # Run AI provider isolation tests
+pnpm run ai-extraction     # Test AI extraction performance
+pnpm run ai-embedding      # Test embedding generation
+pnpm run ai-conceptualization # Test concept generation
+pnpm run ai-latency        # Test AI API latency
 ```
 
 ## Architecture Overview
@@ -133,12 +143,15 @@ The server exposes 6 main tools (available via both transports):
 - **Type Safety**: Strict TypeScript with comprehensive type definitions in `src/shared/types/index.ts`
 - **Error Handling**: Use Result types, avoid throwing exceptions
 - **Database**: Always run `pnpm run db:push` after schema changes
-- **Testing**: Mock dependencies for unit tests, use real services for integration tests
-- **Configuration**: use env.ts
+- **Testing**: Mock dependencies for unit tests, use real services for integration tests  
+- **Configuration**: Environment variables validated with Zod schema in `src/shared/env.ts`
 - **No State Management**: All functions are stateless with explicit parameters
 - **Direct Function Calls**: No factory patterns or dependency injection frameworks
 - **Database Indexes**: Ensure proper indexes for efficient queries (replacing in-memory lookups)
-- **remember to use dev to test to avoid path alias errors**
+- **Path Aliases**: Use `~/*` for imports (e.g., `import { foo } from '~/shared/utils/bar.js'`)
+- **Development Mode**: Always use `pnpm run dev` to avoid path alias resolution issues
+- **Vector Indexes**: Create pgvector indexes manually for performance (see README for SQL commands)
+- **Performance**: Use dedicated benchmark scripts to measure extraction, embedding, and search performance
 
 ## Environment Setup
 
@@ -159,9 +172,19 @@ The server exposes 6 main tools (available via both transports):
 - `HTTP_RATE_LIMIT_MAX` - Max requests per window (default: 100)
 
 ### AI & Knowledge Graph Configuration
-- `KNOWLEDGE_GRAPH_AI_PROVIDER` - AI provider: openai | anthropic (default: openai)
-- `KNOWLEDGE_GRAPH_AI_MODEL` - AI model for extraction (default: gpt-4o-mini)
-- `KNOWLEDGE_GRAPH_EMBEDDING_MODEL` - Embedding model (default: text-embedding-3-small)
+- `AI_PROVIDER` - AI provider: openai | anthropic (default: openai)
+- `AI_MODEL` - AI model for extraction (default: openai/gpt-4o-mini)
+- `EMBEDDING_MODEL` - Embedding model (default: text-embedding-3-small)
+- `EXTRACTION_METHOD` - single-pass | four-stage (default: four-stage)
+- `EXTRACTION_TEMPERATURE` - AI temperature for extraction (default: 0.1)
+- `MAX_CHUNK_TOKENS` - Max tokens per text chunk (default: 1500)
+
+### Performance & Deduplication
+- `BATCH_SIZE` - Embedding batch size (default: 100)
+- `SEARCH_TOP_K` - Initial search candidates (default: 10)
+- `MIN_SCORE` - Similarity threshold (default: 0.7)
+- `ENABLE_SEMANTIC_DEDUP` - Enable semantic deduplication (default: false)
+- `SEMANTIC_THRESHOLD` - Dedup similarity threshold (default: 0.85)
 
 ## File Structure
 
@@ -188,14 +211,12 @@ The server exposes 6 main tools (available via both transports):
 │   └── utils/                    # Utility functions and configuration
 └── index.ts                     # Main entry point with transport selection
 
-/examples/                       # HTTP client examples
-├── javascript/                   # Node.js client examples
-├── python/                       # Python client examples  
-├── web/                         # Browser-based client examples
-└── curl/                        # cURL command examples
-
 /prisma/                         # Database schema and migrations
+├── schema.prisma               # Database schema with vector tables
 /scripts/                        # Testing and development scripts
+├── test-client.mjs            # Test STDIO MCP client
+├── test-http-client.mjs       # Test HTTP API client  
+/logs/                          # Runtime logs and conceptualization outputs
 ```
 
 ## Key Architecture Decisions

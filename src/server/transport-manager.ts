@@ -19,6 +19,8 @@ import { createEmbeddingService } from '~/shared/services/embedding-service.js';
 import type { GraphStats, ToolResult } from '~/shared/types/api.js';
 import type { Concept } from '~/shared/types/core.js';
 import { generateEmbeddingMap } from '~/shared/utils/embedding-cache.js';
+import { chunkText, mergeChunkResults, type TextChunk } from '~/shared/utils/text-chunking.js';
+import { debugLog, infoLog, warnLog, errorLog, perfLog } from '~/shared/utils/conditional-logging.js';
 
 export type ProcessKnowledgeArgs = {
 	text: string;
@@ -35,11 +37,117 @@ export async function processKnowledge(args: ProcessKnowledgeArgs): Promise<Tool
 		const startTime = Date.now();
 		const phaseTimings: Record<string, number> = {};
 
-		console.debug('[ProcessKnowledge] Starting Phase 3 optimized processing with:', {
+		const estimatedTokens = Math.ceil(args.text.length / 4); // Rough estimation
+		debugLog('[ProcessKnowledge] Starting Phase 3 optimized processing with:', {
 			textLength: args.text.length,
 			source: args.source,
 			source_type: args.source_type,
-			estimatedTokens: Math.ceil(args.text.length / 4), // Rough estimation
+			estimatedTokens,
+		});
+
+		// Check if text needs chunking (>3000 tokens)
+		const MAX_TOKENS = 3000;
+		if (estimatedTokens > MAX_TOKENS) {
+			console.debug(`[ProcessKnowledge] Text is large (${estimatedTokens} tokens), using chunking approach`);
+			
+			const chunks = chunkText(args.text, {
+				maxTokens: MAX_TOKENS,
+				overlapTokens: 200,
+				preserveParagraphs: true,
+			});
+			
+			console.debug(`[ProcessKnowledge] Split text into ${chunks.length} chunks`);
+			
+			// Process chunks in parallel for better performance
+			const chunkPromises = chunks.map(async (chunk, index) => {
+				const chunkArgs = {
+					...args,
+					text: chunk.text,
+					source: `${args.source}_chunk_${index + 1}`,
+				};
+				
+				console.debug(`[ProcessKnowledge] Processing chunk ${index + 1}/${chunks.length} (${chunk.estimatedTokens} tokens)`);
+				return await processKnowledgeChunk(chunkArgs);
+			});
+			
+			const chunkResults = await Promise.allSettled(chunkPromises);
+			const successfulResults = chunkResults
+				.filter((result, index) => {
+					if (result.status === 'rejected') {
+						console.warn(`[ProcessKnowledge] Chunk ${index + 1} failed:`, result.reason);
+						return false;
+					}
+					return result.value.success;
+				})
+				.map(result => (result as PromiseFulfilledResult<any>).value);
+			
+			// Merge all successful chunk results
+			let totalTriples = 0;
+			let totalConcepts = 0;
+			let totalConceptualizations = 0;
+			let totalVectors = 0;
+			
+			for (const result of successfulResults) {
+				if (result.data) {
+					totalTriples += result.data.triplesStored || 0;
+					totalConcepts += result.data.conceptsStored || 0;
+					totalConceptualizations += result.data.conceptualizationsStored || 0;
+					totalVectors += result.data.vectorsGenerated || 0;
+				}
+			}
+			
+			const duration = Date.now() - startTime;
+			console.debug(`[ProcessKnowledge] Chunked processing completed in ${duration}ms:`, {
+				totalChunks: chunks.length,
+				successfulChunks: successfulResults.length,
+				failedChunks: chunks.length - successfulResults.length,
+				triplesStored: totalTriples,
+				conceptsStored: totalConcepts,
+				conceptualizationsStored: totalConceptualizations,
+				vectorsGenerated: totalVectors,
+			});
+			
+			return {
+				success: true,
+				data: {
+					triplesStored: totalTriples,
+					conceptsStored: totalConcepts,
+					conceptualizationsStored: totalConceptualizations,
+					vectorsGenerated: totalVectors,
+					processingTime: duration,
+					chunksProcessed: successfulResults.length,
+					chunksTotal: chunks.length,
+				},
+			};
+		}
+
+		// For smaller texts, continue with normal processing
+		return await processKnowledgeChunk(args);
+	} catch (error) {
+		console.error('[ProcessKnowledge] Unexpected error:', error);
+		return {
+			success: false,
+			error: {
+				message: error instanceof Error ? error.message : 'Unknown error occurred',
+				operation: 'knowledge_processing',
+			},
+		};
+	}
+}
+
+/**
+ * Process a single chunk of knowledge text (used by both chunked and non-chunked processing)
+ */
+async function processKnowledgeChunk(args: ProcessKnowledgeArgs): Promise<ToolResult<any>> {
+	try {
+		const startTime = Date.now();
+		const phaseTimings: Record<string, number> = {};
+
+		console.debug('[ProcessKnowledge] Processing chunk with:', {
+			textLength: args.text.length,
+			source: args.source,
+			source_type: args.source_type,
+			estimatedTokens: Math.ceil(args.text.length / 4),
 		});
 
 		const embeddingService = createEmbeddingService({
@@ -128,57 +236,8 @@ export async function processKnowledge(args: ProcessKnowledgeArgs): Promise<Tool
 		const storageStats = batchStorageResult.data;
 		console.debug(`[ProcessKnowledge] Phase 3: ✅ Batch storage completed in ${phaseTimings.storage}ms:`, storageStats);
 
-		// Queue background conceptualization if requested
-		// if (triples.length > 0) {
-		// 	setImmediate(async () => {
-		// 		try {
-		// 			console.log(`[Background] Starting conceptualization for ${triples.length} triples...`);
-
-		// 			const conceptInput = extractElementsFromTriples(triples);
-		// 			const conceptualizeResult = await generateConcepts(conceptInput, {
-		// 				source: args.source,
-		// 				source_type: args.source_type,
-		// 			});
-
-		// 			if (!conceptualizeResult.success || !conceptualizeResult.data) {
-		// 				console.error(
-		// 					`[Background] Failed to conceptualize triples:`,
-		// 					conceptualizeResult.error
-		// 				);
-		// 				return;
-		// 			}
-
-		// 			const { concepts, relationships } = conceptualizeResult.data;
-
-		// 			const conceptResult = await storeConcepts(
-		// 				concepts,
-		// 				embeddingService // Enable concept vector generation
-		// 			);
-
-		// 			// Store conceptualization relationships
-		// 			const relationshipResult = await createConceptualizations(relationships);
-
-		// 			if (conceptResult.success && relationshipResult.success) {
-		// 				const vectorsGenerated = conceptResult.data.vectorsGenerated || 0;
-		// 				console.log(
-		// 					`[Background] Successfully stored ${conceptualizeResult.data.concepts.length} concepts, ${conceptualizeResult.data.relationships.length} relationships, and ${vectorsGenerated} concept vectors`
-		// 				);
-		// 			} else {
-		// 				if (!conceptResult.success) {
-		// 					console.error(`[Background] Failed to store concepts:`, conceptResult.error);
-		// 				}
-		// 				if (!relationshipResult.success) {
-		// 					console.error(
-		// 						`[Background] Failed to store conceptualization relationships:`,
-		// 						relationshipResult.error
-		// 					);
-		// 				}
-		// 			}
-		// 		} catch (error) {
-		// 			console.error(`[Background] Conceptualization error:`, error);
-		// 		}
-		// 	});
-		// }
+		// Note: Conceptualization is now handled in the extraction phase and stored in batch storage
+		// Background processing removed as it was redundant
 
 		const duration = Date.now() - startTime;
 		phaseTimings.total = duration;
