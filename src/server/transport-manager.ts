@@ -18,6 +18,7 @@ import { env } from '~/shared/env.js';
 import { createEmbeddingService } from '~/shared/services/embedding-service.js';
 import type { GraphStats, ToolResult } from '~/shared/types/api.js';
 import type { Concept } from '~/shared/types/core.js';
+import { generateEmbeddingMap } from '~/shared/utils/embedding-cache.js';
 
 export type ProcessKnowledgeArgs = {
 	text: string;
@@ -27,13 +28,13 @@ export type ProcessKnowledgeArgs = {
 };
 
 /**
- * Extract and store knowledge triples from text
+ * Extract and store knowledge triples from text using optimized embedding map approach
  */
 export async function processKnowledge(args: ProcessKnowledgeArgs): Promise<ToolResult> {
 	try {
 		const startTime = Date.now();
 
-		console.debug('[ProcessKnowledge] Starting with:', {
+		console.debug('[ProcessKnowledge] Starting Phase 2 optimized processing with:', {
 			textLength: args.text.length,
 			source: args.source,
 			source_type: args.source_type,
@@ -46,7 +47,7 @@ export async function processKnowledge(args: ProcessKnowledgeArgs): Promise<Tool
 		});
 
 		// Extract knowledge
-		console.debug('[ProcessKnowledge] Extracting triples...');
+		console.debug('[ProcessKnowledge] Phase 2: Extracting triples...');
 		const extractionResult = await extractKnowledgeTriples(args);
 		if (!extractionResult.success || !extractionResult.data) {
 			console.error('[ProcessKnowledge] Extraction failed:', extractionResult.error);
@@ -60,26 +61,45 @@ export async function processKnowledge(args: ProcessKnowledgeArgs): Promise<Tool
 		}
 
 		let { triples, concepts, conceptualizations } = extractionResult.data;
-		console.debug(`[ProcessKnowledge] Extracted ${triples.length} triples`);
+		console.debug(`[ProcessKnowledge] Phase 2: Extracted ${triples.length} triples and ${concepts.length} concepts`);
 
-		// Always deduplicate triples
+		// Phase 2 optimization: Generate comprehensive embedding map once for all operations
+		console.debug('[ProcessKnowledge] Phase 2: Generating comprehensive embedding map...');
+		const embeddingMapResult = await generateEmbeddingMap(triples, concepts, embeddingService, env.ENABLE_SEMANTIC_DEDUP);
+		
+		if (!embeddingMapResult.success) {
+			console.error('[ProcessKnowledge] Phase 2: Embedding map generation failed:', embeddingMapResult.error);
+			return {
+				success: false,
+				error: {
+					message: `Embedding map generation failed: ${embeddingMapResult.error.message}`,
+					operation: 'embedding_generation',
+				},
+			};
+		}
+
+		const embeddingMap = embeddingMapResult.data.embeddings;
+		const embeddingStats = embeddingMapResult.data.stats;
+		console.debug(`[ProcessKnowledge] Phase 2: ✅ Generated embedding map - ${embeddingStats.uniqueTexts} unique embeddings, ${embeddingStats.duplicatesAverted} duplicates averted, ${embeddingStats.batchCalls} API calls`);
+
+		// Always deduplicate triples using embedding map
 		if (triples.length > 0) {
-			console.debug('[ProcessKnowledge] Deduplicating triples...');
-			const deduplicationResult = await deduplicateTriples(triples, embeddingService);
+			console.debug('[ProcessKnowledge] Phase 2: Deduplicating triples using embedding map...');
+			const deduplicationResult = await deduplicateTriples(triples, embeddingMap);
 			if (deduplicationResult.success) {
 				const originalCount = triples.length;
 				triples = deduplicationResult.data?.uniqueTriples ?? [];
 				console.debug(
-					`[ProcessKnowledge] Deduplicated: ${originalCount} → ${triples.length} triples`
+					`[ProcessKnowledge] Phase 2: Deduplicated: ${originalCount} → ${triples.length} triples using embedding map`
 				);
 			}
 		}
 
-		// Store triples with vector generation
-		console.debug('[ProcessKnowledge] Storing triples...');
-		const storeResult = await storeTriples(triples, embeddingService);
+		// Store triples with optimized vector generation using embedding map
+		console.debug('[ProcessKnowledge] Phase 2: Storing triples using embedding map...');
+		const storeResult = await storeTriples(triples, embeddingMap);
 		if (!storeResult.success) {
-			console.error('[ProcessKnowledge] Storage failed:', storeResult.error);
+			console.error('[ProcessKnowledge] Phase 2: Storage failed:', storeResult.error);
 			return {
 				success: false,
 				error: {
@@ -89,22 +109,22 @@ export async function processKnowledge(args: ProcessKnowledgeArgs): Promise<Tool
 			};
 		}
 
-		// Store concepts with vector generation
+		// Store concepts with optimized vector generation using embedding map
 		if (concepts.length > 0) {
-			console.debug(`[ProcessKnowledge] Storing ${concepts.length} concepts...`);
-			const conceptResult = await storeConcepts(concepts, embeddingService);
+			console.debug(`[ProcessKnowledge] Phase 2: Storing ${concepts.length} concepts using embedding map...`);
+			const conceptResult = await storeConcepts(concepts, embeddingMap);
 			if (!conceptResult.success) {
-				console.warn('[ProcessKnowledge] Concept storage failed:', conceptResult.error);
+				console.warn('[ProcessKnowledge] Phase 2: Concept storage failed:', conceptResult.error);
 				// Don't fail the entire operation if concept storage fails
 			}
 		}
 
 		// Store conceptualizations
 		if (conceptualizations.length > 0) {
-			console.debug(`[ProcessKnowledge] Storing ${conceptualizations.length} conceptualizations...`);
+			console.debug(`[ProcessKnowledge] Phase 2: Storing ${conceptualizations.length} conceptualizations...`);
 			const conceptualizationResult = await createConceptualizations(conceptualizations);
 			if (!conceptualizationResult.success) {
-				console.warn('[ProcessKnowledge] Conceptualization storage failed:', conceptualizationResult.error);
+				console.warn('[ProcessKnowledge] Phase 2: Conceptualization storage failed:', conceptualizationResult.error);
 				// Don't fail the entire operation if conceptualization storage fails
 			}
 		}
@@ -162,9 +182,15 @@ export async function processKnowledge(args: ProcessKnowledgeArgs): Promise<Tool
 		// }
 
 		const duration = Date.now() - startTime;
-		console.debug(`[ProcessKnowledge] Completed in ${duration}ms`, {
+		console.debug(`[ProcessKnowledge] Phase 2 optimization completed in ${duration}ms`, {
 			triplesStored: triples.length,
 			conceptsStored: concepts.length,
+			embeddingEfficiency: {
+				uniqueEmbeddings: embeddingStats.uniqueTexts,
+				duplicatesAverted: embeddingStats.duplicatesAverted,
+				apiCallsSaved: embeddingStats.duplicatesAverted > 0 ? Math.floor(embeddingStats.duplicatesAverted / env.BATCH_SIZE) : 0,
+				batchCalls: embeddingStats.batchCalls,
+			},
 		});
 
 		return {
@@ -176,6 +202,15 @@ export async function processKnowledge(args: ProcessKnowledgeArgs): Promise<Tool
 				metadata: {
 					source: args.source,
 					source_type: args.source_type,
+					embeddingOptimization: {
+						phase: 'Phase 2 - Embedding Map Optimization',
+						uniqueEmbeddings: embeddingStats.uniqueTexts,
+						duplicatesAverted: embeddingStats.duplicatesAverted,
+						totalBatchCalls: embeddingStats.batchCalls,
+						efficiency: embeddingStats.duplicatesAverted > 0 
+							? Math.round((embeddingStats.duplicatesAverted / embeddingStats.totalTexts) * 100) 
+							: 0,
+					},
 				},
 			},
 		};

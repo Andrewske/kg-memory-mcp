@@ -54,7 +54,7 @@ export interface StoreResult {
  */
 export async function storeTriples(
 	triples: Triple[],
-	embeddingService?: EmbeddingService
+	embeddingMap?: Map<string, number[]>
 ): Promise<Result<StoreResult>> {
 	try {
 		// Generate IDs for each triple
@@ -87,25 +87,24 @@ export async function storeTriples(
 			return createResult;
 		}
 
-		// Generate and store vectors for the new triples (if embedding service available)
+		// Generate and store vectors for the new triples (using embedding map if available)
 		let vectorsGenerated = 0;
 
-		console.log(`[VECTOR DEBUG] embeddingService present: ${!!embeddingService}`);
+		console.log(`[VECTOR DEBUG] embeddingMap available: ${!!embeddingMap}`);
 		console.log(`[VECTOR DEBUG] newTriples.length: ${newTriples.length}`);
-		console.log(`[VECTOR DEBUG] embeddingService type: ${typeof embeddingService}`);
 
-		if (embeddingService && newTriples.length > 0) {
+		if (embeddingMap && newTriples.length > 0) {
 			try {
 				console.log(
-					`[VECTOR GENERATION] Starting vector generation for ${newTriples.length} new triples...`
+					`[VECTOR GENERATION OPTIMIZED] Starting optimized vector generation for ${newTriples.length} new triples using embedding map...`
 				);
 				console.log(
-					`[VECTOR GENERATION] Sample triple: "${newTriples[0]?.subject}" → "${newTriples[0]?.predicate}" → "${newTriples[0]?.object}"`
+					`[VECTOR GENERATION OPTIMIZED] Sample triple: "${newTriples[0]?.subject}" → "${newTriples[0]?.predicate}" → "${newTriples[0]?.object}"`
 				);
 
-				const vectorResult = await generateAndStoreVectors(newTriples, embeddingService);
+				const vectorResult = await generateAndStoreVectors(newTriples, embeddingMap);
 
-				console.log(`[VECTOR GENERATION] Vector generation result:`, {
+				console.log(`[VECTOR GENERATION OPTIMIZED] Vector generation result:`, {
 					success: vectorResult.success,
 					vectorsStored: vectorResult.success ? vectorResult.data.vectorsStored : 0,
 					error: vectorResult.success ? null : vectorResult.error,
@@ -113,23 +112,23 @@ export async function storeTriples(
 
 				if (vectorResult.success) {
 					vectorsGenerated = vectorResult.data.vectorsStored;
-					console.log(`[VECTOR GENERATION] ✅ Successfully stored ${vectorsGenerated} vectors`);
+					console.log(`[VECTOR GENERATION OPTIMIZED] ✅ Successfully stored ${vectorsGenerated} vectors using embedding map`);
 				} else {
-					console.warn(`[VECTOR GENERATION] ❌ Failed to store vectors:`, vectorResult.error);
+					console.warn(`[VECTOR GENERATION OPTIMIZED] ❌ Failed to store vectors:`, vectorResult.error);
 					// Don't fail the entire operation if vector generation fails
 				}
 			} catch (error) {
-				console.warn(`[VECTOR GENERATION] ❌ Vector generation error (non-blocking):`, error);
+				console.warn(`[VECTOR GENERATION OPTIMIZED] ❌ Vector generation error (non-blocking):`, error);
 				// Vector generation is non-blocking - continue with success
 			}
 		} else {
-			if (!embeddingService) {
+			if (!embeddingMap) {
 				console.warn(
-					`[VECTOR DEBUG] ⚠️  No embedding service provided - vectors will not be generated`
+					`[VECTOR DEBUG] ⚠️ No embedding map provided - vectors will not be generated`
 				);
 			}
 			if (newTriples.length === 0) {
-				console.warn(`[VECTOR DEBUG] ⚠️  No new triples to generate vectors for`);
+				console.warn(`[VECTOR DEBUG] ⚠️ No new triples to generate vectors for`);
 			}
 		}
 
@@ -165,7 +164,7 @@ export async function storeTriples(
  */
 export async function storeConcepts(
 	concepts: Concept[],
-	embeddingService?: EmbeddingService
+	embeddingMap?: Map<string, number[]>
 ): Promise<Result<{ conceptsStored: number; vectorsGenerated?: number }>> {
 	try {
 		// Store concepts first
@@ -176,20 +175,20 @@ export async function storeConcepts(
 
 		let vectorsGenerated: number | undefined;
 
-		// Generate and store vectors for the concepts (if embedding service available)
-		console.log(`[CONCEPT VECTOR DEBUG] embeddingService present: ${!!embeddingService}`);
+		// Generate and store vectors for the concepts (using embedding map if available)
+		console.log(`[CONCEPT VECTOR DEBUG] embeddingMap available: ${!!embeddingMap}`);
 		console.log(`[CONCEPT VECTOR DEBUG] concepts.length: ${concepts.length}`);
 
-		if (embeddingService && concepts.length > 0) {
+		if (embeddingMap && concepts.length > 0) {
 			try {
 				console.log(
-					`[CONCEPT VECTOR GENERATION] Starting vector generation for ${concepts.length} concepts...`
+					`[CONCEPT VECTOR GENERATION OPTIMIZED] Starting optimized vector generation for ${concepts.length} concepts using embedding map...`
 				);
-				console.log(`[CONCEPT VECTOR GENERATION] Sample concept: "${concepts[0]?.concept}"`);
+				console.log(`[CONCEPT VECTOR GENERATION OPTIMIZED] Sample concept: "${concepts[0]?.concept}"`);
 
-				const vectorResult = await generateAndStoreConceptVectors(concepts, embeddingService);
+				const vectorResult = await generateAndStoreConceptVectors(concepts, embeddingMap);
 
-				console.log(`[CONCEPT VECTOR GENERATION] Vector generation result:`, {
+				console.log(`[CONCEPT VECTOR GENERATION OPTIMIZED] Vector generation result:`, {
 					success: vectorResult.success,
 					vectorsStored: vectorResult.success ? vectorResult.data.vectorsStored : 0,
 					error: vectorResult.success ? null : vectorResult.error,
@@ -198,30 +197,30 @@ export async function storeConcepts(
 				if (vectorResult.success) {
 					vectorsGenerated = vectorResult.data.vectorsStored;
 					console.log(
-						`[CONCEPT VECTOR GENERATION] ✅ Successfully stored ${vectorsGenerated} concept vectors`
+						`[CONCEPT VECTOR GENERATION OPTIMIZED] ✅ Successfully stored ${vectorsGenerated} concept vectors using embedding map`
 					);
 				} else {
 					console.warn(
-						`[CONCEPT VECTOR GENERATION] ❌ Failed to store concept vectors:`,
+						`[CONCEPT VECTOR GENERATION OPTIMIZED] ❌ Failed to store concept vectors:`,
 						vectorResult.error
 					);
 					// Don't fail the entire operation if vector generation fails
 				}
 			} catch (error) {
 				console.warn(
-					`[CONCEPT VECTOR GENERATION] ❌ Concept vector generation error (non-blocking):`,
+					`[CONCEPT VECTOR GENERATION OPTIMIZED] ❌ Concept vector generation error (non-blocking):`,
 					error
 				);
 				// Vector generation is non-blocking - continue with success
 			}
 		} else {
-			if (!embeddingService) {
+			if (!embeddingMap) {
 				console.warn(
-					`[CONCEPT VECTOR DEBUG] ⚠️  No embedding service provided - concept vectors will not be generated`
+					`[CONCEPT VECTOR DEBUG] ⚠️ No embedding map provided - concept vectors will not be generated`
 				);
 			}
 			if (concepts.length === 0) {
-				console.warn(`[CONCEPT VECTOR DEBUG] ⚠️  No concepts to generate vectors for`);
+				console.warn(`[CONCEPT VECTOR DEBUG] ⚠️ No concepts to generate vectors for`);
 			}
 		}
 
@@ -446,15 +445,15 @@ export async function enumerateEntities(
 }
 
 /**
- * Generate and store vectors for knowledge triples
+ * Generate and store vectors for knowledge triples using pre-generated embedding map
  * Creates entity, relationship, and semantic vectors for efficient search
  */
 async function generateAndStoreVectors(
 	triples: Triple[],
-	embeddingService: EmbeddingService
+	embeddingMap: Map<string, number[]>
 ): Promise<Result<{ vectorsStored: number }>> {
 	try {
-		console.log(`[VECTOR DETAIL] Starting vector generation for ${triples.length} triples`);
+		console.log(`[VECTOR OPTIMIZED] Starting optimized vector generation for ${triples.length} triples using embedding map`);
 
 		const entityVectors: Array<{
 			vector_id: string;
@@ -478,165 +477,102 @@ async function generateAndStoreVectors(
 			knowledge_triple_id: string;
 		}> = [];
 
-		// Collect unique entities and relationships for batch embedding generation
+		// Collect unique entities and relationships
 		const uniqueEntities = new Set<string>();
 		const uniqueRelationships = new Set<string>();
-		const source_type = triples[0].source_type;
-		const source = triples[0].source;
-		const semanticTexts: string[] = [];
-		const tripleIds: string[] = [];
 
 		for (const triple of triples) {
 			uniqueEntities.add(triple.subject);
 			uniqueEntities.add(triple.object);
 			uniqueRelationships.add(triple.predicate);
+		}
 
-			// Generate semantic text combining all parts of the triple
+		console.log(
+			`[VECTOR OPTIMIZED] Processing ${uniqueEntities.size} entities, ${uniqueRelationships.size} relationships, ${triples.length} semantic texts`
+		);
+
+		// Generate entity vectors using embedding map
+		let entityLookupMisses = 0;
+		for (const entity of uniqueEntities) {
+			const embedding = embeddingMap.get(entity);
+			if (!embedding) {
+				console.warn(`[VECTOR OPTIMIZED] ⚠️ Missing embedding for entity: "${entity}"`);
+				entityLookupMisses++;
+				continue;
+			}
+
+			// Find all triples that contain this entity
+			for (const triple of triples) {
+				if (triple.subject === entity || triple.object === entity) {
+					entityVectors.push({
+						vector_id: uuidv4(),
+						text: entity,
+						embedding,
+						entity_name: entity,
+						knowledge_triple_id: (triple as any).id,
+					});
+				}
+			}
+		}
+
+		// Generate relationship vectors using embedding map
+		let relationshipLookupMisses = 0;
+		for (const relationship of uniqueRelationships) {
+			const embedding = embeddingMap.get(relationship);
+			if (!embedding) {
+				console.warn(`[VECTOR OPTIMIZED] ⚠️ Missing embedding for relationship: "${relationship}"`);
+				relationshipLookupMisses++;
+				continue;
+			}
+
+			// Find all triples that contain this relationship
+			for (const triple of triples) {
+				if (triple.predicate === relationship) {
+					relationshipVectors.push({
+						vector_id: uuidv4(),
+						text: relationship,
+						embedding,
+						knowledge_triple_id: (triple as any).id,
+					});
+				}
+			}
+		}
+
+		// Generate semantic vectors using embedding map
+		let semanticLookupMisses = 0;
+		for (const triple of triples) {
 			const semanticText = `${triple.subject} ${triple.predicate} ${triple.object}`;
-			semanticTexts.push(semanticText);
-			tripleIds.push((triple as any).id);
-		}
-
-		console.log(
-			`[VECTOR DETAIL] Collected ${uniqueEntities.size} entities, ${uniqueRelationships.size} relationships, ${semanticTexts.length} semantic texts`
-		);
-		console.log(`[VECTOR DETAIL] Sample semantic text: "${semanticTexts[0]}"`);
-
-		const batchSize = env.BATCH_SIZE;
-		let totalVectors = 0;
-
-		console.log(`[VECTOR DETAIL] Using batch size: ${batchSize}`);
-
-		// Generate entity embeddings
-		const entityArray = Array.from(uniqueEntities);
-		console.log(
-			`[VECTOR DETAIL] Processing ${entityArray.length} entities in ${Math.ceil(entityArray.length / batchSize)} batches`
-		);
-
-		for (let i = 0; i < entityArray.length; i += batchSize) {
-			const batch = entityArray.slice(i, i + batchSize);
-			console.log(
-				`[VECTOR DETAIL] Generating embeddings for entity batch ${Math.floor(i / batchSize) + 1}: ${batch.length} entities`
-			);
-
-			try {
-				const embeddings = await embeddingService.embedBatch(batch, {
-					source_type,
-					source,
-				});
-				console.log(`[VECTOR DETAIL] Entity embeddings result:`, {
-					success: embeddings.success,
-					dataLength: embeddings.success ? embeddings.data.length : 0,
-				});
-
-				if (embeddings.success) {
-					for (let j = 0; j < batch.length; j++) {
-						const entity = batch[j];
-						const embedding = embeddings.data[j];
-
-						// Find all triples that contain this entity
-						for (const triple of triples) {
-							if (triple.subject === entity || triple.object === entity) {
-								entityVectors.push({
-									vector_id: uuidv4(),
-									text: entity,
-									embedding,
-									entity_name: entity,
-									knowledge_triple_id: (triple as any).id,
-								});
-							}
-						}
-					}
-					console.log(`[VECTOR DETAIL] Added ${batch.length} entity vectors for this batch`);
-				} else {
-					console.warn(`[VECTOR DETAIL] ❌ Entity embedding failed:`, embeddings.error);
-				}
-			} catch (error) {
-				console.warn(`[VECTOR DETAIL] ❌ Entity embedding error:`, error);
+			const embedding = embeddingMap.get(semanticText);
+			if (!embedding) {
+				console.warn(`[VECTOR OPTIMIZED] ⚠️ Missing embedding for semantic text: "${semanticText}"`);
+				semanticLookupMisses++;
+				continue;
 			}
-		}
 
-		// Generate relationship embeddings
-		const relationshipArray = Array.from(uniqueRelationships);
-		for (let i = 0; i < relationshipArray.length; i += batchSize) {
-			const batch = relationshipArray.slice(i, i + batchSize);
-			const embeddings = await embeddingService.embedBatch(batch, {
-				source_type,
-				source,
+			semanticVectors.push({
+				vector_id: uuidv4(),
+				text: semanticText,
+				embedding,
+				knowledge_triple_id: (triple as any).id,
 			});
-
-			if (embeddings.success) {
-				for (let j = 0; j < batch.length; j++) {
-					const relationship = batch[j];
-					const embedding = embeddings.data[j];
-
-					// Find all triples that contain this relationship
-					for (const triple of triples) {
-						if (triple.predicate === relationship) {
-							relationshipVectors.push({
-								vector_id: uuidv4(),
-								text: relationship,
-								embedding,
-								knowledge_triple_id: (triple as any).id,
-							});
-						}
-					}
-				}
-			}
 		}
 
-		// Generate semantic embeddings (full triple content)
-		console.log(
-			`[VECTOR DETAIL] Processing ${semanticTexts.length} semantic texts in ${Math.ceil(semanticTexts.length / batchSize)} batches`
-		);
-
-		for (let i = 0; i < semanticTexts.length; i += batchSize) {
-			const batch = semanticTexts.slice(i, i + batchSize);
-			const batchIds = tripleIds.slice(i, i + batchSize);
-			console.log(
-				`[VECTOR DETAIL] Generating semantic embeddings for batch ${Math.floor(i / batchSize) + 1}: ${batch.length} texts`
-			);
-			console.log(`[VECTOR DETAIL] Sample text: "${batch[0]}"`);
-			console.log(`[VECTOR DETAIL] Sample triple ID: "${batchIds[0]}"`);
-
-			try {
-				const embeddings = await embeddingService.embedBatch(batch, {
-					source_type,
-					source,
-				});
-				console.log(`[VECTOR DETAIL] Semantic embeddings result:`, {
-					success: embeddings.success,
-					dataLength: embeddings.success ? embeddings.data.length : 0,
-					firstEmbeddingLength:
-						embeddings.success && embeddings.data[0] ? embeddings.data[0].length : 0,
-				});
-
-				if (embeddings.success) {
-					for (let j = 0; j < batch.length; j++) {
-						semanticVectors.push({
-							vector_id: uuidv4(),
-							text: batch[j],
-							embedding: embeddings.data[j],
-							knowledge_triple_id: batchIds[j],
-						});
-					}
-					console.log(`[VECTOR DETAIL] Added ${batch.length} semantic vectors for this batch`);
-				} else {
-					console.warn(`[VECTOR DETAIL] ❌ Semantic embedding failed:`, embeddings.error);
-				}
-			} catch (error) {
-				console.warn(`[VECTOR DETAIL] ❌ Semantic embedding error:`, error);
-			}
+		// Report embedding lookup results
+		const totalLookupMisses = entityLookupMisses + relationshipLookupMisses + semanticLookupMisses;
+		if (totalLookupMisses > 0) {
+			console.warn(`[VECTOR OPTIMIZED] ⚠️ ${totalLookupMisses} embedding lookups failed (${entityLookupMisses} entities, ${relationshipLookupMisses} relationships, ${semanticLookupMisses} semantic)`);
+		} else {
+			console.log(`[VECTOR OPTIMIZED] ✅ All embedding lookups successful - no API calls needed!`);
 		}
 
 		// Store all vectors in database
-		totalVectors = entityVectors.length + relationshipVectors.length + semanticVectors.length;
+		const totalVectors = entityVectors.length + relationshipVectors.length + semanticVectors.length;
 		console.log(
-			`[VECTOR DETAIL] Preparing to store ${totalVectors} vectors (${entityVectors.length} entity, ${relationshipVectors.length} relationship, ${semanticVectors.length} semantic)`
+			`[VECTOR OPTIMIZED] Preparing to store ${totalVectors} vectors (${entityVectors.length} entity, ${relationshipVectors.length} relationship, ${semanticVectors.length} semantic)`
 		);
 
 		if (totalVectors === 0) {
-			console.warn(`[VECTOR DETAIL] ⚠️  No vectors to store - all embedding generations failed`);
+			console.warn(`[VECTOR OPTIMIZED] ⚠️ No vectors to store - all embedding lookups failed`);
 			return {
 				success: true,
 				data: {
@@ -652,18 +588,18 @@ async function generateAndStoreVectors(
 				semantic: semanticVectors,
 			});
 
-			console.log(`[VECTOR DETAIL] Vector storage result:`, {
+			console.log(`[VECTOR OPTIMIZED] Vector storage result:`, {
 				success: storeResult.success,
 				error: storeResult.success ? null : storeResult.error,
 			});
 
 			if (!storeResult.success) {
-				console.warn(`[VECTOR DETAIL] ❌ Failed to store vectors:`, storeResult.error);
+				console.warn(`[VECTOR OPTIMIZED] ❌ Failed to store vectors:`, storeResult.error);
 				return storeResult;
 			}
 
 			console.log(
-				`[VECTOR GENERATION] ✅ Successfully generated and stored ${totalVectors} vectors (${entityVectors.length} entity, ${relationshipVectors.length} relationship, ${semanticVectors.length} semantic)`
+				`[VECTOR OPTIMIZED] ✅ Successfully generated and stored ${totalVectors} vectors using embedding map (${entityVectors.length} entity, ${relationshipVectors.length} relationship, ${semanticVectors.length} semantic)`
 			);
 
 			return {
@@ -673,7 +609,7 @@ async function generateAndStoreVectors(
 				},
 			};
 		} catch (error) {
-			console.warn(`[VECTOR DETAIL] ❌ Vector storage error:`, error);
+			console.warn(`[VECTOR OPTIMIZED] ❌ Vector storage error:`, error);
 			return {
 				success: false,
 				error: {
@@ -696,20 +632,20 @@ async function generateAndStoreVectors(
 }
 
 /**
- * Generate and store vectors for concept nodes
+ * Generate and store vectors for concept nodes using pre-generated embedding map
  * Creates concept vectors for efficient conceptual similarity search
  */
 async function generateAndStoreConceptVectors(
 	concepts: Concept[],
-	embeddingService: EmbeddingService
+	embeddingMap: Map<string, number[]>
 ): Promise<Result<{ vectorsStored: number }>> {
 	try {
 		console.log(
-			`[CONCEPT VECTOR DETAIL] Starting concept vector generation for ${concepts.length} concepts`
+			`[CONCEPT VECTOR OPTIMIZED] Starting optimized concept vector generation for ${concepts.length} concepts using embedding map`
 		);
 
 		if (concepts.length === 0) {
-			console.log(`[CONCEPT VECTOR DETAIL] No concepts to process`);
+			console.log(`[CONCEPT VECTOR OPTIMIZED] No concepts to process`);
 			return {
 				success: true,
 				data: {
@@ -725,74 +661,40 @@ async function generateAndStoreConceptVectors(
 			concept_node_id: string;
 		}> = [];
 
-		// Generate concept texts for embedding
-		const conceptTexts: string[] = [];
-		const conceptIds: string[] = [];
-		const source_type = concepts[0].source_type;
-		const source = concepts[0].source;
+		// Generate concept vectors using embedding map
+		let conceptLookupMisses = 0;
 		for (const concept of concepts) {
-			// Create rich text representation of the concept
-			const conceptText = concept.concept; // Start with the concept name
-			conceptTexts.push(conceptText);
-			conceptIds.push(generateConceptId(concept));
+			const conceptText = concept.concept;
+			const embedding = embeddingMap.get(conceptText);
+			
+			if (!embedding) {
+				console.warn(`[CONCEPT VECTOR OPTIMIZED] ⚠️ Missing embedding for concept: "${conceptText}"`);
+				conceptLookupMisses++;
+				continue;
+			}
+
+			conceptVectors.push({
+				vector_id: uuidv4(),
+				text: conceptText,
+				embedding,
+				concept_node_id: generateConceptId(concept),
+			});
 		}
 
-		console.log(`[CONCEPT VECTOR DETAIL] Generated concept texts for ${concepts.length} concepts`);
-		console.log(`[CONCEPT VECTOR DETAIL] Sample concept text: "${conceptTexts[0]}"`);
-
-		const batchSize = env.BATCH_SIZE;
-		console.log(`[CONCEPT VECTOR DETAIL] Using batch size: ${batchSize}`);
-
-		// Generate concept embeddings in batches
-		for (let i = 0; i < conceptTexts.length; i += batchSize) {
-			const batch = conceptTexts.slice(i, i + batchSize);
-			const batchIds = conceptIds.slice(i, i + batchSize);
-
-			console.log(
-				`[CONCEPT VECTOR DETAIL] Generating concept embeddings for batch ${Math.floor(i / batchSize) + 1}: ${batch.length} concepts`
-			);
-			console.log(`[CONCEPT VECTOR DETAIL] Sample concept in batch: "${batch[0]}"`);
-			console.log(`[CONCEPT VECTOR DETAIL] Sample concept ID: "${batchIds[0]}"`);
-
-			try {
-				const embeddings = await embeddingService.embedBatch(batch, {
-					source_type,
-					source,
-				});
-				console.log(`[CONCEPT VECTOR DETAIL] Concept embeddings result:`, {
-					success: embeddings.success,
-					dataLength: embeddings.success ? embeddings.data.length : 0,
-					firstEmbeddingLength:
-						embeddings.success && embeddings.data[0] ? embeddings.data[0].length : 0,
-				});
-
-				if (embeddings.success) {
-					for (let j = 0; j < batch.length; j++) {
-						conceptVectors.push({
-							vector_id: uuidv4(),
-							text: batch[j],
-							embedding: embeddings.data[j],
-							concept_node_id: batchIds[j],
-						});
-					}
-					console.log(
-						`[CONCEPT VECTOR DETAIL] Added ${batch.length} concept vectors for this batch`
-					);
-				} else {
-					console.warn(`[CONCEPT VECTOR DETAIL] ❌ Concept embedding failed:`, embeddings.error);
-				}
-			} catch (error) {
-				console.warn(`[CONCEPT VECTOR DETAIL] ❌ Concept embedding error:`, error);
-			}
+		// Report embedding lookup results
+		if (conceptLookupMisses > 0) {
+			console.warn(`[CONCEPT VECTOR OPTIMIZED] ⚠️ ${conceptLookupMisses} concept embedding lookups failed`);
+		} else {
+			console.log(`[CONCEPT VECTOR OPTIMIZED] ✅ All concept embedding lookups successful - no API calls needed!`);
 		}
 
 		// Store concept vectors in database
 		const totalVectors = conceptVectors.length;
-		console.log(`[CONCEPT VECTOR DETAIL] Preparing to store ${totalVectors} concept vectors`);
+		console.log(`[CONCEPT VECTOR OPTIMIZED] Preparing to store ${totalVectors} concept vectors`);
 
 		if (totalVectors === 0) {
 			console.warn(
-				`[CONCEPT VECTOR DETAIL] ⚠️  No concept vectors to store - all embedding generations failed`
+				`[CONCEPT VECTOR OPTIMIZED] ⚠️ No concept vectors to store - all embedding lookups failed`
 			);
 			return {
 				success: true,
@@ -807,21 +709,21 @@ async function generateAndStoreConceptVectors(
 				concept: conceptVectors,
 			});
 
-			console.log(`[CONCEPT VECTOR DETAIL] Concept vector storage result:`, {
+			console.log(`[CONCEPT VECTOR OPTIMIZED] Concept vector storage result:`, {
 				success: storeResult.success,
 				error: storeResult.success ? null : storeResult.error,
 			});
 
 			if (!storeResult.success) {
 				console.warn(
-					`[CONCEPT VECTOR DETAIL] ❌ Failed to store concept vectors:`,
+					`[CONCEPT VECTOR OPTIMIZED] ❌ Failed to store concept vectors:`,
 					storeResult.error
 				);
 				return storeResult;
 			}
 
 			console.log(
-				`[CONCEPT VECTOR GENERATION] ✅ Successfully generated and stored ${totalVectors} concept vectors`
+				`[CONCEPT VECTOR OPTIMIZED] ✅ Successfully generated and stored ${totalVectors} concept vectors using embedding map`
 			);
 
 			return {
@@ -831,7 +733,7 @@ async function generateAndStoreConceptVectors(
 				},
 			};
 		} catch (error) {
-			console.warn(`[CONCEPT VECTOR DETAIL] ❌ Concept vector storage error:`, error);
+			console.warn(`[CONCEPT VECTOR OPTIMIZED] ❌ Concept vector storage error:`, error);
 			return {
 				success: false,
 				error: {

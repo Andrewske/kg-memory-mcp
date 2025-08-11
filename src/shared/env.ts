@@ -24,7 +24,7 @@ const envSchema = z.object({
 		.transform(val => parseInt(val)),
 	BATCH_SIZE: z
 		.string()
-		.default('32')
+		.default('100')
 		.transform(val => parseInt(val)),
 
 	// HTTP
