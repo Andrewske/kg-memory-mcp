@@ -93,9 +93,9 @@ export class DeduplicationJobHandler implements JobHandler {
 				allTexts.add(triple.object);
 				allTexts.add(`${triple.subject} ${triple.predicate} ${triple.object}`);
 			}
-			
+
 			const embeddingResults = await embeddingService.embedBatch(Array.from(allTexts));
-			
+
 			if (!embeddingResults.success) {
 				return {
 					success: false,
@@ -105,7 +105,7 @@ export class DeduplicationJobHandler implements JobHandler {
 					},
 				};
 			}
-			
+
 			const embeddingMap = new Map<string, number[]>();
 			Array.from(allTexts).forEach((text, index) => {
 				embeddingMap.set(text, embeddingResults.data[index]);

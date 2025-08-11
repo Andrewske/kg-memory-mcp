@@ -77,9 +77,7 @@ export async function schedulePostProcessingJobs(
 ): Promise<void> {
 	const qstash = getQStash();
 	if (!qstash) {
-		warnLog(
-			'[PipelineCoordinator] QStash not configured, skipping post-processing job scheduling'
-		);
+		warnLog('[PipelineCoordinator] QStash not configured, skipping post-processing job scheduling');
 		return;
 	}
 
@@ -104,7 +102,7 @@ export async function schedulePostProcessingJobs(
 	await qstash.publishJSON({
 		url: `${env.HTTP_SERVER_URL}/api/process-job`,
 		body: { jobId: conceptJob.id },
-		delay: Math.max(5, baseDelay * 0.1), // Minimum 5 second delay
+		delay: Math.max(6, baseDelay * 0.1), // Minimum 6 second delay
 	});
 
 	debugLog(`[PipelineCoordinator] Scheduled concept generation job ${conceptJob.id}`);
@@ -143,8 +141,8 @@ function calculateProcessingDelay(metrics: ExtractionMetrics): number {
 	const timeBasedDelay = Math.ceil(metrics.processingTime / 1000); // Convert ms to seconds
 	const volumeBasedDelay = Math.ceil(metrics.triplesExtracted / 10); // 1 second per 10 triples
 
-	// Use the larger of the two delays, capped at 60 seconds
-	return Math.min(60, Math.max(timeBasedDelay, volumeBasedDelay));
+	// Use the larger of the two delays, with minimum 6 seconds, capped at 60 seconds
+	return Math.min(60, Math.max(6, Math.max(timeBasedDelay, volumeBasedDelay)));
 }
 
 /**
@@ -155,22 +153,21 @@ export async function updateJobProgress(
 	progress: number,
 	metrics?: any
 ): Promise<void> {
+	const clampedProgress = Math.min(100, Math.max(0, progress));
 	const updateData: any = {
-		progress: Math.min(100, Math.max(0, progress)),
+		progress: clampedProgress,
 	};
 
 	if (metrics) {
 		updateData.metrics = metrics;
 	}
 
-	if (progress === 100) {
+	if (clampedProgress === 100) {
 		updateData.status = JobStatus.COMPLETED;
 		updateData.completedAt = new Date();
-	} else if (progress > 0 && progress < 100) {
+	} else if (clampedProgress > 0) {
 		updateData.status = JobStatus.PROCESSING;
-		if (!updateData.startedAt) {
-			updateData.startedAt = new Date();
-		}
+		updateData.startedAt = new Date();
 	}
 
 	await db.processingJob.update({

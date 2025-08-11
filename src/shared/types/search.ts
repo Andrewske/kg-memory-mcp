@@ -61,7 +61,6 @@ export interface SearchResult {
 	};
 }
 
-
 export interface EntityEnumerationOptions {
 	role?: 'subject' | 'object' | 'both';
 	min_occurrence?: number;

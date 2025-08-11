@@ -52,9 +52,7 @@ export async function generateEmbeddingMap(
 		infoLog(
 			`[EMBEDDING MAP] Generating embeddings for ${uniqueTexts.size} unique texts (${duplicatesAverted} duplicates averted)`
 		);
-		debugLog(
-			`[EMBEDDING MAP] Text breakdown: entities, relationships, semantic content, concepts`
-		);
+		debugLog(`[EMBEDDING MAP] Text breakdown: entities, relationships, semantic content, concepts`);
 		debugLog(`[EMBEDDING MAP] Sample texts:`, allTexts.slice(0, 3));
 
 		// Generate embeddings in batches

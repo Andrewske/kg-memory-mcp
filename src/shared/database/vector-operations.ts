@@ -199,7 +199,7 @@ export async function createVectors(vectors: {
 		}
 
 		const allVectors: any[] = [];
-		
+
 		// Prepare entity vectors
 		if (vectors.entity && vectors.entity.length > 0) {
 			vectors.entity.forEach(v => {
@@ -268,10 +268,12 @@ export async function createVectors(vectors: {
 
 		if (allVectors.length > 0) {
 			// Build the VALUES clause for bulk insert
-			const values = allVectors.map((v, i) => {
-				const base = i * 8;
-				return `($${base + 1}, $${base + 2}, $${base + 3}, $${base + 4}::vector, $${base + 5}, $${base + 6}, $${base + 7}, $${base + 8}, NOW(), NOW())`;
-			}).join(', ');
+			const values = allVectors
+				.map((v, i) => {
+					const base = i * 8;
+					return `($${base + 1}, $${base + 2}, $${base + 3}, $${base + 4}::vector, $${base + 5}, $${base + 6}, $${base + 7}, $${base + 8}, NOW(), NOW())`;
+				})
+				.join(', ');
 
 			// Execute bulk insert into unified vector_embeddings table
 			await db.$executeRawUnsafe(

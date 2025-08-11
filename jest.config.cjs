@@ -1,4 +1,4 @@
-export default {
+module.exports = {
   preset: 'ts-jest/presets/default-esm',
   testEnvironment: 'node',
   roots: ['<rootDir>/src'],
@@ -6,19 +6,13 @@ export default {
   transform: {
     '^.+\\.ts$': ['ts-jest', {
       useESM: true,
-      tsconfig: {
-        module: 'esnext',
-        target: 'es2022',
-        moduleResolution: 'node',
-        allowSyntheticDefaultImports: true,
-        esModuleInterop: true,
-      }
     }]
   },
   moduleNameMapper: {
     '^~/(.*)$': '<rootDir>/src/$1',
-    '^(\\.{1,2}/.*)\\.js$': '$1'
+    '^(\\.{1,2}/.*)\\.js$': '$1',
   },
+  resolver: '<rootDir>/jest.resolver.cjs',
   collectCoverageFrom: [
     'src/**/*.ts',
     '!src/**/*.d.ts',
@@ -30,4 +24,10 @@ export default {
   coverageReporters: ['text', 'lcov', 'html'],
   testTimeout: 60000,
   extensionsToTreatAsEsm: ['.ts'],
+  maxWorkers: 1,
+  testPathIgnorePatterns: [
+    '/node_modules/',
+    '/dist/',
+    '/coverage/',
+  ],
 };

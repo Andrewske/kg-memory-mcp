@@ -63,8 +63,8 @@ export class BatchExtractionJobHandler implements JobHandler {
 			await updateJobProgress(job.id, 80);
 
 			// Merge chunk results
-			let allTriples: any[] = [];
-			let allConcepts: any[] = [];
+			const allTriples: any[] = [];
+			const allConcepts: any[] = [];
 			for (const result of chunkResults) {
 				if (result.data?.triples) allTriples.push(...result.data.triples);
 				if (result.data?.concepts) allConcepts.push(...result.data.concepts);

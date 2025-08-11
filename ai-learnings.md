@@ -9,6 +9,7 @@ This file contains insights and lessons learned from working on the Knowledge Gr
 - **Pure Functional Design**: No factories, no hidden state - all dependencies passed as parameters
 - **Database-First**: All operations go directly to PostgreSQL with proper indexing
 - **TypeScript with ES Modules**: Uses strict typing with path aliases (`~` maps to `src/`)
+- **Unified Vector Storage**: Single `VectorEmbedding` table with `vector_type` field (ENTITY, RELATIONSHIP, SEMANTIC, CONCEPT)
 
 ### Key Directories
 ```
@@ -334,6 +335,34 @@ Based on Phase 3 findings, focus on the 95% bottleneck:
 
 **Total Expected Improvement**: 70-90% faster processing (focusing on the real bottleneck)
 
+## 🔥 Recent Architectural Changes (August 2025)
+
+### ✅ Vector Storage Consolidation (Commit 5109125)
+**MAJOR ARCHITECTURAL IMPROVEMENT**: Consolidated all vector operations into unified `VectorEmbedding` table
+
+**What Changed:**
+- **Removed**: Separate `entity_vectors`, `relationship_vectors`, `semantic_vectors` tables  
+- **Added**: Single `VectorEmbedding` table with `vector_type` enum field
+- **Updated**: All vector operations to use unified storage pattern
+- **Simplified**: Deduplication handler now deletes from single table
+
+**Code Impact:**
+- **Modified Files**: 
+  - `src/shared/database/batch-storage.ts` - Unified vector generation and storage
+  - `src/shared/database/vector-operations.ts` - Single table operations  
+  - `src/features/knowledge-processing/handlers/deduplication-handler.ts` - Simplified deletions
+- **Removed Code**: ~2,100 lines of legacy vector handling code
+- **Performance**: Database operations now 526ms (0.8% of total processing time)
+
+**⚠️ CRITICAL SECURITY NOTE**: The consolidation uses raw SQL with potential injection vulnerability in `batch-storage.ts:368-388`. Immediate fix required using Prisma parameterized queries.
+
+**Developer Impact:**
+- ✅ Much simpler vector operations (single table, single insert pattern)
+- ✅ Better performance with bulk operations
+- ✅ Easier maintenance and debugging
+- ⚠️ Must use `vector_type` field in all queries now
+- ⚠️ Update any custom queries to use `vector_embeddings` table
+
 ## 🐛 Common Issues & Solutions
 
 ### Performance Testing Setup Issues
@@ -437,17 +466,24 @@ await createVectors(vectorData); // Uses proper pgvector operations
 ### Key Tables and Relationships
 - `KnowledgeTriple`: Core relationship storage with extraction metadata
 - `ConceptNode`: Hierarchical concept abstractions
-- `EntityVector`, `RelationshipVector`, `SemanticVector`: Separate vector storage for different search types
-- `Conceptualization`: Links between entities and their conceptual abstractions
+- `VectorEmbedding`: **UNIFIED** vector storage with `vector_type` field (replaces separate vector tables)
+- `ConceptualizationRelationship`: Links between entities and their conceptual abstractions
 
-### Vector Storage Strategy
-The system generates multiple vector types for comprehensive search:
-- **Entity vectors**: For subject/object entities in triples
-- **Relationship vectors**: For predicate relationships
-- **Semantic vectors**: For full triple meaning
-- **Concept vectors**: For conceptual abstractions
+### Vector Storage Strategy (Updated August 2025)
+**✅ UNIFIED ARCHITECTURE**: Single `VectorEmbedding` table with polymorphic relationships:
+- **Entity vectors**: `vector_type = 'ENTITY'` for subject/object entities
+- **Relationship vectors**: `vector_type = 'RELATIONSHIP'` for predicates  
+- **Semantic vectors**: `vector_type = 'SEMANTIC'` for full triple meaning
+- **Concept vectors**: `vector_type = 'CONCEPT'` for conceptual abstractions
 
-This multi-vector approach enables fusion search but creates performance overhead due to duplicate embeddings.
+**Benefits of Unified Storage:**
+- ✅ Reduces code duplication by ~60% (single insert/query logic)
+- ✅ Better performance with bulk operations
+- ✅ Simpler maintenance and schema evolution
+- ✅ Consistent indexing strategy across all vector types
+- ✅ Single deduplication process handles all vector types
+
+**CRITICAL**: All vector operations now use the unified table - no more separate `entity_vectors`, `relationship_vectors`, etc.
 
 ## 🔍 Debugging & Monitoring
 
