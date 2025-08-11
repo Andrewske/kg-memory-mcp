@@ -345,21 +345,36 @@ enum SearchType {
   @@map("search_type")
 }
 
+// Processing Jobs - Enhanced with hierarchy and progress tracking
 model ProcessingJob {
-  id           String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
-  text         String    @db.Text
-  metadata     Json      @default("{}")
-  status       JobStatus @default(QUEUED)
-  result       Json?
-  errorMessage String?   @map("error_message") @db.Text
-  createdAt    DateTime  @default(now()) @map("created_at") @db.Timestamptz(6)
-  startedAt    DateTime? @map("started_at") @db.Timestamptz(6)
-  completedAt  DateTime? @map("completed_at") @db.Timestamptz(6)
-  retryCount   Int       @default(0) @map("retry_count")
-  maxRetries   Int       @default(3) @map("max_retries")
+  id            String     @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  job_type      JobType    @default(PROCESS_KNOWLEDGE) @map("job_type")
+  parent_job_id String?    @map("parent_job_id") @db.Uuid
+  stage         JobStage?  @map("stage") // Track pipeline stage
+  text          String     @db.Text
+  metadata      Json       @default("{}")
+  status        JobStatus  @default(QUEUED)
+  progress      Int        @default(0) // 0-100 progress tracking
+  result        Json?
+  errorMessage  String?    @map("error_message") @db.Text
+  createdAt     DateTime   @default(now()) @map("created_at") @db.Timestamptz(6)
+  startedAt     DateTime?  @map("started_at") @db.Timestamptz(6)
+  completedAt   DateTime?  @map("completed_at") @db.Timestamptz(6)
+  retryCount    Int        @default(0) @map("retry_count")
+  maxRetries    Int        @default(3) @map("max_retries")
+  metrics       Json       @default("{}") // Performance metrics
 
+  // Self-referential relations for job hierarchy
+  parent_job    ProcessingJob?  @relation("JobHierarchy", fields: [parent_job_id], references: [id])
+  child_jobs    ProcessingJob[] @relation("JobHierarchy")
+
+  // Indexes for efficient querying
   @@index([status])
   @@index([createdAt])
+  @@index([job_type, status])
+  @@index([stage, status])
+  @@index([parent_job_id])
+  @@index([progress])
   @@map("processing_jobs")
 }
 
@@ -370,4 +385,21 @@ enum JobStatus {
   FAILED
 
   @@map("job_status")
+}
+
+enum JobType {
+  PROCESS_KNOWLEDGE           // Original monolithic job (for backwards compatibility)
+  EXTRACT_KNOWLEDGE_BATCH     // NEW: Coordinated parallel extraction
+  GENERATE_CONCEPTS           // NEW: Post-processing concept generation
+  DEDUPLICATE_KNOWLEDGE      // NEW: Post-processing deduplication
+
+  @@map("job_type")
+}
+
+enum JobStage {
+  EXTRACTION        // Stage 1: Knowledge extraction
+  CONCEPTS         // Stage 2: Concept generation
+  DEDUPLICATION    // Stage 3: Duplicate removal
+
+  @@map("job_stage")
 }

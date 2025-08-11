@@ -24,8 +24,10 @@ export interface SimilarityScore {
  */
 export async function deduplicateTriples(triples: Triple[], embeddingMap: Map<string, number[]>) {
 	try {
-		console.log(`[DEDUPLICATION OPTIMIZED] Starting deduplication for ${triples.length} triples using embedding map`);
-		
+		console.log(
+			`[DEDUPLICATION OPTIMIZED] Starting deduplication for ${triples.length} triples using embedding map`
+		);
+
 		let processedTriples = [...triples];
 		let duplicatesRemoved = 0;
 		let semanticDuplicatesRemoved = 0;
@@ -41,17 +43,23 @@ export async function deduplicateTriples(triples: Triple[], embeddingMap: Map<st
 		processedTriples = exactResult.uniqueTriples;
 		duplicatesRemoved += exactResult.duplicatesCount;
 		mergedMetadata.push(...exactResult.mergedMetadata);
-		console.log(`[DEDUPLICATION OPTIMIZED] Step 1 complete: ${exactResult.duplicatesCount} exact duplicates removed`);
+		console.log(
+			`[DEDUPLICATION OPTIMIZED] Step 1 complete: ${exactResult.duplicatesCount} exact duplicates removed`
+		);
 
 		// Step 2: Remove semantic duplicates if enabled (using embedding map)
 		if (env.ENABLE_SEMANTIC_DEDUP) {
-			console.log(`[DEDUPLICATION OPTIMIZED] Step 2: Removing semantic duplicates using embedding map...`);
+			console.log(
+				`[DEDUPLICATION OPTIMIZED] Step 2: Removing semantic duplicates using embedding map...`
+			);
 			const semanticResult = await removeSemanticDuplicates(processedTriples, embeddingMap);
 			if (semanticResult.success && semanticResult.data) {
 				processedTriples = semanticResult.data.uniqueTriples;
 				semanticDuplicatesRemoved = semanticResult.data.duplicatesCount;
 				mergedMetadata.push(...semanticResult.data.mergedMetadata);
-				console.log(`[DEDUPLICATION OPTIMIZED] Step 2 complete: ${semanticDuplicatesRemoved} semantic duplicates removed`);
+				console.log(
+					`[DEDUPLICATION OPTIMIZED] Step 2 complete: ${semanticDuplicatesRemoved} semantic duplicates removed`
+				);
 			} else {
 				console.warn(`[DEDUPLICATION OPTIMIZED] Step 2 failed:`, semanticResult.error);
 			}
@@ -60,7 +68,9 @@ export async function deduplicateTriples(triples: Triple[], embeddingMap: Map<st
 		}
 
 		const totalDuplicatesRemoved = duplicatesRemoved + semanticDuplicatesRemoved;
-		console.log(`[DEDUPLICATION OPTIMIZED] ✅ Deduplication complete: ${totalDuplicatesRemoved} total duplicates removed (${duplicatesRemoved} exact, ${semanticDuplicatesRemoved} semantic)`);
+		console.log(
+			`[DEDUPLICATION OPTIMIZED] ✅ Deduplication complete: ${totalDuplicatesRemoved} total duplicates removed (${duplicatesRemoved} exact, ${semanticDuplicatesRemoved} semantic)`
+		);
 
 		return {
 			success: true,
@@ -129,7 +139,9 @@ export async function removeSemanticDuplicates(
 	embeddingMap: Map<string, number[]>
 ) {
 	try {
-		console.log(`[SEMANTIC DEDUP OPTIMIZED] Starting semantic deduplication using embedding map for ${triples.length} triples`);
+		console.log(
+			`[SEMANTIC DEDUP OPTIMIZED] Starting semantic deduplication using embedding map for ${triples.length} triples`
+		);
 
 		// Get embeddings from map
 		const embeddings: number[][] = [];
@@ -141,19 +153,23 @@ export async function removeSemanticDuplicates(
 			const triple = triples[i];
 			const semanticText = `${triple.subject} ${triple.predicate} ${triple.object}`;
 			const embedding = embeddingMap.get(semanticText);
-			
+
 			if (embedding) {
 				embeddings.push(embedding);
 				tripleTexts.push(semanticText);
 				validIndices.push(i);
 			} else {
-				console.warn(`[SEMANTIC DEDUP OPTIMIZED] ⚠️ Missing embedding for semantic text: "${semanticText}"`);
+				console.warn(
+					`[SEMANTIC DEDUP OPTIMIZED] ⚠️ Missing embedding for semantic text: "${semanticText}"`
+				);
 				embeddingLookupMisses++;
 			}
 		}
 
 		if (embeddingLookupMisses > 0) {
-			console.warn(`[SEMANTIC DEDUP OPTIMIZED] ⚠️ ${embeddingLookupMisses} embedding lookups failed - proceeding with available embeddings`);
+			console.warn(
+				`[SEMANTIC DEDUP OPTIMIZED] ⚠️ ${embeddingLookupMisses} embedding lookups failed - proceeding with available embeddings`
+			);
 		}
 
 		const uniqueTriples = [];
@@ -200,14 +216,16 @@ export async function removeSemanticDuplicates(
 
 		// Add triples that couldn't be processed due to missing embeddings
 		if (embeddingLookupMisses > 0) {
-			const missingEmbeddingTriples = triples.filter((triple) => {
+			const missingEmbeddingTriples = triples.filter(triple => {
 				const semanticText = `${triple.subject} ${triple.predicate} ${triple.object}`;
 				return !embeddingMap.has(semanticText);
 			});
 			uniqueTriples.push(...missingEmbeddingTriples);
 		}
 
-		console.log(`[SEMANTIC DEDUP OPTIMIZED] ✅ Completed semantic deduplication: ${triples.length - uniqueTriples.length} duplicates removed`);
+		console.log(
+			`[SEMANTIC DEDUP OPTIMIZED] ✅ Completed semantic deduplication: ${triples.length - uniqueTriples.length} duplicates removed`
+		);
 
 		return {
 			success: true,

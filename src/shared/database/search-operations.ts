@@ -134,8 +134,11 @@ export async function searchByEntity(
 
 		// Entity search: find triples where entity appears as subject or object
 		// Split the query into words and search for any of them
-		const searchTerms = entityQuery.trim().split(/\s+/).filter(term => term.length > 0);
-		
+		const searchTerms = entityQuery
+			.trim()
+			.split(/\s+/)
+			.filter(term => term.length > 0);
+
 		if (searchTerms.length === 1) {
 			// Single word search - use simple contains
 			whereConditions.OR = [
@@ -211,8 +214,11 @@ export async function searchByRelationship(
 
 		// Relationship search: find triples where relationship appears in predicate
 		// Split the query into words and search for any of them
-		const searchTerms = relationshipQuery.trim().split(/\s+/).filter(term => term.length > 0);
-		
+		const searchTerms = relationshipQuery
+			.trim()
+			.split(/\s+/)
+			.filter(term => term.length > 0);
+
 		if (searchTerms.length === 1) {
 			// Single word search - use simple contains
 			whereConditions.predicate = {
@@ -224,7 +230,7 @@ export async function searchByRelationship(
 			const orConditions: any[] = [];
 			for (const term of searchTerms) {
 				orConditions.push({
-					predicate: { contains: term, mode: 'insensitive' }
+					predicate: { contains: term, mode: 'insensitive' },
 				});
 			}
 			whereConditions.OR = orConditions;

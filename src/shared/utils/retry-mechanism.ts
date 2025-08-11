@@ -30,16 +30,16 @@ function sleep(ms: number): Promise<void> {
  * Calculate retry delay with exponential backoff and optional jitter
  */
 function calculateDelay(attempt: number, options: RetryOptions): number {
-	const exponentialDelay = options.baseDelay * Math.pow(options.exponentialFactor, attempt);
+	const exponentialDelay = options.baseDelay * options.exponentialFactor ** attempt;
 	const clampedDelay = Math.min(exponentialDelay, options.maxDelay);
-	
+
 	if (options.jitter) {
 		// Add +/- 20% jitter to prevent thundering herd
 		const jitterAmount = clampedDelay * 0.2;
 		const jitter = (Math.random() - 0.5) * 2 * jitterAmount;
 		return Math.max(0, clampedDelay + jitter);
 	}
-	
+
 	return clampedDelay;
 }
 
@@ -49,13 +49,7 @@ function calculateDelay(attempt: number, options: RetryOptions): number {
 function isRetryableError(error: any): boolean {
 	// Retry on network errors, rate limiting, and temporary server errors
 	if (error?.code) {
-		const retryableCodes = [
-			'ECONNRESET',
-			'ECONNREFUSED', 
-			'ETIMEDOUT',
-			'ENOTFOUND',
-			'EAI_AGAIN',
-		];
+		const retryableCodes = ['ECONNRESET', 'ECONNREFUSED', 'ETIMEDOUT', 'ENOTFOUND', 'EAI_AGAIN'];
 		if (retryableCodes.includes(error.code)) {
 			return true;
 		}
@@ -116,19 +110,28 @@ export async function withRetry<T>(
 
 			// Check if the error is retryable
 			if (!isRetryableError(error)) {
-				console.debug(`[Retry] Non-retryable error on attempt ${attempt + 1}:`, (error as any)?.message || error);
+				console.debug(
+					`[Retry] Non-retryable error on attempt ${attempt + 1}:`,
+					(error as any)?.message || error
+				);
 				throw error;
 			}
 
 			const delay = calculateDelay(attempt, opts);
-			console.debug(`[Retry] Attempt ${attempt + 1} failed, retrying in ${Math.round(delay)}ms:`, (error as any)?.message || error);
-			
+			console.debug(
+				`[Retry] Attempt ${attempt + 1} failed, retrying in ${Math.round(delay)}ms:`,
+				(error as any)?.message || error
+			);
+
 			await sleep(delay);
 		}
 	}
 
 	// If we get here, all retries failed
-	console.warn(`[Retry] All ${opts.maxRetries + 1} attempts failed. Last error:`, (lastError as any)?.message || lastError);
+	console.warn(
+		`[Retry] All ${opts.maxRetries + 1} attempts failed. Last error:`,
+		(lastError as any)?.message || lastError
+	);
 	throw lastError;
 }
 
@@ -192,15 +195,20 @@ export async function withCircuitBreaker<T>(
 
 	// Reject immediately if circuit is open
 	if (state.state === 'open') {
-		throw new Error(`Circuit breaker is open for operation: ${operationKey}. Too many recent failures.`);
+		throw new Error(
+			`Circuit breaker is open for operation: ${operationKey}. Too many recent failures.`
+		);
 	}
 
 	try {
 		const result = await Promise.race([
 			fn(),
 			new Promise<never>((_, reject) => {
-				setTimeout(() => reject(new Error(`Operation timeout after ${options.timeout}ms`)), options.timeout);
-			})
+				setTimeout(
+					() => reject(new Error(`Operation timeout after ${options.timeout}ms`)),
+					options.timeout
+				);
+			}),
 		]);
 
 		// Success - reset failure count
@@ -209,7 +217,7 @@ export async function withCircuitBreaker<T>(
 		}
 		state.failures = 0;
 		circuitBreakerStates.set(operationKey, state);
-		
+
 		return result;
 	} catch (error) {
 		state.failures++;
@@ -217,7 +225,9 @@ export async function withCircuitBreaker<T>(
 
 		if (state.failures >= options.failureThreshold) {
 			state.state = 'open';
-			console.warn(`[CircuitBreaker] Circuit opened for ${operationKey} after ${state.failures} failures`);
+			console.warn(
+				`[CircuitBreaker] Circuit opened for ${operationKey} after ${state.failures} failures`
+			);
 		}
 
 		circuitBreakerStates.set(operationKey, state);

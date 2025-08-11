@@ -11,7 +11,10 @@ export interface BatchStorageInput {
 	/** Concept nodes to store */
 	concepts: Concept[];
 	/** Conceptualization relationships */
-	conceptualizations: Omit<ConceptualizationRelationship, 'id' | 'created_at' | 'updated_at' | 'knowledge_triple_id' | 'concept_node_id'>[];
+	conceptualizations: Omit<
+		ConceptualizationRelationship,
+		'id' | 'created_at' | 'updated_at' | 'knowledge_triple_id' | 'concept_node_id'
+	>[];
 	/** Embedding map for vector generation */
 	embeddingMap: Map<string, number[]>;
 }
@@ -44,11 +47,11 @@ export async function batchStoreKnowledge(
 	try {
 		// Use Prisma transaction to ensure atomicity
 		const result = await db.$transaction(
-			async (tx) => {
+			async tx => {
 				let triplesStored = 0;
 				let conceptsStored = 0;
 				let conceptualizationsStored = 0;
-				let vectorsGenerated = 0;
+				const vectorsGenerated = 0;
 				let duplicatesSkipped = 0;
 
 				// Step 1: Store triples if any
@@ -94,11 +97,15 @@ export async function batchStoreKnowledge(
 						});
 
 						triplesStored = newTriples.length;
-						console.log(`[BATCH STORAGE] Transaction: ✅ Stored ${triplesStored} triples (${duplicatesSkipped} duplicates skipped)`);
+						console.log(
+							`[BATCH STORAGE] Transaction: ✅ Stored ${triplesStored} triples (${duplicatesSkipped} duplicates skipped)`
+						);
 
 						// Skip vector generation in transaction due to pgvector compatibility issues
 						// Vectors will be generated separately after transaction commits
-						console.log(`[BATCH STORAGE] Transaction: Skipping vector generation (will be done separately)`);
+						console.log(
+							`[BATCH STORAGE] Transaction: Skipping vector generation (will be done separately)`
+						);
 					}
 				}
 
@@ -132,7 +139,9 @@ export async function batchStoreKnowledge(
 
 				// Step 3: Store conceptualizations if any
 				if (conceptualizations.length > 0) {
-					console.log(`[BATCH STORAGE] Transaction: Storing ${conceptualizations.length} conceptualizations...`);
+					console.log(
+						`[BATCH STORAGE] Transaction: Storing ${conceptualizations.length} conceptualizations...`
+					);
 
 					const prismaConceptualizations = conceptualizations.map(c => ({
 						id: uuidv4(),
@@ -154,7 +163,9 @@ export async function batchStoreKnowledge(
 					});
 
 					conceptualizationsStored = conceptualizations.length;
-					console.log(`[BATCH STORAGE] Transaction: ✅ Stored ${conceptualizationsStored} conceptualizations`);
+					console.log(
+						`[BATCH STORAGE] Transaction: ✅ Stored ${conceptualizationsStored} conceptualizations`
+					);
 				}
 
 				return {
@@ -180,8 +191,10 @@ export async function batchStoreKnowledge(
 		let vectorsGenerated = 0;
 		if (triples.length > 0 && result.triplesStored > 0) {
 			try {
-				console.log(`[BATCH STORAGE] Post-transaction: Generating vectors for ${result.triplesStored} stored triples...`);
-				
+				console.log(
+					`[BATCH STORAGE] Post-transaction: Generating vectors for ${result.triplesStored} stored triples...`
+				);
+
 				// Find the stored triples (those that weren't duplicates)
 				const triplesWithIds = triples.map(triple => ({
 					...triple,
@@ -193,12 +206,18 @@ export async function batchStoreKnowledge(
 					return true; // For now, assume all non-duplicates were stored
 				});
 
-				const vectorResult = await generateAndStoreVectorsPostTransaction(storedTriples.slice(0, result.triplesStored), embeddingMap);
+				const vectorResult = await generateAndStoreVectorsPostTransaction(
+					storedTriples.slice(0, result.triplesStored),
+					embeddingMap
+				);
 				if (vectorResult.success) {
 					vectorsGenerated = vectorResult.data.vectorsStored;
 					console.log(`[BATCH STORAGE] Post-transaction: ✅ Generated ${vectorsGenerated} vectors`);
 				} else {
-					console.warn(`[BATCH STORAGE] Post-transaction: ❌ Vector generation failed:`, vectorResult.error);
+					console.warn(
+						`[BATCH STORAGE] Post-transaction: ❌ Vector generation failed:`,
+						vectorResult.error
+					);
 				}
 			} catch (error) {
 				console.warn(`[BATCH STORAGE] Post-transaction: ❌ Vector generation error:`, error);
@@ -236,7 +255,9 @@ async function storeTripleVectorsInTransaction(
 	embeddingMap: Map<string, number[]>
 ): Promise<number> {
 	try {
-		console.log(`[BATCH STORAGE] Transaction: Generating vectors for ${triples.length} triples using embedding map...`);
+		console.log(
+			`[BATCH STORAGE] Transaction: Generating vectors for ${triples.length} triples using embedding map...`
+		);
 
 		const entityVectors: any[] = [];
 		const relationshipVectors: any[] = [];
@@ -284,7 +305,9 @@ async function storeTripleVectorsInTransaction(
 		for (const relationship of uniqueRelationships) {
 			const embedding = embeddingMap.get(relationship);
 			if (!embedding) {
-				console.warn(`[BATCH STORAGE] Transaction: ⚠️ Missing embedding for relationship: "${relationship}"`);
+				console.warn(
+					`[BATCH STORAGE] Transaction: ⚠️ Missing embedding for relationship: "${relationship}"`
+				);
 				lookupMisses++;
 				continue;
 			}
@@ -307,7 +330,9 @@ async function storeTripleVectorsInTransaction(
 			const semanticText = `${triple.subject} ${triple.predicate} ${triple.object}`;
 			const embedding = embeddingMap.get(semanticText);
 			if (!embedding) {
-				console.warn(`[BATCH STORAGE] Transaction: ⚠️ Missing embedding for semantic text: "${semanticText}"`);
+				console.warn(
+					`[BATCH STORAGE] Transaction: ⚠️ Missing embedding for semantic text: "${semanticText}"`
+				);
 				lookupMisses++;
 				continue;
 			}
@@ -323,7 +348,9 @@ async function storeTripleVectorsInTransaction(
 		// Store all vectors in batch within transaction
 		const totalVectors = entityVectors.length + relationshipVectors.length + semanticVectors.length;
 		if (totalVectors === 0) {
-			console.warn(`[BATCH STORAGE] Transaction: ⚠️ No vectors to store - all ${lookupMisses} embedding lookups failed`);
+			console.warn(
+				`[BATCH STORAGE] Transaction: ⚠️ No vectors to store - all ${lookupMisses} embedding lookups failed`
+			);
 			return 0;
 		}
 
@@ -333,36 +360,51 @@ async function storeTripleVectorsInTransaction(
 		// Store entity vectors individually
 		for (const vector of entityVectors) {
 			vectorPromises.push(
-				tx.entityVector.create({
-					data: vector,
-				}).catch((error: any) => {
-					console.warn(`[BATCH STORAGE] Failed to store entity vector for "${vector.text}":`, error.message);
-					return null;
-				})
+				tx.entityVector
+					.create({
+						data: vector,
+					})
+					.catch((error: any) => {
+						console.warn(
+							`[BATCH STORAGE] Failed to store entity vector for "${vector.text}":`,
+							error.message
+						);
+						return null;
+					})
 			);
 		}
 
 		// Store relationship vectors individually
 		for (const vector of relationshipVectors) {
 			vectorPromises.push(
-				tx.relationshipVector.create({
-					data: vector,
-				}).catch((error: any) => {
-					console.warn(`[BATCH STORAGE] Failed to store relationship vector for "${vector.text}":`, error.message);
-					return null;
-				})
+				tx.relationshipVector
+					.create({
+						data: vector,
+					})
+					.catch((error: any) => {
+						console.warn(
+							`[BATCH STORAGE] Failed to store relationship vector for "${vector.text}":`,
+							error.message
+						);
+						return null;
+					})
 			);
 		}
 
 		// Store semantic vectors individually
 		for (const vector of semanticVectors) {
 			vectorPromises.push(
-				tx.semanticVector.create({
-					data: vector,
-				}).catch((error: any) => {
-					console.warn(`[BATCH STORAGE] Failed to store semantic vector for "${vector.text}":`, error.message);
-					return null;
-				})
+				tx.semanticVector
+					.create({
+						data: vector,
+					})
+					.catch((error: any) => {
+						console.warn(
+							`[BATCH STORAGE] Failed to store semantic vector for "${vector.text}":`,
+							error.message
+						);
+						return null;
+					})
 			);
 		}
 
@@ -388,7 +430,9 @@ async function generateAndStoreVectorsPostTransaction(
 	embeddingMap: Map<string, number[]>
 ): Promise<{ success: true; data: { vectorsStored: number } } | { success: false; error: any }> {
 	try {
-		console.log(`[BATCH STORAGE] Post-transaction: Starting vector generation for ${triples.length} triples using embedding map...`);
+		console.log(
+			`[BATCH STORAGE] Post-transaction: Starting vector generation for ${triples.length} triples using embedding map...`
+		);
 
 		const entityVectors: any[] = [];
 		const relationshipVectors: any[] = [];
@@ -413,7 +457,9 @@ async function generateAndStoreVectorsPostTransaction(
 		for (const entity of uniqueEntities) {
 			const embedding = embeddingMap.get(entity);
 			if (!embedding) {
-				console.warn(`[BATCH STORAGE] Post-transaction: ⚠️ Missing embedding for entity: "${entity}"`);
+				console.warn(
+					`[BATCH STORAGE] Post-transaction: ⚠️ Missing embedding for entity: "${entity}"`
+				);
 				lookupMisses++;
 				continue;
 			}
@@ -436,7 +482,9 @@ async function generateAndStoreVectorsPostTransaction(
 		for (const relationship of uniqueRelationships) {
 			const embedding = embeddingMap.get(relationship);
 			if (!embedding) {
-				console.warn(`[BATCH STORAGE] Post-transaction: ⚠️ Missing embedding for relationship: "${relationship}"`);
+				console.warn(
+					`[BATCH STORAGE] Post-transaction: ⚠️ Missing embedding for relationship: "${relationship}"`
+				);
 				lookupMisses++;
 				continue;
 			}
@@ -459,7 +507,9 @@ async function generateAndStoreVectorsPostTransaction(
 			const semanticText = `${triple.subject} ${triple.predicate} ${triple.object}`;
 			const embedding = embeddingMap.get(semanticText);
 			if (!embedding) {
-				console.warn(`[BATCH STORAGE] Post-transaction: ⚠️ Missing embedding for semantic text: "${semanticText}"`);
+				console.warn(
+					`[BATCH STORAGE] Post-transaction: ⚠️ Missing embedding for semantic text: "${semanticText}"`
+				);
 				lookupMisses++;
 				continue;
 			}
@@ -474,7 +524,9 @@ async function generateAndStoreVectorsPostTransaction(
 
 		const totalVectors = entityVectors.length + relationshipVectors.length + semanticVectors.length;
 		if (totalVectors === 0) {
-			console.warn(`[BATCH STORAGE] Post-transaction: ⚠️ No vectors to store - all ${lookupMisses} embedding lookups failed`);
+			console.warn(
+				`[BATCH STORAGE] Post-transaction: ⚠️ No vectors to store - all ${lookupMisses} embedding lookups failed`
+			);
 			return {
 				success: true,
 				data: {
@@ -526,7 +578,9 @@ async function storeConceptVectorsInTransaction(
 	embeddingMap: Map<string, number[]>
 ): Promise<number> {
 	try {
-		console.log(`[BATCH STORAGE] Transaction: Generating vectors for ${concepts.length} concepts using embedding map...`);
+		console.log(
+			`[BATCH STORAGE] Transaction: Generating vectors for ${concepts.length} concepts using embedding map...`
+		);
 
 		const conceptVectors: any[] = [];
 		let lookupMisses = 0;
@@ -534,7 +588,9 @@ async function storeConceptVectorsInTransaction(
 		for (const concept of concepts) {
 			const embedding = embeddingMap.get(concept.concept);
 			if (!embedding) {
-				console.warn(`[BATCH STORAGE] Transaction: ⚠️ Missing embedding for concept: "${concept.concept}"`);
+				console.warn(
+					`[BATCH STORAGE] Transaction: ⚠️ Missing embedding for concept: "${concept.concept}"`
+				);
 				lookupMisses++;
 				continue;
 			}
@@ -556,7 +612,9 @@ async function storeConceptVectorsInTransaction(
 		}
 
 		if (conceptVectors.length === 0) {
-			console.warn(`[BATCH STORAGE] Transaction: ⚠️ No concept vectors to store - all ${lookupMisses} embedding lookups failed`);
+			console.warn(
+				`[BATCH STORAGE] Transaction: ⚠️ No concept vectors to store - all ${lookupMisses} embedding lookups failed`
+			);
 			return 0;
 		}
 
@@ -566,7 +624,9 @@ async function storeConceptVectorsInTransaction(
 			skipDuplicates: true,
 		});
 
-		console.log(`[BATCH STORAGE] Transaction: ✅ Stored ${conceptVectors.length} concept vectors with ${lookupMisses} lookup misses`);
+		console.log(
+			`[BATCH STORAGE] Transaction: ✅ Stored ${conceptVectors.length} concept vectors with ${lookupMisses} lookup misses`
+		);
 
 		return conceptVectors.length;
 	} catch (error) {

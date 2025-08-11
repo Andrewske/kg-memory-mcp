@@ -112,20 +112,26 @@ export async function storeTriples(
 
 				if (vectorResult.success) {
 					vectorsGenerated = vectorResult.data.vectorsStored;
-					console.log(`[VECTOR GENERATION OPTIMIZED] ✅ Successfully stored ${vectorsGenerated} vectors using embedding map`);
+					console.log(
+						`[VECTOR GENERATION OPTIMIZED] ✅ Successfully stored ${vectorsGenerated} vectors using embedding map`
+					);
 				} else {
-					console.warn(`[VECTOR GENERATION OPTIMIZED] ❌ Failed to store vectors:`, vectorResult.error);
+					console.warn(
+						`[VECTOR GENERATION OPTIMIZED] ❌ Failed to store vectors:`,
+						vectorResult.error
+					);
 					// Don't fail the entire operation if vector generation fails
 				}
 			} catch (error) {
-				console.warn(`[VECTOR GENERATION OPTIMIZED] ❌ Vector generation error (non-blocking):`, error);
+				console.warn(
+					`[VECTOR GENERATION OPTIMIZED] ❌ Vector generation error (non-blocking):`,
+					error
+				);
 				// Vector generation is non-blocking - continue with success
 			}
 		} else {
 			if (!embeddingMap) {
-				console.warn(
-					`[VECTOR DEBUG] ⚠️ No embedding map provided - vectors will not be generated`
-				);
+				console.warn(`[VECTOR DEBUG] ⚠️ No embedding map provided - vectors will not be generated`);
 			}
 			if (newTriples.length === 0) {
 				console.warn(`[VECTOR DEBUG] ⚠️ No new triples to generate vectors for`);
@@ -184,7 +190,9 @@ export async function storeConcepts(
 				console.log(
 					`[CONCEPT VECTOR GENERATION OPTIMIZED] Starting optimized vector generation for ${concepts.length} concepts using embedding map...`
 				);
-				console.log(`[CONCEPT VECTOR GENERATION OPTIMIZED] Sample concept: "${concepts[0]?.concept}"`);
+				console.log(
+					`[CONCEPT VECTOR GENERATION OPTIMIZED] Sample concept: "${concepts[0]?.concept}"`
+				);
 
 				const vectorResult = await generateAndStoreConceptVectors(concepts, embeddingMap);
 
@@ -453,7 +461,9 @@ async function generateAndStoreVectors(
 	embeddingMap: Map<string, number[]>
 ): Promise<Result<{ vectorsStored: number }>> {
 	try {
-		console.log(`[VECTOR OPTIMIZED] Starting optimized vector generation for ${triples.length} triples using embedding map`);
+		console.log(
+			`[VECTOR OPTIMIZED] Starting optimized vector generation for ${triples.length} triples using embedding map`
+		);
 
 		const entityVectors: Array<{
 			vector_id: string;
@@ -560,7 +570,9 @@ async function generateAndStoreVectors(
 		// Report embedding lookup results
 		const totalLookupMisses = entityLookupMisses + relationshipLookupMisses + semanticLookupMisses;
 		if (totalLookupMisses > 0) {
-			console.warn(`[VECTOR OPTIMIZED] ⚠️ ${totalLookupMisses} embedding lookups failed (${entityLookupMisses} entities, ${relationshipLookupMisses} relationships, ${semanticLookupMisses} semantic)`);
+			console.warn(
+				`[VECTOR OPTIMIZED] ⚠️ ${totalLookupMisses} embedding lookups failed (${entityLookupMisses} entities, ${relationshipLookupMisses} relationships, ${semanticLookupMisses} semantic)`
+			);
 		} else {
 			console.log(`[VECTOR OPTIMIZED] ✅ All embedding lookups successful - no API calls needed!`);
 		}
@@ -666,9 +678,11 @@ async function generateAndStoreConceptVectors(
 		for (const concept of concepts) {
 			const conceptText = concept.concept;
 			const embedding = embeddingMap.get(conceptText);
-			
+
 			if (!embedding) {
-				console.warn(`[CONCEPT VECTOR OPTIMIZED] ⚠️ Missing embedding for concept: "${conceptText}"`);
+				console.warn(
+					`[CONCEPT VECTOR OPTIMIZED] ⚠️ Missing embedding for concept: "${conceptText}"`
+				);
 				conceptLookupMisses++;
 				continue;
 			}
@@ -683,9 +697,13 @@ async function generateAndStoreConceptVectors(
 
 		// Report embedding lookup results
 		if (conceptLookupMisses > 0) {
-			console.warn(`[CONCEPT VECTOR OPTIMIZED] ⚠️ ${conceptLookupMisses} concept embedding lookups failed`);
+			console.warn(
+				`[CONCEPT VECTOR OPTIMIZED] ⚠️ ${conceptLookupMisses} concept embedding lookups failed`
+			);
 		} else {
-			console.log(`[CONCEPT VECTOR OPTIMIZED] ✅ All concept embedding lookups successful - no API calls needed!`);
+			console.log(
+				`[CONCEPT VECTOR OPTIMIZED] ✅ All concept embedding lookups successful - no API calls needed!`
+			);
 		}
 
 		// Store concept vectors in database

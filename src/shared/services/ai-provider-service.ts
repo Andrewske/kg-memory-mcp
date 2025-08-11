@@ -173,10 +173,8 @@ function extractTokenUsage(
 
 function getModel(config: AIConfig) {
 	// Remove provider prefix if present (e.g. "openai/gpt-4" -> "gpt-4")
-	const modelName = config.model.includes('/') 
-		? config.model.split('/')[1] 
-		: config.model;
-	
+	const modelName = config.model.includes('/') ? config.model.split('/')[1] : config.model;
+
 	if (config.provider === 'anthropic') {
 		return anthropic(modelName);
 	} else {

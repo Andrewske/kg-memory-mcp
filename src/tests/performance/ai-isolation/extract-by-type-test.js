@@ -2,10 +2,10 @@
 
 /**
  * ExtractByType Performance Isolation Test
- * 
+ *
  * Purpose: Test individual extractByType calls for each triple type to identify
  * which specific extraction types are causing the 95% AI bottleneck
- * 
+ *
  * Measurements:
  * - Individual API response times per type
  * - Token usage patterns
@@ -14,15 +14,17 @@
  */
 
 import { readFileSync } from 'node:fs';
-import { resolve, dirname } from 'node:path';
-import { fileURLToPath } from 'node:url';
+import { dirname, resolve } from 'node:path';
 import { performance } from 'node:perf_hooks';
+import { fileURLToPath } from 'node:url';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 
 // Import the function we're testing
 async function loadExtractFunction() {
-	const { extractByType, createTypeSpecificPrompt } = await import('../../../features/knowledge-extraction/extract.js');
+	const { extractByType, createTypeSpecificPrompt } = await import(
+		'../../../features/knowledge-extraction/extract.js'
+	);
 	return { extractByType, createTypeSpecificPrompt };
 }
 
@@ -60,17 +62,17 @@ function createTestData(text, size) {
 async function testExtractByType(extractByType, testData, type) {
 	const startTime = performance.now();
 	const startMemory = process.memoryUsage();
-	
+
 	console.log(`[${type}] Starting extraction test...`);
-	
+
 	try {
 		const result = await extractByType(testData, type);
-		
+
 		const endTime = performance.now();
 		const endMemory = process.memoryUsage();
 		const duration = endTime - startTime;
 		const memoryUsed = endMemory.heapUsed - startMemory.heapUsed;
-		
+
 		if (!result.success) {
 			console.error(`[${type}] ❌ Extraction failed:`, result.error);
 			return {
@@ -82,19 +84,19 @@ async function testExtractByType(extractByType, testData, type) {
 				timestamp: new Date().toISOString(),
 			};
 		}
-		
+
 		const triplesExtracted = result.data.length;
 		const tokensPerSecond = testData.text.length / 4 / (duration / 1000); // Rough token estimate
 		const msPerToken = duration / (testData.text.length / 4);
-		
+
 		console.log(`[${type}] ✅ Extraction completed:`, {
 			duration: `${duration.toFixed(2)}ms`,
 			triplesExtracted,
 			tokensPerSecond: tokensPerSecond.toFixed(2),
 			msPerToken: msPerToken.toFixed(2),
-			memoryUsed: `${(memoryUsed / 1024 / 1024).toFixed(2)}MB`
+			memoryUsed: `${(memoryUsed / 1024 / 1024).toFixed(2)}MB`,
 		});
-		
+
 		return {
 			type,
 			success: true,
@@ -110,13 +112,12 @@ async function testExtractByType(extractByType, testData, type) {
 			sampleTriples: result.data.slice(0, 3), // Include sample for quality analysis
 			timestamp: new Date().toISOString(),
 		};
-		
 	} catch (error) {
 		const endTime = performance.now();
 		const duration = endTime - startTime;
-		
+
 		console.error(`[${type}] ❌ Extraction threw error:`, error.message);
-		
+
 		return {
 			type,
 			success: false,
@@ -136,53 +137,48 @@ async function testExtractByType(extractByType, testData, type) {
 async function runExtractByTypeTest() {
 	console.log('🧪 ExtractByType Performance Isolation Test');
 	console.log('==============================================\n');
-	
+
 	const { extractByType } = await loadExtractFunction();
-	
+
 	// Load test texts
 	const testSizes = [
 		{ name: 'small', filename: 'small-text.txt' },
 		{ name: 'medium', filename: 'medium-text.txt' },
 	];
-	
-	const extractionTypes = [
-		'ENTITY_ENTITY',
-		'ENTITY_EVENT', 
-		'EVENT_EVENT',
-		'EMOTIONAL_CONTEXT',
-	];
-	
+
+	const extractionTypes = ['ENTITY_ENTITY', 'ENTITY_EVENT', 'EVENT_EVENT', 'EMOTIONAL_CONTEXT'];
+
 	const results = [];
-	
+
 	for (const testSize of testSizes) {
 		console.log(`\n📝 Testing ${testSize.name} text (${testSize.filename})`);
 		console.log('─'.repeat(50));
-		
+
 		const text = loadTestText(testSize.filename);
 		if (!text) {
 			console.error(`❌ Failed to load ${testSize.filename}, skipping...`);
 			continue;
 		}
-		
+
 		console.log(`Text length: ${text.length} characters (~${Math.round(text.length / 4)} tokens)`);
-		
+
 		const testData = createTestData(text, testSize.name);
 		const sizeResults = [];
-		
+
 		// Test each extraction type individually
 		for (const type of extractionTypes) {
 			console.log(`\n🔍 Testing ${type} extraction...`);
-			
+
 			const result = await testExtractByType(extractByType, testData, type);
 			sizeResults.push(result);
-			
+
 			// Add delay between requests to avoid rate limiting
 			if (extractionTypes.indexOf(type) < extractionTypes.length - 1) {
 				console.log('⏳ Waiting 2s to avoid rate limiting...');
 				await new Promise(resolve => setTimeout(resolve, 2000));
 			}
 		}
-		
+
 		results.push({
 			testSize: testSize.name,
 			textLength: text.length,
@@ -190,25 +186,25 @@ async function runExtractByTypeTest() {
 			results: sizeResults,
 		});
 	}
-	
+
 	// Generate comprehensive report
 	console.log('\n📊 EXTRACTION TYPE PERFORMANCE ANALYSIS');
 	console.log('=====================================\n');
-	
+
 	// Analyze results by type across all sizes
 	const typeAnalysis = {};
-	
+
 	for (const sizeResult of results) {
 		console.log(`\n${sizeResult.testSize.toUpperCase()} TEXT RESULTS:`);
 		console.log(`Text: ${sizeResult.textLength} chars (~${sizeResult.estimatedTokens} tokens)`);
 		console.log('─'.repeat(40));
-		
+
 		for (const result of sizeResult.results) {
 			if (!result.success) {
 				console.log(`❌ ${result.type}: FAILED - ${result.error?.message || 'Unknown error'}`);
 				continue;
 			}
-			
+
 			const r = result.results;
 			console.log(`✅ ${result.type}:`);
 			console.log(`   Duration: ${r.duration.toFixed(2)}ms`);
@@ -216,7 +212,7 @@ async function runExtractByTypeTest() {
 			console.log(`   Speed: ${r.tokensPerSecond.toFixed(1)} tok/s`);
 			console.log(`   Efficiency: ${r.msPerToken.toFixed(1)}ms/token`);
 			console.log(`   Memory: ${(r.memoryUsed / 1024 / 1024).toFixed(1)}MB`);
-			
+
 			// Aggregate type analysis
 			if (!typeAnalysis[result.type]) {
 				typeAnalysis[result.type] = {
@@ -229,7 +225,7 @@ async function runExtractByTypeTest() {
 					avgMsPerToken: 0,
 				};
 			}
-			
+
 			const analysis = typeAnalysis[result.type];
 			analysis.totalDuration += r.duration;
 			analysis.totalTriples += r.triplesExtracted;
@@ -240,21 +236,22 @@ async function runExtractByTypeTest() {
 			analysis.avgMsPerToken += r.msPerToken;
 		}
 	}
-	
+
 	// Calculate final averages
 	for (const type in typeAnalysis) {
 		const analysis = typeAnalysis[type];
 		analysis.avgTokenSpeed = analysis.avgTokenSpeed / analysis.testCount;
 		analysis.avgMsPerToken = analysis.avgMsPerToken / analysis.testCount;
 	}
-	
+
 	console.log('\n🎯 EXTRACTION TYPE PERFORMANCE RANKING');
 	console.log('=====================================');
-	
+
 	// Sort by average duration (fastest first)
-	const sortedTypes = Object.entries(typeAnalysis)
-		.sort(([,a], [,b]) => a.avgDuration - b.avgDuration);
-	
+	const sortedTypes = Object.entries(typeAnalysis).sort(
+		([, a], [, b]) => a.avgDuration - b.avgDuration
+	);
+
 	sortedTypes.forEach(([type, analysis], index) => {
 		const medal = index === 0 ? '🥇' : index === 1 ? '🥈' : index === 2 ? '🥉' : '  ';
 		console.log(`${medal} ${type}:`);
@@ -264,7 +261,7 @@ async function runExtractByTypeTest() {
 		console.log(`   Avg Efficiency: ${analysis.avgMsPerToken.toFixed(1)}ms/token`);
 		console.log('');
 	});
-	
+
 	// Save detailed results
 	const reportData = {
 		testName: 'ExtractByType Performance Isolation',
@@ -277,13 +274,13 @@ async function runExtractByTypeTest() {
 		typeAnalysis,
 		recommendations: generateRecommendations(typeAnalysis),
 	};
-	
+
 	console.log('💡 OPTIMIZATION RECOMMENDATIONS:');
 	console.log('================================');
 	reportData.recommendations.forEach((rec, index) => {
 		console.log(`${index + 1}. ${rec}`);
 	});
-	
+
 	return reportData;
 }
 
@@ -293,43 +290,53 @@ async function runExtractByTypeTest() {
 function generateRecommendations(typeAnalysis) {
 	const recommendations = [];
 	const types = Object.entries(typeAnalysis);
-	
+
 	if (types.length === 0) {
 		return ['No successful extractions to analyze'];
 	}
-	
+
 	// Find slowest and fastest types
-	const slowest = types.reduce((a, b) => a[1].avgDuration > b[1].avgDuration ? a : b);
-	const fastest = types.reduce((a, b) => a[1].avgDuration < b[1].avgDuration ? a : b);
-	
+	const slowest = types.reduce((a, b) => (a[1].avgDuration > b[1].avgDuration ? a : b));
+	const fastest = types.reduce((a, b) => (a[1].avgDuration < b[1].avgDuration ? a : b));
+
 	if (slowest[1].avgDuration > fastest[1].avgDuration * 1.5) {
-		recommendations.push(`${slowest[0]} is ${(slowest[1].avgDuration / fastest[1].avgDuration).toFixed(1)}x slower than ${fastest[0]} - investigate prompt complexity`);
+		recommendations.push(
+			`${slowest[0]} is ${(slowest[1].avgDuration / fastest[1].avgDuration).toFixed(1)}x slower than ${fastest[0]} - investigate prompt complexity`
+		);
 	}
-	
+
 	// Check for consistently slow types
-	const avgDuration = types.reduce((sum, [, analysis]) => sum + analysis.avgDuration, 0) / types.length;
+	const avgDuration =
+		types.reduce((sum, [, analysis]) => sum + analysis.avgDuration, 0) / types.length;
 	const slowTypes = types.filter(([, analysis]) => analysis.avgDuration > avgDuration * 1.2);
-	
+
 	if (slowTypes.length > 0) {
-		recommendations.push(`Slow extraction types detected: ${slowTypes.map(([type]) => type).join(', ')} - consider prompt optimization`);
+		recommendations.push(
+			`Slow extraction types detected: ${slowTypes.map(([type]) => type).join(', ')} - consider prompt optimization`
+		);
 	}
-	
+
 	// Check extraction efficiency
 	const lowEfficiencyTypes = types.filter(([, analysis]) => analysis.avgTriples < 1);
 	if (lowEfficiencyTypes.length > 0) {
-		recommendations.push(`Low triple extraction efficiency: ${lowEfficiencyTypes.map(([type]) => type).join(', ')} - review prompt effectiveness`);
+		recommendations.push(
+			`Low triple extraction efficiency: ${lowEfficiencyTypes.map(([type]) => type).join(', ')} - review prompt effectiveness`
+		);
 	}
-	
+
 	// Overall speed analysis
-	const overallAvgSpeed = types.reduce((sum, [, analysis]) => sum + analysis.avgTokenSpeed, 0) / types.length;
+	const overallAvgSpeed =
+		types.reduce((sum, [, analysis]) => sum + analysis.avgTokenSpeed, 0) / types.length;
 	if (overallAvgSpeed < 20) {
-		recommendations.push(`Overall token processing speed is ${overallAvgSpeed.toFixed(1)} tok/s - investigate API latency and model selection`);
+		recommendations.push(
+			`Overall token processing speed is ${overallAvgSpeed.toFixed(1)} tok/s - investigate API latency and model selection`
+		);
 	}
-	
+
 	if (recommendations.length === 0) {
 		recommendations.push('All extraction types performing within expected parameters');
 	}
-	
+
 	return recommendations;
 }
 

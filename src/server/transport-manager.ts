@@ -3,24 +3,16 @@
  * Provides shared tool handling logic across different transports
  */
 
-import {
-	extractElementsFromTriples,
-	generateConcepts,
-} from '~/features/conceptualization/conceptualize.js';
-import { deduplicateTriples } from '~/features/deduplication/deduplicate.js';
-import { extractKnowledgeTriples } from '~/features/knowledge-extraction/extract.js';
 import type { FusionSearchResult } from '~/features/knowledge-graph/fusion-search.js';
 import { searchFusion } from '~/features/knowledge-graph/fusion-search.js';
 import { getStats } from '~/features/knowledge-graph/operations.js';
 import { searchConcepts } from '~/features/knowledge-graph/search.js';
-import { batchStoreKnowledge } from '~/shared/database/batch-storage.js';
-import { env } from '~/shared/env.js';
-import { createEmbeddingService } from '~/shared/services/embedding-service.js';
+import {
+	getPipelineStatus,
+	initiateKnowledgePipeline,
+} from '~/features/knowledge-processing/pipeline-coordinator.js';
 import type { GraphStats, ToolResult } from '~/shared/types/api.js';
 import type { Concept } from '~/shared/types/core.js';
-import { generateEmbeddingMap } from '~/shared/utils/embedding-cache.js';
-import { chunkText, mergeChunkResults, type TextChunk } from '~/shared/utils/text-chunking.js';
-import { debugLog, infoLog, warnLog, errorLog, perfLog } from '~/shared/utils/conditional-logging.js';
 
 export type ProcessKnowledgeArgs = {
 	text: string;
@@ -30,259 +22,76 @@ export type ProcessKnowledgeArgs = {
 };
 
 /**
- * Extract and store knowledge triples from text using optimized embedding map approach
+ * Get pipeline status and progress
  */
-export async function processKnowledge(args: ProcessKnowledgeArgs): Promise<ToolResult> {
+export async function getPipelineStatusTool(args: { parentJobId: string }): Promise<ToolResult> {
 	try {
-		const startTime = Date.now();
-		const phaseTimings: Record<string, number> = {};
+		const status = await getPipelineStatus(args.parentJobId);
 
-		const estimatedTokens = Math.ceil(args.text.length / 4); // Rough estimation
-		debugLog('[ProcessKnowledge] Starting Phase 3 optimized processing with:', {
-			textLength: args.text.length,
-			source: args.source,
-			source_type: args.source_type,
-			estimatedTokens,
-		});
-
-		// Check if text needs chunking (>3000 tokens)
-		const MAX_TOKENS = 3000;
-		if (estimatedTokens > MAX_TOKENS) {
-			console.debug(`[ProcessKnowledge] Text is large (${estimatedTokens} tokens), using chunking approach`);
-			
-			const chunks = chunkText(args.text, {
-				maxTokens: MAX_TOKENS,
-				overlapTokens: 200,
-				preserveParagraphs: true,
-			});
-			
-			console.debug(`[ProcessKnowledge] Split text into ${chunks.length} chunks`);
-			
-			// Process chunks in parallel for better performance
-			const chunkPromises = chunks.map(async (chunk, index) => {
-				const chunkArgs = {
-					...args,
-					text: chunk.text,
-					source: `${args.source}_chunk_${index + 1}`,
-				};
-				
-				console.debug(`[ProcessKnowledge] Processing chunk ${index + 1}/${chunks.length} (${chunk.estimatedTokens} tokens)`);
-				return await processKnowledgeChunk(chunkArgs);
-			});
-			
-			const chunkResults = await Promise.allSettled(chunkPromises);
-			const successfulResults = chunkResults
-				.filter((result, index) => {
-					if (result.status === 'rejected') {
-						console.warn(`[ProcessKnowledge] Chunk ${index + 1} failed:`, result.reason);
-						return false;
-					}
-					return result.value.success;
-				})
-				.map(result => (result as PromiseFulfilledResult<any>).value);
-			
-			// Merge all successful chunk results
-			let totalTriples = 0;
-			let totalConcepts = 0;
-			let totalConceptualizations = 0;
-			let totalVectors = 0;
-			
-			for (const result of successfulResults) {
-				if (result.data) {
-					totalTriples += result.data.triplesStored || 0;
-					totalConcepts += result.data.conceptsStored || 0;
-					totalConceptualizations += result.data.conceptualizationsStored || 0;
-					totalVectors += result.data.vectorsGenerated || 0;
-				}
-			}
-			
-			const duration = Date.now() - startTime;
-			console.debug(`[ProcessKnowledge] Chunked processing completed in ${duration}ms:`, {
-				totalChunks: chunks.length,
-				successfulChunks: successfulResults.length,
-				failedChunks: chunks.length - successfulResults.length,
-				triplesStored: totalTriples,
-				conceptsStored: totalConcepts,
-				conceptualizationsStored: totalConceptualizations,
-				vectorsGenerated: totalVectors,
-			});
-			
+		if (!status) {
 			return {
-				success: true,
-				data: {
-					triplesStored: totalTriples,
-					conceptsStored: totalConcepts,
-					conceptualizationsStored: totalConceptualizations,
-					vectorsGenerated: totalVectors,
-					processingTime: duration,
-					chunksProcessed: successfulResults.length,
-					chunksTotal: chunks.length,
+				success: false,
+				error: {
+					message: 'Pipeline not found',
+					operation: 'get_pipeline_status',
 				},
 			};
 		}
 
-		// For smaller texts, continue with normal processing
-		return await processKnowledgeChunk(args);
+		return {
+			success: true,
+			data: status,
+		};
 	} catch (error) {
-		console.error('[ProcessKnowledge] Unexpected error:', error);
 		return {
 			success: false,
 			error: {
-				message: error instanceof Error ? error.message : 'Unknown error occurred',
-				operation: 'knowledge_processing',
+				message: error instanceof Error ? error.message : 'Failed to get pipeline status',
+				operation: 'get_pipeline_status',
 			},
 		};
 	}
 }
 
 /**
- * Process a single chunk of knowledge text (used by both chunked and non-chunked processing)
+ * Process knowledge using the new 3-job pipeline
+ * Simply initiates the pipeline and returns job tracking information
  */
-async function processKnowledgeChunk(args: ProcessKnowledgeArgs): Promise<ToolResult<any>> {
+export async function processKnowledge(args: ProcessKnowledgeArgs): Promise<ToolResult> {
 	try {
-		const startTime = Date.now();
-		const phaseTimings: Record<string, number> = {};
-
-		console.debug('[ProcessKnowledge] Processing chunk with:', {
+		console.debug('[ProcessKnowledge] Initiating 3-job pipeline', {
 			textLength: args.text.length,
 			source: args.source,
 			source_type: args.source_type,
-			estimatedTokens: Math.ceil(args.text.length / 4),
 		});
 
-		const embeddingService = createEmbeddingService({
-			model: env.EMBEDDING_MODEL,
-			dimensions: env.EMBEDDING_DIMENSIONS,
-			batchSize: env.BATCH_SIZE,
-		});
+		// Initiate the pipeline and get parent job ID
+		const parentJobId = await initiateKnowledgePipeline(args);
 
-		// Extract knowledge
-		const extractionStartTime = Date.now();
-		console.debug('[ProcessKnowledge] Phase 3: Extracting triples...');
-		const extractionResult = await extractKnowledgeTriples(args);
-		phaseTimings.extraction = Date.now() - extractionStartTime;
-		if (!extractionResult.success || !extractionResult.data) {
-			console.error('[ProcessKnowledge] Extraction failed:', extractionResult.error);
-			return {
-				success: false,
-				error: {
-					message: extractionResult.error?.message ?? 'Unknown error',
-					operation: 'knowledge_extraction',
-				},
-			};
-		}
-
-		let { triples, concepts, conceptualizations } = extractionResult.data;
-		console.debug(`[ProcessKnowledge] Phase 3: Extracted ${triples.length} triples and ${concepts.length} concepts in ${phaseTimings.extraction}ms`);
-
-		// Phase 2 optimization: Generate comprehensive embedding map once for all operations
-		const embeddingStartTime = Date.now();
-		console.debug('[ProcessKnowledge] Phase 3: Generating comprehensive embedding map...');
-		const embeddingMapResult = await generateEmbeddingMap(triples, concepts, embeddingService, env.ENABLE_SEMANTIC_DEDUP);
-		phaseTimings.embeddingGeneration = Date.now() - embeddingStartTime;
-		
-		if (!embeddingMapResult.success) {
-			console.error('[ProcessKnowledge] Phase 2: Embedding map generation failed:', embeddingMapResult.error);
-			return {
-				success: false,
-				error: {
-					message: `Embedding map generation failed: ${embeddingMapResult.error.message}`,
-					operation: 'embedding_generation',
-				},
-			};
-		}
-
-		const embeddingMap = embeddingMapResult.data.embeddings;
-		const embeddingStats = embeddingMapResult.data.stats;
-		console.debug(`[ProcessKnowledge] Phase 3: ✅ Generated embedding map in ${phaseTimings.embeddingGeneration}ms - ${embeddingStats.uniqueTexts} unique embeddings, ${embeddingStats.duplicatesAverted} duplicates averted, ${embeddingStats.batchCalls} API calls`);
-
-		// Always deduplicate triples using embedding map
-		const deduplicationStartTime = Date.now();
-		if (triples.length > 0) {
-			console.debug('[ProcessKnowledge] Phase 3: Deduplicating triples using embedding map...');
-			const deduplicationResult = await deduplicateTriples(triples, embeddingMap);
-			if (deduplicationResult.success) {
-				const originalCount = triples.length;
-				triples = deduplicationResult.data?.uniqueTriples ?? [];
-				console.debug(
-					`[ProcessKnowledge] Phase 3: Deduplicated: ${originalCount} → ${triples.length} triples using embedding map`
-				);
-			}
-		}
-		phaseTimings.deduplication = Date.now() - deduplicationStartTime;
-
-		// Phase 3 optimization: Batch store all knowledge data in single atomic transaction
-		const storageStartTime = Date.now();
-		console.debug('[ProcessKnowledge] Phase 3: Batch storing all knowledge data in atomic transaction...');
-		const batchStorageResult = await batchStoreKnowledge({
-			triples,
-			concepts,
-			conceptualizations,
-			embeddingMap,
-		});
-		phaseTimings.storage = Date.now() - storageStartTime;
-
-		if (!batchStorageResult.success) {
-			console.error('[ProcessKnowledge] Phase 3: Batch storage failed:', batchStorageResult.error);
-			return {
-				success: false,
-				error: {
-					message: `Batch storage failed: ${batchStorageResult.error.message}`,
-					operation: 'batch_knowledge_storage',
-				},
-			};
-		}
-
-		const storageStats = batchStorageResult.data;
-		console.debug(`[ProcessKnowledge] Phase 3: ✅ Batch storage completed in ${phaseTimings.storage}ms:`, storageStats);
-
-		// Note: Conceptualization is now handled in the extraction phase and stored in batch storage
-		// Background processing removed as it was redundant
-
-		const duration = Date.now() - startTime;
-		phaseTimings.total = duration;
-		
-		console.debug(`[ProcessKnowledge] Phase 3 optimization completed in ${duration}ms`, {
-			...storageStats,
-			phaseTimings,
-			embeddingEfficiency: {
-				uniqueEmbeddings: embeddingStats.uniqueTexts,
-				duplicatesAverted: embeddingStats.duplicatesAverted,
-				apiCallsSaved: embeddingStats.duplicatesAverted > 0 ? Math.floor(embeddingStats.duplicatesAverted / env.BATCH_SIZE) : 0,
-				batchCalls: embeddingStats.batchCalls,
-			},
-		});
+		// Get initial pipeline status
+		const status = await getPipelineStatus(parentJobId);
 
 		return {
 			success: true,
 			data: {
-				...storageStats,
-				metadata: {
-					source: args.source,
-					source_type: args.source_type,
-					optimizations: {
-						phase: 'Phase 3 - Batch Transaction Storage + Embedding Map',
-						batchTransaction: true,
-						embeddingOptimization: {
-							uniqueEmbeddings: embeddingStats.uniqueTexts,
-							duplicatesAverted: embeddingStats.duplicatesAverted,
-							totalBatchCalls: embeddingStats.batchCalls,
-							efficiency: embeddingStats.duplicatesAverted > 0 
-								? Math.round((embeddingStats.duplicatesAverted / embeddingStats.totalTexts) * 100) 
-								: 0,
-						},
-						performanceTimings: phaseTimings,
-					},
+				message: 'Knowledge processing pipeline initiated',
+				parentJobId,
+				estimatedTime: '2-5 minutes',
+				stages: {
+					extraction: 'Coordinated parallel extraction',
+					concepts: 'Background concept generation',
+					deduplication: 'Optional semantic deduplication',
 				},
+				status,
 			},
 		};
 	} catch (error) {
-		console.error('[ProcessKnowledge] Unexpected error:', error);
+		console.error('[ProcessKnowledge] Pipeline initiation failed:', error);
 		return {
 			success: false,
 			error: {
-				message: error instanceof Error ? error.message : 'Unknown error occurred',
-				operation: 'process_knowledge',
+				message: error instanceof Error ? error.message : 'Pipeline initiation failed',
+				operation: 'pipeline_initiation',
 			},
 		};
 	}
@@ -422,6 +231,9 @@ export async function executeToolFunction(toolName: string, args: any): Promise<
 		case 'process_knowledge':
 			result = await processKnowledge(args);
 			break;
+		case 'get_pipeline_status':
+			result = await getPipelineStatusTool(args);
+			break;
 		case 'search_knowledge_graph':
 			result = await searchKnowledgeGraph(args);
 			break;
@@ -457,7 +269,8 @@ export async function executeToolFunction(toolName: string, args: any): Promise<
 export const TOOL_DEFINITIONS = [
 	{
 		name: 'process_knowledge',
-		description: 'Extract knowledge triples from text and store them in the knowledge graph',
+		description:
+			'Extract knowledge triples from text and store them in the knowledge graph using the new 3-job pipeline',
 		inputSchema: {
 			type: 'object',
 			properties: {
@@ -469,20 +282,30 @@ export const TOOL_DEFINITIONS = [
 					type: 'string',
 					description: 'Source identifier for the content',
 				},
-				thread_id: {
+				source_type: {
 					type: 'string',
-					description: 'Optional thread ID for grouping',
+					description: 'Type of source (e.g. "thread", "file", "manual")',
 				},
 				source_date: {
 					type: 'string',
-					description: 'Optional source date (ISO format)',
-				},
-				include_concepts: {
-					type: 'boolean',
-					description: 'Whether to include conceptualization (default: false)',
+					description: 'Source date (ISO format)',
 				},
 			},
-			required: ['text', 'source'],
+			required: ['text', 'source', 'source_type', 'source_date'],
+		},
+	},
+	{
+		name: 'get_pipeline_status',
+		description: 'Get the status and progress of a knowledge processing pipeline',
+		inputSchema: {
+			type: 'object',
+			properties: {
+				parentJobId: {
+					type: 'string',
+					description: 'The parent job ID returned from process_knowledge',
+				},
+			},
+			required: ['parentJobId'],
 		},
 	},
 	{

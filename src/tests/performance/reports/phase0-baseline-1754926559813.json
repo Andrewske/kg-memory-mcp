@@ -1,6 +1,6 @@
 {
   "phase": "Phase 0: Baseline",
-  "timestamp": "2025-08-11T05:48:51.446Z",
+  "timestamp": "2025-08-11T15:35:59.813Z",
   "environment": {
     "nodeVersion": "v24.5.0",
     "platform": "linux"
@@ -24,20 +24,20 @@
       "filename": "small-text.txt",
       "textLength": 1259,
       "estimatedTokens": 315,
-      "duration": 36589.892116999996,
+      "duration": 1673.0054340000002,
       "success": true,
-      "memoryUsed": 4212168,
+      "memoryUsed": -8872616,
       "performance": {
-        "tokensPerSecond": 8.608934920954527,
-        "msPerToken": 116.15838767301587,
-        "mbPerToken": 0.012752496628534227,
-        "extractionEfficiency": 57.14285714285714
+        "tokensPerSecond": 188.28390727151694,
+        "msPerToken": 5.311128361904762,
+        "mbPerToken": -0.02686217777312748,
+        "extractionEfficiency": 0
       },
-      "timestamp": "2025-08-11T05:48:01.915Z",
+      "timestamp": "2025-08-11T15:35:56.270Z",
       "results": {
-        "triplesStored": 18,
-        "conceptsStored": 12,
-        "conceptualizationsStored": 13
+        "triplesStored": 0,
+        "conceptsStored": 0,
+        "conceptualizationsStored": 0
       }
     },
     {
@@ -45,20 +45,20 @@
       "filename": "medium-text.txt",
       "textLength": 3928,
       "estimatedTokens": 982,
-      "duration": 46528.55631099999,
+      "duration": 538.0723459999999,
       "success": true,
-      "memoryUsed": 20638424,
+      "memoryUsed": 572752,
       "performance": {
-        "tokensPerSecond": 21.1053184937922,
-        "msPerToken": 47.38142190529531,
-        "mbPerToken": 0.0200431108960309,
-        "extractionEfficiency": 5.091649694501019
+        "tokensPerSecond": 1825.0333943012192,
+        "msPerToken": 0.5479351792260692,
+        "mbPerToken": 0.0005562310306214995,
+        "extractionEfficiency": 0
       },
-      "timestamp": "2025-08-11T05:48:51.445Z",
+      "timestamp": "2025-08-11T15:35:59.812Z",
       "results": {
-        "triplesStored": 5,
-        "conceptsStored": 10,
-        "conceptualizationsStored": 10
+        "triplesStored": 0,
+        "conceptsStored": 0,
+        "conceptualizationsStored": 0
       }
     }
   ],
@@ -67,8 +67,8 @@
     "totalTests": 2,
     "successful": 2,
     "failed": 0,
-    "avgTimePerToken": 81.76990478915559,
-    "avgSpeed": 14.857126707373364,
+    "avgTimePerToken": 2.929531770565416,
+    "avgSpeed": 1006.6586507863681,
     "nextPhase": "Phase 1: Implement parallel extraction optimization"
   }
 }

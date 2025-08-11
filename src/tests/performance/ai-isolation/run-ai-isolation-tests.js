@@ -2,23 +2,23 @@
 
 /**
  * AI Isolation Tests Master Runner
- * 
+ *
  * Purpose: Execute all AI performance isolation tests and generate
  * comprehensive analysis to identify the root causes of the 95% AI bottleneck
- * 
+ *
  * Tests Included:
  * - ExtractByType performance analysis
  * - Embedding batch optimization analysis
- * - Conceptualization performance analysis  
+ * - Conceptualization performance analysis
  * - API latency measurement analysis
- * 
+ *
  * Output: Comprehensive performance report with optimization roadmap
  */
 
 import { writeFileSync } from 'node:fs';
-import { resolve, dirname } from 'node:path';
-import { fileURLToPath } from 'node:url';
+import { dirname, resolve } from 'node:path';
 import { performance } from 'node:perf_hooks';
+import { fileURLToPath } from 'node:url';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 
@@ -28,7 +28,7 @@ async function loadTestModules() {
 	const { runEmbeddingBatchTest } = await import('./embedding-batch-test.js');
 	const { runConceptualizationTest } = await import('./conceptualization-test.js');
 	const { runAPILatencyTest } = await import('./api-latency-test.js');
-	
+
 	return {
 		runExtractByTypeTest,
 		runEmbeddingBatchTest,
@@ -43,15 +43,15 @@ async function loadTestModules() {
 async function runTestSafely(testName, testFunction) {
 	console.log(`\n🚀 Starting ${testName}...`);
 	console.log('='.repeat(60));
-	
+
 	const startTime = performance.now();
-	
+
 	try {
 		const result = await testFunction();
 		const duration = performance.now() - startTime;
-		
+
 		console.log(`\n✅ ${testName} completed successfully in ${(duration / 1000).toFixed(2)}s`);
-		
+
 		return {
 			testName,
 			success: true,
@@ -59,12 +59,11 @@ async function runTestSafely(testName, testFunction) {
 			data: result,
 			timestamp: new Date().toISOString(),
 		};
-		
 	} catch (error) {
 		const duration = performance.now() - startTime;
-		
+
 		console.error(`\n❌ ${testName} failed after ${(duration / 1000).toFixed(2)}s:`, error.message);
-		
+
 		return {
 			testName,
 			success: false,
@@ -88,10 +87,10 @@ function generateCrossTestAnalysis(results) {
 		correlations: {},
 		recommendations: [],
 	};
-	
+
 	const successfulResults = results.filter(r => r.success);
 	const failedResults = results.filter(r => !r.success);
-	
+
 	// Summary statistics
 	analysis.summary = {
 		totalTests: results.length,
@@ -100,73 +99,101 @@ function generateCrossTestAnalysis(results) {
 		totalDuration: results.reduce((sum, r) => sum + r.duration, 0),
 		avgTestDuration: results.reduce((sum, r) => sum + r.duration, 0) / results.length,
 	};
-	
+
 	// Extract key performance metrics from each test
 	const performanceMetrics = {};
-	
+
 	successfulResults.forEach(result => {
 		const testData = result.data;
-		
+
 		switch (result.testName) {
 			case 'ExtractByType Performance Test':
 				if (testData.typeAnalysis) {
 					performanceMetrics.extraction = {
-						avgDurationPerType: Object.values(testData.typeAnalysis).reduce((sum, t) => sum + t.avgDuration, 0) / Object.keys(testData.typeAnalysis).length,
-						avgTokenSpeed: Object.values(testData.typeAnalysis).reduce((sum, t) => sum + t.avgTokenSpeed, 0) / Object.keys(testData.typeAnalysis).length,
-						slowestType: Object.entries(testData.typeAnalysis).reduce((a, b) => a[1].avgDuration > b[1].avgDuration ? a : b),
-						fastestType: Object.entries(testData.typeAnalysis).reduce((a, b) => a[1].avgDuration < b[1].avgDuration ? a : b),
+						avgDurationPerType:
+							Object.values(testData.typeAnalysis).reduce((sum, t) => sum + t.avgDuration, 0) /
+							Object.keys(testData.typeAnalysis).length,
+						avgTokenSpeed:
+							Object.values(testData.typeAnalysis).reduce((sum, t) => sum + t.avgTokenSpeed, 0) /
+							Object.keys(testData.typeAnalysis).length,
+						slowestType: Object.entries(testData.typeAnalysis).reduce((a, b) =>
+							a[1].avgDuration > b[1].avgDuration ? a : b
+						),
+						fastestType: Object.entries(testData.typeAnalysis).reduce((a, b) =>
+							a[1].avgDuration < b[1].avgDuration ? a : b
+						),
 					};
 				}
 				break;
-				
+
 			case 'Embedding Batch Performance Test':
 				if (testData.batchAnalysis) {
-					const optimalBatch = Object.entries(testData.batchAnalysis).reduce((a, b) => a[1].avgEfficiency > b[1].avgEfficiency ? a : b);
+					const optimalBatch = Object.entries(testData.batchAnalysis).reduce((a, b) =>
+						a[1].avgEfficiency > b[1].avgEfficiency ? a : b
+					);
 					performanceMetrics.embedding = {
 						optimalBatchSize: optimalBatch[0],
 						optimalEfficiency: optimalBatch[1].avgEfficiency,
-						avgTokenSpeed: Object.values(testData.batchAnalysis).reduce((sum, b) => sum + b.avgTokenSpeed, 0) / Object.keys(testData.batchAnalysis).length,
+						avgTokenSpeed:
+							Object.values(testData.batchAnalysis).reduce((sum, b) => sum + b.avgTokenSpeed, 0) /
+							Object.keys(testData.batchAnalysis).length,
 					};
 				}
 				break;
-				
+
 			case 'Conceptualization Performance Test':
 				if (testData.results && testData.results.length > 0) {
 					const successfulConceptResults = testData.results.filter(r => r.result.success);
 					if (successfulConceptResults.length > 0) {
 						performanceMetrics.conceptualization = {
-							avgProcessingSpeed: successfulConceptResults.reduce((sum, r) => sum + r.result.results.processingSpeed, 0) / successfulConceptResults.length,
-							avgConceptsPerElement: successfulConceptResults.reduce((sum, r) => sum + r.result.results.conceptsPerElement, 0) / successfulConceptResults.length,
-							avgConfidence: successfulConceptResults.reduce((sum, r) => sum + r.result.results.avgConfidence, 0) / successfulConceptResults.length,
+							avgProcessingSpeed:
+								successfulConceptResults.reduce(
+									(sum, r) => sum + r.result.results.processingSpeed,
+									0
+								) / successfulConceptResults.length,
+							avgConceptsPerElement:
+								successfulConceptResults.reduce(
+									(sum, r) => sum + r.result.results.conceptsPerElement,
+									0
+								) / successfulConceptResults.length,
+							avgConfidence:
+								successfulConceptResults.reduce(
+									(sum, r) => sum + r.result.results.avgConfidence,
+									0
+								) / successfulConceptResults.length,
 						};
 					}
 				}
 				break;
-				
-			case 'API Latency Performance Test':
+
+			case 'API Latency Performance Test': {
 				const basicLatency = testData.testResults?.find(t => t.testName === 'basic-latency');
 				const modelLatency = testData.testResults?.find(t => t.testName === 'model-latency');
 				if (basicLatency || modelLatency) {
 					performanceMetrics.apiLatency = {
 						basicLatency: basicLatency?.avgLatency || 0,
 						modelLatency: modelLatency?.avgLatency || 0,
-						successRate: (basicLatency?.successRate || modelLatency?.successRate || 0),
+						successRate: basicLatency?.successRate || modelLatency?.successRate || 0,
 						variability: modelLatency?.latencyStdDev || 0,
 					};
 				}
 				break;
+			}
 		}
 	});
-	
+
 	// Bottleneck analysis
 	analysis.bottleneckAnalysis = analyzeBottlenecks(performanceMetrics);
-	
+
 	// Generate correlations
 	analysis.correlations = findPerformanceCorrelations(performanceMetrics);
-	
+
 	// Generate cross-test recommendations
-	analysis.recommendations = generateCrossTestRecommendations(performanceMetrics, analysis.bottleneckAnalysis);
-	
+	analysis.recommendations = generateCrossTestRecommendations(
+		performanceMetrics,
+		analysis.bottleneckAnalysis
+	);
+
 	return analysis;
 }
 
@@ -179,18 +206,19 @@ function analyzeBottlenecks(metrics) {
 		secondary: [],
 		insights: [],
 	};
-	
+
 	// API Latency Analysis (Primary bottleneck candidate)
 	if (metrics.apiLatency) {
 		const { basicLatency, modelLatency, successRate } = metrics.apiLatency;
 		const avgLatency = Math.max(basicLatency, modelLatency);
-		
+
 		if (avgLatency > 3000) {
 			bottlenecks.primary.push({
 				type: 'API_LATENCY',
 				severity: 'HIGH',
 				metric: `${avgLatency.toFixed(0)}ms average API response time`,
-				impact: 'This explains the 95% processing time bottleneck - API calls dominate execution time',
+				impact:
+					'This explains the 95% processing time bottleneck - API calls dominate execution time',
 			});
 		} else if (avgLatency > 1500) {
 			bottlenecks.secondary.push({
@@ -200,7 +228,7 @@ function analyzeBottlenecks(metrics) {
 				impact: 'Moderate API latency contributing to slow processing',
 			});
 		}
-		
+
 		if (successRate < 0.9) {
 			bottlenecks.primary.push({
 				type: 'API_RELIABILITY',
@@ -210,11 +238,11 @@ function analyzeBottlenecks(metrics) {
 			});
 		}
 	}
-	
+
 	// Extraction Performance Analysis
 	if (metrics.extraction) {
 		const { avgTokenSpeed, slowestType, fastestType } = metrics.extraction;
-		
+
 		if (avgTokenSpeed < 20) {
 			bottlenecks.secondary.push({
 				type: 'EXTRACTION_SPEED',
@@ -223,7 +251,7 @@ function analyzeBottlenecks(metrics) {
 				impact: 'Slow token processing affects overall pipeline performance',
 			});
 		}
-		
+
 		if (slowestType && fastestType) {
 			const speedRatio = slowestType[1].avgDuration / fastestType[1].avgDuration;
 			if (speedRatio > 2) {
@@ -235,11 +263,11 @@ function analyzeBottlenecks(metrics) {
 			}
 		}
 	}
-	
+
 	// Embedding Performance Analysis
 	if (metrics.embedding) {
 		const { avgTokenSpeed } = metrics.embedding;
-		
+
 		if (avgTokenSpeed < 500) {
 			bottlenecks.secondary.push({
 				type: 'EMBEDDING_SPEED',
@@ -249,11 +277,11 @@ function analyzeBottlenecks(metrics) {
 			});
 		}
 	}
-	
+
 	// Conceptualization Performance Analysis
 	if (metrics.conceptualization) {
 		const { avgProcessingSpeed } = metrics.conceptualization;
-		
+
 		if (avgProcessingSpeed < 5) {
 			bottlenecks.secondary.push({
 				type: 'CONCEPTUALIZATION_SPEED',
@@ -263,7 +291,7 @@ function analyzeBottlenecks(metrics) {
 			});
 		}
 	}
-	
+
 	return bottlenecks;
 }
 
@@ -272,12 +300,12 @@ function analyzeBottlenecks(metrics) {
  */
 function findPerformanceCorrelations(metrics) {
 	const correlations = [];
-	
+
 	// API latency vs extraction speed correlation
 	if (metrics.apiLatency && metrics.extraction) {
 		const apiLatency = Math.max(metrics.apiLatency.basicLatency, metrics.apiLatency.modelLatency);
 		const extractionSpeed = metrics.extraction.avgTokenSpeed;
-		
+
 		if (apiLatency > 2000 && extractionSpeed < 25) {
 			correlations.push({
 				type: 'API_EXTRACTION_CORRELATION',
@@ -286,11 +314,11 @@ function findPerformanceCorrelations(metrics) {
 			});
 		}
 	}
-	
-	// Success rate vs processing speed correlation  
+
+	// Success rate vs processing speed correlation
 	if (metrics.apiLatency) {
 		const successRate = metrics.apiLatency.successRate;
-		
+
 		if (successRate < 0.85) {
 			correlations.push({
 				type: 'RELIABILITY_PERFORMANCE_CORRELATION',
@@ -299,7 +327,7 @@ function findPerformanceCorrelations(metrics) {
 			});
 		}
 	}
-	
+
 	// Embedding efficiency correlation
 	if (metrics.embedding && metrics.embedding.optimalEfficiency > 90) {
 		correlations.push({
@@ -308,7 +336,7 @@ function findPerformanceCorrelations(metrics) {
 			insight: 'Phase 2 optimizations successfully eliminated embedding bottleneck',
 		});
 	}
-	
+
 	return correlations;
 }
 
@@ -317,20 +345,22 @@ function findPerformanceCorrelations(metrics) {
  */
 function generateCrossTestRecommendations(metrics, bottlenecks) {
 	const recommendations = [];
-	
+
 	// Primary recommendations based on bottleneck analysis
 	if (bottlenecks.primary.length > 0) {
 		recommendations.push('🎯 PRIMARY OPTIMIZATIONS (High Impact):');
-		
+
 		bottlenecks.primary.forEach(bottleneck => {
 			switch (bottleneck.type) {
 				case 'API_LATENCY':
-					recommendations.push('   • Implement request timeout optimization and retry logic with exponential backoff');
+					recommendations.push(
+						'   • Implement request timeout optimization and retry logic with exponential backoff'
+					);
 					recommendations.push('   • Add circuit breaker pattern for failed API calls');
 					recommendations.push('   • Consider API region optimization or provider alternatives');
 					recommendations.push('   • Implement request batching/grouping where possible');
 					break;
-					
+
 				case 'API_RELIABILITY':
 					recommendations.push('   • Implement robust retry mechanisms with exponential backoff');
 					recommendations.push('   • Add request deduplication to avoid retry storms');
@@ -339,24 +369,24 @@ function generateCrossTestRecommendations(metrics, bottlenecks) {
 			}
 		});
 	}
-	
+
 	// Secondary recommendations
 	if (bottlenecks.secondary.length > 0) {
 		recommendations.push('');
 		recommendations.push('⚙️  SECONDARY OPTIMIZATIONS (Medium Impact):');
-		
+
 		bottlenecks.secondary.forEach(bottleneck => {
 			switch (bottleneck.type) {
 				case 'EXTRACTION_SPEED':
 					recommendations.push('   • Optimize prompts for faster processing');
 					recommendations.push('   • Consider model switching for speed vs quality tradeoff');
 					break;
-					
+
 				case 'EMBEDDING_SPEED':
 					recommendations.push('   • Fine-tune batch sizes for optimal throughput');
 					recommendations.push('   • Consider embedding caching for frequently seen texts');
 					break;
-					
+
 				case 'CONCEPTUALIZATION_SPEED':
 					recommendations.push('   • Move conceptualization to background processing queue');
 					recommendations.push('   • Implement progressive concept generation');
@@ -364,47 +394,60 @@ function generateCrossTestRecommendations(metrics, bottlenecks) {
 			}
 		});
 	}
-	
+
 	// Implementation insights
 	if (bottlenecks.insights.length > 0) {
 		recommendations.push('');
 		recommendations.push('💡 IMPLEMENTATION INSIGHTS:');
-		
+
 		bottlenecks.insights.forEach(insight => {
 			if (insight.type === 'EXTRACTION_IMBALANCE') {
-				recommendations.push(`   • ${insight.metric} - balance prompt complexity across extraction types`);
+				recommendations.push(
+					`   • ${insight.metric} - balance prompt complexity across extraction types`
+				);
 			}
 		});
 	}
-	
+
 	// Specific optimization recommendations based on metrics
 	if (metrics.apiLatency?.basicLatency > 5000) {
 		recommendations.push('');
-		recommendations.push('🚨 CRITICAL: API latency exceeds 5 seconds - immediate investigation required');
+		recommendations.push(
+			'🚨 CRITICAL: API latency exceeds 5 seconds - immediate investigation required'
+		);
 		recommendations.push('   • Check network connectivity and DNS resolution');
 		recommendations.push('   • Verify API endpoint regions and routing');
 		recommendations.push('   • Consider switching to faster AI provider/model');
 	}
-	
+
 	if (metrics.embedding?.optimalBatchSize) {
 		recommendations.push('');
-		recommendations.push(`✅ CONFIRMED: Optimal embedding batch size is ${metrics.embedding.optimalBatchSize} (${metrics.embedding.optimalEfficiency.toFixed(1)} texts/call)`);
+		recommendations.push(
+			`✅ CONFIRMED: Optimal embedding batch size is ${metrics.embedding.optimalBatchSize} (${metrics.embedding.optimalEfficiency.toFixed(1)} texts/call)`
+		);
 		recommendations.push('   • Update production configuration to use optimal batch size');
 	}
-	
+
 	// Overall strategy recommendation
 	recommendations.push('');
 	recommendations.push('🎯 OPTIMIZATION STRATEGY:');
-	if (metrics.apiLatency && (metrics.apiLatency.basicLatency > 2000 || metrics.apiLatency.modelLatency > 2000)) {
-		recommendations.push('   1. Focus on API request optimization (highest impact - addresses 95% bottleneck)');
+	if (
+		metrics.apiLatency &&
+		(metrics.apiLatency.basicLatency > 2000 || metrics.apiLatency.modelLatency > 2000)
+	) {
+		recommendations.push(
+			'   1. Focus on API request optimization (highest impact - addresses 95% bottleneck)'
+		);
 		recommendations.push('   2. Implement background processing for non-blocking operations');
 		recommendations.push('   3. Add comprehensive monitoring and alerting for API performance');
 		recommendations.push('   4. Consider architectural changes for high-latency scenarios');
 	} else {
-		recommendations.push('   1. API latency is within acceptable range - focus on algorithmic optimizations');
+		recommendations.push(
+			'   1. API latency is within acceptable range - focus on algorithmic optimizations'
+		);
 		recommendations.push('   2. Continue with planned optimization phases');
 	}
-	
+
 	return recommendations;
 }
 
@@ -415,7 +458,7 @@ function saveReport(reportData) {
 	const timestamp = new Date().toISOString().replace(/[:.]/g, '-');
 	const filename = `ai-isolation-report-${timestamp}.json`;
 	const filepath = resolve(__dirname, '../reports', filename);
-	
+
 	try {
 		// Ensure reports directory exists
 		const reportsDir = resolve(__dirname, '../reports');
@@ -425,7 +468,7 @@ function saveReport(reportData) {
 		} catch (e) {
 			// Directory might already exist
 		}
-		
+
 		writeFileSync(filepath, JSON.stringify(reportData, null, 2));
 		console.log(`\n📄 Detailed report saved to: ${filename}`);
 		return filepath;
@@ -442,64 +485,68 @@ async function runAIIsolationTests() {
 	console.log('🧪 AI Performance Isolation Test Suite');
 	console.log('=====================================');
 	console.log('🎯 Goal: Identify root causes of 95% AI processing bottleneck');
-	console.log('📊 Expected: Detailed analysis of extraction, embedding, conceptualization, and API latency');
+	console.log(
+		'📊 Expected: Detailed analysis of extraction, embedding, conceptualization, and API latency'
+	);
 	console.log('\n🚀 Starting comprehensive AI performance analysis...\n');
-	
+
 	const overallStartTime = performance.now();
-	
+
 	try {
 		// Load all test modules
 		const testModules = await loadTestModules();
-		
+
 		// Run each test suite
 		const testResults = [];
-		
+
 		// Test 1: ExtractByType Performance
 		const extractResult = await runTestSafely(
 			'ExtractByType Performance Test',
 			testModules.runExtractByTypeTest
 		);
 		testResults.push(extractResult);
-		
+
 		// Test 2: Embedding Batch Performance
 		const embeddingResult = await runTestSafely(
 			'Embedding Batch Performance Test',
 			testModules.runEmbeddingBatchTest
 		);
 		testResults.push(embeddingResult);
-		
-		// Test 3: Conceptualization Performance  
+
+		// Test 3: Conceptualization Performance
 		const conceptResult = await runTestSafely(
 			'Conceptualization Performance Test',
 			testModules.runConceptualizationTest
 		);
 		testResults.push(conceptResult);
-		
+
 		// Test 4: API Latency Performance
 		const apiResult = await runTestSafely(
 			'API Latency Performance Test',
 			testModules.runAPILatencyTest
 		);
 		testResults.push(apiResult);
-		
+
 		const overallEndTime = performance.now();
 		const totalDuration = overallEndTime - overallStartTime;
-		
+
 		// Generate comprehensive cross-test analysis
 		console.log('\n' + '='.repeat(80));
 		console.log('📋 COMPREHENSIVE AI PERFORMANCE ANALYSIS');
 		console.log('='.repeat(80));
-		
+
 		const crossAnalysis = generateCrossTestAnalysis(testResults);
-		
+
 		// Display summary
 		console.log('\n📊 EXECUTION SUMMARY:');
 		console.log(`   Total Duration: ${(totalDuration / 1000).toFixed(2)}s`);
 		console.log(`   Tests Run: ${crossAnalysis.summary.totalTests}`);
 		console.log(`   Successful: ${crossAnalysis.summary.successfulTests}`);
 		console.log(`   Failed: ${crossAnalysis.summary.failedTests}`);
-		console.log(`   Average Test Time: ${(crossAnalysis.summary.avgTestDuration / 1000).toFixed(2)}s`);
-		
+		console.log(
+			`   Average Test Time: ${(crossAnalysis.summary.avgTestDuration / 1000).toFixed(2)}s`
+		);
+
 		// Display bottleneck analysis
 		if (crossAnalysis.bottleneckAnalysis.primary.length > 0) {
 			console.log('\n🚨 PRIMARY BOTTLENECKS IDENTIFIED:');
@@ -508,14 +555,14 @@ async function runAIIsolationTests() {
 				console.log(`      Impact: ${bottleneck.impact}`);
 			});
 		}
-		
+
 		if (crossAnalysis.bottleneckAnalysis.secondary.length > 0) {
 			console.log('\n⚠️  SECONDARY BOTTLENECKS:');
 			crossAnalysis.bottleneckAnalysis.secondary.forEach(bottleneck => {
 				console.log(`   • ${bottleneck.type}: ${bottleneck.metric}`);
 			});
 		}
-		
+
 		// Display correlations
 		if (crossAnalysis.correlations.length > 0) {
 			console.log('\n🔗 PERFORMANCE CORRELATIONS:');
@@ -524,14 +571,14 @@ async function runAIIsolationTests() {
 				console.log(`     Insight: ${correlation.insight}`);
 			});
 		}
-		
+
 		// Display recommendations
 		console.log('\n💡 COMPREHENSIVE OPTIMIZATION ROADMAP:');
 		console.log('=======================================');
 		crossAnalysis.recommendations.forEach(rec => {
 			console.log(rec);
 		});
-		
+
 		// Compile final report
 		const finalReport = {
 			testName: 'AI Performance Isolation Test Suite',
@@ -545,24 +592,23 @@ async function runAIIsolationTests() {
 			crossAnalysis,
 			conclusion: generateConclusion(crossAnalysis),
 		};
-		
+
 		// Save detailed report
 		const reportPath = saveReport(finalReport);
-		
+
 		console.log('\n✅ AI Performance Isolation Test Suite completed successfully!');
 		console.log(`📊 Total execution time: ${(totalDuration / 1000).toFixed(2)}s`);
 		if (reportPath) {
 			console.log(`📄 Detailed report available at: ${reportPath}`);
 		}
-		
+
 		return finalReport;
-		
 	} catch (error) {
 		const totalDuration = performance.now() - overallStartTime;
-		
+
 		console.error('\n❌ AI Isolation Test Suite failed:', error.message);
 		console.error(`⏱️  Failed after: ${(totalDuration / 1000).toFixed(2)}s`);
-		
+
 		throw error;
 	}
 }
@@ -577,13 +623,13 @@ function generateConclusion(crossAnalysis) {
 		expectedImprovement: '0-10%',
 		nextSteps: [],
 	};
-	
+
 	const { bottleneckAnalysis } = crossAnalysis;
-	
+
 	// Determine root cause
 	if (bottleneckAnalysis.primary.length > 0) {
 		const primaryBottleneck = bottleneckAnalysis.primary[0];
-		
+
 		if (primaryBottleneck.type === 'API_LATENCY') {
 			conclusion.rootCause = 'HIGH_API_LATENCY';
 			conclusion.confidence = 'HIGH';
@@ -621,7 +667,7 @@ function generateConclusion(crossAnalysis) {
 			'Consider alternative processing strategies',
 		];
 	}
-	
+
 	return conclusion;
 }
 

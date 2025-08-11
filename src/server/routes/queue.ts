@@ -1,5 +1,7 @@
 import { JobStatus } from '@prisma/client';
-import { type ProcessKnowledgeArgs, processKnowledge } from '~/server/transport-manager.js';
+import { routeJob } from '~/features/knowledge-processing/job-router.js';
+import type { ProcessKnowledgeArgs } from '~/server/transport-manager.js';
+import { db } from '~/shared/database/client.js';
 import { addJobToQueue, getJob, updateJobStatus } from '~/shared/services/queue-service.js';
 
 // Queue processing for large jobs
@@ -19,6 +21,39 @@ export async function queueKnowledgeProcessing(data: {
 }
 
 // Handle background job processing (called by QStash)
+// Get pipeline status endpoint
+export async function getPipelineStatusEndpoint(params: { parentJobId: string }) {
+	const { parentJobId } = params;
+
+	try {
+		// Import the function here to avoid circular dependencies
+		const { getPipelineStatus } = await import(
+			'~/features/knowledge-processing/pipeline-coordinator.js'
+		);
+		const status = await getPipelineStatus(parentJobId);
+
+		if (!status) {
+			return {
+				success: false,
+				error: 'Pipeline not found',
+			};
+		}
+
+		return {
+			success: true,
+			data: status,
+		};
+	} catch (error) {
+		const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+		console.error(`[QueueRoute] Failed to get pipeline status:`, error);
+
+		return {
+			success: false,
+			error: errorMessage,
+		};
+	}
+}
+
 export async function handleProcessJob(body: { jobId: string }) {
 	const { jobId } = body;
 
@@ -26,8 +61,11 @@ export async function handleProcessJob(body: { jobId: string }) {
 		throw new Error('Job ID is required');
 	}
 
-	// Get job from database
-	const job = await getJob(jobId);
+	// Get job from database using Prisma directly
+	const job = await db.processingJob.findUnique({
+		where: { id: jobId },
+	});
+
 	if (!job) {
 		throw new Error(`Job ${jobId} not found`);
 	}
@@ -41,24 +79,14 @@ export async function handleProcessJob(body: { jobId: string }) {
 	}
 
 	try {
-		// Mark job as processing
-		await updateJobStatus(jobId, JobStatus.PROCESSING);
+		console.debug(`[QueueRoute] Processing job ${jobId} of type ${job.job_type}`);
 
-		const processKnowledgeArgs: ProcessKnowledgeArgs = {
-			text: job.text,
-			...(job.metadata as Omit<ProcessKnowledgeArgs, 'text'>),
-		};
-
-		// Process the knowledge using your existing function
-		const result = await processKnowledge(processKnowledgeArgs);
+		// Route job to appropriate handler
+		const result = await routeJob(job);
 
 		if (!result.success) {
-			await updateJobStatus(jobId, JobStatus.FAILED, null, result.error?.message);
 			throw new Error(result.error?.message || 'Processing failed');
 		}
-
-		// Mark job as completed
-		await updateJobStatus(jobId, JobStatus.COMPLETED, result.data);
 
 		return {
 			jobId,
@@ -66,9 +94,18 @@ export async function handleProcessJob(body: { jobId: string }) {
 			result: result.data,
 		};
 	} catch (error) {
-		// Mark job as failed
 		const errorMessage = error instanceof Error ? error.message : 'Unknown error';
-		await updateJobStatus(jobId, JobStatus.FAILED, null, errorMessage);
+		console.error(`[QueueRoute] Job ${jobId} failed:`, error);
+
+		// Update job status to failed
+		await db.processingJob.update({
+			where: { id: jobId },
+			data: {
+				status: JobStatus.FAILED,
+				errorMessage,
+				completedAt: new Date(),
+			},
+		});
 
 		throw error;
 	}
