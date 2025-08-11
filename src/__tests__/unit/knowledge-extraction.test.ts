@@ -38,12 +38,16 @@ describe('Knowledge Extraction', () => {
 
 		// Setup mocks
 		(createAIProvider as jest.Mock).mockReturnValue(mockAIProvider);
-		(env as any) = { ...mockEnv, EXTRACTION_METHOD: 'four-stage' };
+		Object.assign(env, { ...mockEnv, EXTRACTION_METHOD: 'four-stage' });
 		(trackTokenUsage as jest.Mock).mockImplementation(usage => usage);
 
 		// Mock retry mechanism to pass through function calls
-		(retryAIOperation as jest.Mock).mockImplementation(async (fn: any) => await fn());
-		(withCircuitBreaker as jest.Mock).mockImplementation(async (fn: any) => await fn());
+		(retryAIOperation as jest.MockedFunction<typeof retryAIOperation>).mockImplementation(
+			async <T>(fn: () => Promise<T>) => await fn()
+		);
+		(withCircuitBreaker as jest.MockedFunction<typeof withCircuitBreaker>).mockImplementation(
+			async <T>(fn: () => Promise<T>) => await fn()
+		);
 	});
 
 	describe('extractKnowledgeTriples', () => {
@@ -91,7 +95,7 @@ describe('Knowledge Extraction', () => {
 		});
 
 		it('should extract triples using single-pass method when configured', async () => {
-			(env as any).EXTRACTION_METHOD = 'single-pass';
+			Object.assign(env, { EXTRACTION_METHOD: 'single-pass' });
 			const args = createTestArgs({ text: testTexts.small });
 
 			mockAIProvider.generateText.mockResolvedValueOnce(
@@ -128,7 +132,7 @@ describe('Knowledge Extraction', () => {
 		it('should clean markdown formatting from responses', async () => {
 			const args = createTestArgs();
 
-			const markdownResponse = '```json\n' + mockAIExtractions.singlePass.response + '\n```';
+			const markdownResponse = `\`\`\`json\n${mockAIExtractions.singlePass.response}\n\`\`\``;
 			mockAIProvider.generateText.mockResolvedValue(
 				createSuccessResult({
 					data: markdownResponse,
@@ -185,11 +189,15 @@ describe('Knowledge Extraction', () => {
 		it('should use retry mechanism for AI operations', async () => {
 			const args = createTestArgs();
 
-			(retryAIOperation as jest.Mock).mockImplementation(
-				async (fn: any, operation: any, config: any) => {
-					expect(operation).toContain('extraction_');
-					expect(config.maxRetries).toBe(2);
-					return await fn();
+			(retryAIOperation as jest.MockedFunction<typeof retryAIOperation>).mockImplementation(
+				async <T>(
+					operation: () => Promise<T>,
+					operationName: string,
+					customOptions?: Partial<any>
+				) => {
+					expect(operationName).toContain('extraction_');
+					expect(customOptions?.maxRetries).toBe(2);
+					return await operation();
 				}
 			);
 
@@ -208,11 +216,15 @@ describe('Knowledge Extraction', () => {
 		it('should use circuit breaker for AI operations', async () => {
 			const args = createTestArgs();
 
-			(withCircuitBreaker as jest.Mock).mockImplementation(
-				async (fn: any, key: any, config: any) => {
-					expect(key).toContain(`text_extraction_${args.source}`);
-					expect(config.failureThreshold).toBe(3);
-					expect(config.timeout).toBe(45000);
+			(withCircuitBreaker as jest.MockedFunction<typeof withCircuitBreaker>).mockImplementation(
+				async <T>(
+					fn: () => Promise<T>,
+					operationKey: string,
+					options?: { failureThreshold: number; timeout: number; resetTimeout: number }
+				) => {
+					expect(operationKey).toContain(`text_extraction_${args.source}`);
+					expect(options?.failureThreshold).toBe(3);
+					expect(options?.timeout).toBe(45000);
 					return await fn();
 				}
 			);
@@ -250,8 +262,8 @@ describe('Knowledge Extraction', () => {
 			mockAIProvider.generateText.mockRejectedValue(new Error('AI service unavailable'));
 
 			// Mock retry mechanism to propagate the error
-			(retryAIOperation as jest.Mock).mockImplementation(
-				async (...args: any[]) => {
+			(retryAIOperation as jest.MockedFunction<typeof retryAIOperation>).mockImplementation(
+				async <T>() => {
 					throw new Error('AI service unavailable');
 				}
 			);
@@ -305,11 +317,11 @@ describe('Knowledge Extraction', () => {
 				);
 
 			// Mock retry to fail for the second call
-			(retryAIOperation as jest.Mock)
-				.mockImplementationOnce(async (fn: any) => await fn())
-				.mockRejectedValueOnce(createErrorResult('Network timeout', 'ai_extraction'))
-				.mockImplementationOnce(async (fn: any) => await fn())
-				.mockImplementationOnce(async (fn: any) => await fn());
+			(retryAIOperation as jest.MockedFunction<typeof retryAIOperation>)
+				.mockImplementationOnce(async <T>(operation: () => Promise<T>) => await operation())
+				.mockRejectedValueOnce(new Error('Network timeout'))
+				.mockImplementationOnce(async <T>(operation: () => Promise<T>) => await operation())
+				.mockImplementationOnce(async <T>(operation: () => Promise<T>) => await operation());
 
 			const result = await extractKnowledgeTriples(args);
 

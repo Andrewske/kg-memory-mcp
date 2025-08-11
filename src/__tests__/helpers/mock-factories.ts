@@ -35,38 +35,32 @@ export function createMockAIProvider() {
 				},
 			},
 		}),
-		generateObject: jest.fn(),
+		generateObject: jest.fn().mockResolvedValue({
+			success: true,
+			data: {},
+		}),
 	};
 }
 
 // Mock Embedding Service
 export function createMockEmbeddingService() {
 	return {
-		generateEmbeddings: jest.fn().mockImplementation((texts: string[]) => ({
+		embed: jest.fn().mockResolvedValue({
 			success: true,
-			data: {
-				embeddings: texts.map(() =>
+			data: Array(1536)
+				.fill(0)
+				.map(() => Math.random()),
+		}),
+		embedBatch: jest.fn().mockImplementation((texts: string[]) =>
+			Promise.resolve({
+				success: true,
+				data: texts.map(() =>
 					Array(1536)
 						.fill(0)
 						.map(() => Math.random())
 				),
-				usage: {
-					promptTokens: texts.length * 8,
-					totalTokens: texts.length * 8,
-				},
-			},
-		})),
-		generateSingleEmbedding: jest.fn().mockResolvedValue({
-			success: true,
-			data: {
-				embedding: Array(1536)
-					.fill(0)
-					.map(() => Math.random()),
-				usage: { promptTokens: 8, totalTokens: 8 },
-			},
-		}),
-		embed: jest.fn(),
-		embedBatch: jest.fn(),
+			})
+		),
 	};
 }
 
@@ -107,10 +101,15 @@ export function createMockDatabase() {
 			findMany: jest.fn().mockResolvedValue([]),
 			deleteMany: jest.fn().mockResolvedValue({ count: 0 }),
 		},
-		vectorEmbedding: {
+		conceptualizationRelationship: {
+			findMany: jest.fn().mockResolvedValue([]),
 			deleteMany: jest.fn().mockResolvedValue({ count: 0 }),
 		},
-		$transaction: jest.fn().mockImplementation(callback =>
+		vectorEmbedding: {
+			findMany: jest.fn().mockResolvedValue([]),
+			deleteMany: jest.fn().mockResolvedValue({ count: 0 }),
+		},
+		$transaction: jest.fn().mockImplementation((callback: (tx: unknown) => unknown) =>
 			callback({
 				processingJob: mockDatabase.processingJob,
 				knowledgeTriple: mockDatabase.knowledgeTriple,
@@ -137,7 +136,9 @@ export function createMockQStash() {
 export function createMockResourceManager() {
 	return {
 		withAI: jest.fn().mockImplementation(async (callback: () => Promise<any>) => await callback()),
-		withDatabase: jest.fn().mockImplementation(async (callback: () => Promise<any>) => await callback()),
+		withDatabase: jest
+			.fn()
+			.mockImplementation(async (callback: () => Promise<any>) => await callback()),
 		getStatus: jest.fn().mockReturnValue({
 			database: { available: 2, waiting: 0 },
 			ai: { available: 2, waiting: 0 },
@@ -219,7 +220,7 @@ export function createTestJobMetadata(overrides: Partial<JobMetadata> = {}): Job
 			maxMemoryMB: 2048,
 		},
 		...overrides,
-	};
+	} as JobMetadata;
 }
 
 export function createTestMetrics(overrides: Partial<ExtractionMetrics> = {}): ExtractionMetrics {
@@ -275,7 +276,7 @@ export function createTestEmbeddingMap(
 	});
 
 	return {
-		success: true,
+		success: true as const,
 		data: {
 			embeddings,
 			stats: {

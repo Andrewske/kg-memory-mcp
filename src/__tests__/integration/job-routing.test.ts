@@ -10,9 +10,6 @@ jest.mock('~/shared/services/ai-provider-service.js');
 jest.mock('~/shared/services/embedding-service.js');
 jest.mock('~/shared/env.js');
 
-import { BatchExtractionJobHandler } from '~/features/knowledge-processing/handlers/batch-extraction-handler.js';
-import { ConceptJobHandler } from '~/features/knowledge-processing/handlers/concept-handler.js';
-import { DeduplicationJobHandler } from '~/features/knowledge-processing/handlers/deduplication-handler.js';
 import { routeJob } from '~/features/knowledge-processing/job-router.js';
 import { db } from '~/shared/database/client.js';
 import { env } from '~/shared/env.js';
@@ -45,7 +42,7 @@ describe('Job Routing Integration', () => {
 
 		(createAIProvider as jest.Mock).mockReturnValue(mockAIProvider);
 		(createEmbeddingService as jest.Mock).mockReturnValue(mockEmbeddingService);
-		(env as any) = { ...mockEnv };
+		Object.assign(env, { ...mockEnv });
 	});
 
 	afterAll(async () => {

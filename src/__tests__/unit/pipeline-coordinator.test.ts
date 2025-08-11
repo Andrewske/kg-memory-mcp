@@ -59,8 +59,10 @@ describe('Pipeline Coordinator', () => {
 		// Set up the mocked database client
 		Object.assign(db.processingJob, mockDb.processingJob);
 		(getQStash as jest.Mock).mockReturnValue(mockQStash);
-		(env as any).HTTP_SERVER_URL = 'http://localhost:3000';
-		(env as any).ENABLE_SEMANTIC_DEDUP = false;
+		Object.assign(env, {
+			HTTP_SERVER_URL: 'http://localhost:3000',
+			ENABLE_SEMANTIC_DEDUP: false,
+		});
 	});
 
 	describe('initiateKnowledgePipeline', () => {
@@ -178,7 +180,7 @@ describe('Pipeline Coordinator', () => {
 		});
 
 		it('should schedule deduplication job when enabled', async () => {
-			(env as any).ENABLE_SEMANTIC_DEDUP = true;
+			Object.assign(env, { ENABLE_SEMANTIC_DEDUP: true });
 
 			await schedulePostProcessingJobs(parentJobId, metrics);
 
@@ -190,7 +192,7 @@ describe('Pipeline Coordinator', () => {
 		});
 
 		it('should not schedule deduplication when disabled', async () => {
-			(env as any).ENABLE_SEMANTIC_DEDUP = false;
+			Object.assign(env, { ENABLE_SEMANTIC_DEDUP: false });
 
 			await schedulePostProcessingJobs(parentJobId, metrics);
 

@@ -38,19 +38,25 @@ export async function createTestJob(
 			source: 'test-source',
 			source_type: 'test',
 			source_date: new Date().toISOString(),
-		} as any,
+		},
 		status: JobStatus.QUEUED,
 		progress: 0,
+		result: null,
+		startedAt: null,
+		completedAt: null,
+		parent_job_id: null,
+		stage: null,
+		metrics: null,
 	};
 	
-	// Merge overrides and clean up incompatible fields
+	// Merge overrides
 	const finalData = { ...defaultData, ...overrides };
-	delete (finalData as any).id;
-	delete (finalData as any).createdAt;
-	delete (finalData as any).updatedAt;
+	
+	// Remove fields that shouldn't be in create data
+	const { id, created_at, updated_at, ...dataToCreate } = finalData as any;
 	
 	return await db.processingJob.create({
-		data: finalData as any,
+		data: dataToCreate,
 	});
 }
 

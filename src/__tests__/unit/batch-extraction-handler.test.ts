@@ -3,7 +3,7 @@
  */
 
 import { beforeEach, describe, expect, it, jest } from '@jest/globals';
-import { JobStatus, JobType } from '@prisma/client';
+import { JobStatus, JobType, type ProcessingJob } from '@prisma/client';
 
 // Mock dependencies before imports
 jest.mock('~/features/deduplication/deduplicate.js');
@@ -43,6 +43,12 @@ import { setupTestSuite } from '../helpers/test-setup.js';
 // Setup test environment
 setupTestSuite();
 
+type ExtractKTResult = Awaited<ReturnType<typeof extractKnowledgeTriples>>;
+type ExtractKTSuccess = Extract<ExtractKTResult, { success: true }>;
+type DedupTriplesResult = Awaited<ReturnType<typeof deduplicateTriples>>;
+type DedupSuccess = Extract<DedupTriplesResult, { success: true }>;
+type EmbeddingMapResult = Awaited<ReturnType<typeof generateEmbeddingMap>>;
+
 describe('BatchExtractionJobHandler', () => {
 	let handler: BatchExtractionJobHandler;
 	let mockEmbeddingService: ReturnType<typeof createMockEmbeddingService>;
@@ -53,15 +59,21 @@ describe('BatchExtractionJobHandler', () => {
 		mockEmbeddingService = createMockEmbeddingService();
 
 		// Setup environment mocks
-		(env as any).EMBEDDING_MODEL = 'text-embedding-3-small';
-		(env as any).EMBEDDING_DIMENSIONS = 1536;
-		(env as any).BATCH_SIZE = 32;
-		(env as any).ENABLE_SEMANTIC_DEDUP = false;
+		Object.assign(env, {
+			EMBEDDING_MODEL: 'text-embedding-3-small',
+			EMBEDDING_DIMENSIONS: 1536,
+			BATCH_SIZE: 32,
+			ENABLE_SEMANTIC_DEDUP: false,
+		});
 
 		// Setup service mocks
-		(createEmbeddingService as jest.Mock).mockReturnValue(mockEmbeddingService);
-		(updateJobProgress as jest.Mock).mockResolvedValue(undefined);
-		(schedulePostProcessingJobs as jest.Mock).mockResolvedValue(undefined);
+		(createEmbeddingService as jest.MockedFunction<typeof createEmbeddingService>).mockReturnValue(
+			mockEmbeddingService
+		);
+		(updateJobProgress as jest.MockedFunction<typeof updateJobProgress>).mockResolvedValue();
+		(
+			schedulePostProcessingJobs as jest.MockedFunction<typeof schedulePostProcessingJobs>
+		).mockResolvedValue();
 	});
 
 	describe('canHandle', () => {
@@ -89,19 +101,35 @@ describe('BatchExtractionJobHandler', () => {
 			const mockTriples = [createTestTriple()];
 			const mockConcepts = [createTestConcept()];
 
-			(extractKnowledgeTriples as jest.Mock).mockResolvedValue(
-				createSuccessResult({ triples: mockTriples, concepts: mockConcepts })
+			(
+				extractKnowledgeTriples as jest.MockedFunction<typeof extractKnowledgeTriples>
+			).mockResolvedValue({
+				success: true,
+				data: { triples: mockTriples, concepts: mockConcepts, conceptualizations: [] },
+			} as ExtractKTResult);
+
+			(generateEmbeddingMap as jest.MockedFunction<typeof generateEmbeddingMap>).mockResolvedValue({
+				success: true,
+				data: {
+					embeddings: new Map(),
+					stats: { totalTexts: 1, uniqueTexts: 1, duplicatesAverted: 0, batchCalls: 1 },
+				},
+			} as EmbeddingMapResult);
+			(deduplicateTriples as jest.MockedFunction<typeof deduplicateTriples>).mockResolvedValue({
+				success: true,
+				data: { uniqueTriples: mockTriples, duplicatesRemoved: 0, mergedMetadata: [] },
+			} as DedupTriplesResult);
+			(batchStoreKnowledge as jest.MockedFunction<typeof batchStoreKnowledge>).mockResolvedValue(
+				createSuccessResult({
+					triplesStored: 1,
+					conceptsStored: 1,
+					conceptualizationsStored: 0,
+					vectorsGenerated: 2,
+					duplicatesSkipped: 0,
+				})
 			);
 
-			(generateEmbeddingMap as jest.Mock).mockResolvedValue(createTestEmbeddingMap());
-			(deduplicateTriples as jest.Mock).mockResolvedValue(
-				createSuccessResult({ uniqueTriples: mockTriples })
-			);
-			(batchStoreKnowledge as jest.Mock).mockResolvedValue(
-				createSuccessResult({ triplesStored: 1, conceptsStored: 1 })
-			);
-
-			const result = await handler.execute(job as any);
+			const result = await handler.execute(job as ProcessingJob);
 
 			expect(result.success).toBe(true);
 			expect(result.data).toMatchObject({
@@ -125,19 +153,35 @@ describe('BatchExtractionJobHandler', () => {
 			const mockTriples = [createTestTriple()];
 			const mockConcepts = [createTestConcept()];
 
-			(chunkText as jest.Mock).mockReturnValue(chunks);
-			(extractKnowledgeTriples as jest.Mock).mockResolvedValue(
-				createSuccessResult({ triples: mockTriples, concepts: mockConcepts })
-			);
-			(generateEmbeddingMap as jest.Mock).mockResolvedValue(createTestEmbeddingMap());
-			(deduplicateTriples as jest.Mock).mockResolvedValue(
-				createSuccessResult({ uniqueTriples: mockTriples })
-			);
-			(batchStoreKnowledge as jest.Mock).mockResolvedValue(
-				createSuccessResult({ triplesStored: 3, conceptsStored: 3 })
+			(chunkText as jest.MockedFunction<typeof chunkText>).mockReturnValue(chunks);
+			(
+				extractKnowledgeTriples as jest.MockedFunction<typeof extractKnowledgeTriples>
+			).mockResolvedValue({
+				success: true,
+				data: { triples: mockTriples, concepts: mockConcepts, conceptualizations: [] },
+			} as ExtractKTResult);
+			(generateEmbeddingMap as jest.MockedFunction<typeof generateEmbeddingMap>).mockResolvedValue({
+				success: true,
+				data: {
+					embeddings: new Map(),
+					stats: { totalTexts: 1, uniqueTexts: 1, duplicatesAverted: 0, batchCalls: 1 },
+				},
+			} as EmbeddingMapResult);
+			(deduplicateTriples as jest.MockedFunction<typeof deduplicateTriples>).mockResolvedValue({
+				success: true,
+				data: { uniqueTriples: mockTriples, duplicatesRemoved: 0, mergedMetadata: [] },
+			} as DedupTriplesResult);
+			(batchStoreKnowledge as jest.MockedFunction<typeof batchStoreKnowledge>).mockResolvedValue(
+				createSuccessResult({
+					triplesStored: 3,
+					conceptsStored: 3,
+					conceptualizationsStored: 0,
+					vectorsGenerated: 6,
+					duplicatesSkipped: 0,
+				})
 			);
 
-			const result = await handler.execute(job as any);
+			const result = await handler.execute(job as ProcessingJob);
 
 			expect(result.success).toBe(true);
 			expect(chunkText).toHaveBeenCalledWith(largeText, {
@@ -154,18 +198,34 @@ describe('BatchExtractionJobHandler', () => {
 			const mockTriples = [createTestTriple()];
 			const mockConcepts = [createTestConcept()];
 
-			(extractKnowledgeTriples as jest.Mock).mockResolvedValue(
-				createSuccessResult({ triples: mockTriples, concepts: mockConcepts })
-			);
-			(generateEmbeddingMap as jest.Mock).mockResolvedValue(createTestEmbeddingMap());
-			(deduplicateTriples as jest.Mock).mockResolvedValue(
-				createSuccessResult({ uniqueTriples: mockTriples })
-			);
-			(batchStoreKnowledge as jest.Mock).mockResolvedValue(
-				createSuccessResult({ triplesStored: 1, conceptsStored: 1 })
+			(
+				extractKnowledgeTriples as jest.MockedFunction<typeof extractKnowledgeTriples>
+			).mockResolvedValue({
+				success: true,
+				data: { triples: mockTriples, concepts: mockConcepts, conceptualizations: [] },
+			} as ExtractKTResult);
+			(generateEmbeddingMap as jest.MockedFunction<typeof generateEmbeddingMap>).mockResolvedValue({
+				success: true,
+				data: {
+					embeddings: new Map(),
+					stats: { totalTexts: 1, uniqueTexts: 1, duplicatesAverted: 0, batchCalls: 1 },
+				},
+			} as EmbeddingMapResult);
+			(deduplicateTriples as jest.MockedFunction<typeof deduplicateTriples>).mockResolvedValue({
+				success: true,
+				data: { uniqueTriples: mockTriples, duplicatesRemoved: 0, mergedMetadata: [] },
+			} as DedupTriplesResult);
+			(batchStoreKnowledge as jest.MockedFunction<typeof batchStoreKnowledge>).mockResolvedValue(
+				createSuccessResult({
+					triplesStored: 1,
+					conceptsStored: 1,
+					conceptualizationsStored: 0,
+					vectorsGenerated: 2,
+					duplicatesSkipped: 0,
+				})
 			);
 
-			await handler.execute(job as any);
+			await handler.execute(job as unknown as ProcessingJob);
 
 			expect(generateEmbeddingMap).toHaveBeenCalledWith(
 				mockTriples,
@@ -181,18 +241,42 @@ describe('BatchExtractionJobHandler', () => {
 			const uniqueTriples = [createTestTriple()];
 			const embeddingMap = new Map([['test', [1, 2, 3]]]);
 
-			(extractKnowledgeTriples as jest.Mock).mockResolvedValue(
-				createSuccessResult({ triples: mockTriples, concepts: [] })
-			);
-			(generateEmbeddingMap as jest.Mock).mockResolvedValue(
-				createSuccessResult({ embeddings: embeddingMap, stats: { uniqueTexts: 1 } })
-			);
-			(deduplicateTriples as jest.Mock).mockResolvedValue(createSuccessResult({ uniqueTriples }));
-			(batchStoreKnowledge as jest.Mock).mockResolvedValue(
-				createSuccessResult({ triplesStored: 1, conceptsStored: 0 })
+			(
+				extractKnowledgeTriples as jest.MockedFunction<typeof extractKnowledgeTriples>
+			).mockResolvedValue({
+				success: true,
+				data: {
+					triples: mockTriples,
+					concepts: [] as ExtractKTSuccess['data']['concepts'],
+					conceptualizations: [] as ExtractKTSuccess['data']['conceptualizations'],
+				},
+			} as ExtractKTResult);
+			(generateEmbeddingMap as jest.MockedFunction<typeof generateEmbeddingMap>).mockResolvedValue({
+				success: true,
+				data: {
+					embeddings: embeddingMap,
+					stats: { totalTexts: 1, uniqueTexts: 1, duplicatesAverted: 0, batchCalls: 1 },
+				},
+			} as EmbeddingMapResult);
+			(deduplicateTriples as jest.MockedFunction<typeof deduplicateTriples>).mockResolvedValue({
+				success: true,
+				data: {
+					uniqueTriples,
+					duplicatesRemoved: 0,
+					mergedMetadata: [] as DedupSuccess['data']['mergedMetadata'],
+				},
+			} as DedupTriplesResult);
+			(batchStoreKnowledge as jest.MockedFunction<typeof batchStoreKnowledge>).mockResolvedValue(
+				createSuccessResult({
+					triplesStored: 1,
+					conceptsStored: 0,
+					conceptualizationsStored: 0,
+					vectorsGenerated: 1,
+					duplicatesSkipped: 0,
+				})
 			);
 
-			await handler.execute(job as any);
+			await handler.execute(job as unknown as ProcessingJob);
 
 			expect(deduplicateTriples).toHaveBeenCalledWith(mockTriples, embeddingMap);
 		});
@@ -200,15 +284,30 @@ describe('BatchExtractionJobHandler', () => {
 		it('should skip deduplication when no triples exist', async () => {
 			const job = createTestJob({ metadata: createTestJobMetadata() });
 
-			(extractKnowledgeTriples as jest.Mock).mockResolvedValue(
-				createSuccessResult({ triples: [], concepts: [] })
+			(
+				extractKnowledgeTriples as jest.MockedFunction<typeof extractKnowledgeTriples>
+			).mockResolvedValue({
+				success: true,
+				data: {
+					triples: [] as ExtractKTSuccess['data']['triples'],
+					concepts: [] as ExtractKTSuccess['data']['concepts'],
+					conceptualizations: [] as ExtractKTSuccess['data']['conceptualizations'],
+				},
+			} as ExtractKTResult);
+			(generateEmbeddingMap as jest.MockedFunction<typeof generateEmbeddingMap>).mockResolvedValue(
+				createTestEmbeddingMap()
 			);
-			(generateEmbeddingMap as jest.Mock).mockResolvedValue(createTestEmbeddingMap());
-			(batchStoreKnowledge as jest.Mock).mockResolvedValue(
-				createSuccessResult({ triplesStored: 0, conceptsStored: 0 })
+			(batchStoreKnowledge as jest.MockedFunction<typeof batchStoreKnowledge>).mockResolvedValue(
+				createSuccessResult({
+					triplesStored: 0,
+					conceptsStored: 0,
+					conceptualizationsStored: 0,
+					vectorsGenerated: 0,
+					duplicatesSkipped: 0,
+				})
 			);
 
-			await handler.execute(job as any);
+			await handler.execute(job as unknown as ProcessingJob);
 
 			expect(deduplicateTriples).not.toHaveBeenCalled();
 		});
@@ -219,20 +318,42 @@ describe('BatchExtractionJobHandler', () => {
 			const mockConcepts = [createTestConcept()];
 			const embeddingMap = new Map([['test', [1, 2, 3]]]);
 
-			(extractKnowledgeTriples as jest.Mock).mockResolvedValue(
-				createSuccessResult({ triples: mockTriples, concepts: mockConcepts })
-			);
-			(generateEmbeddingMap as jest.Mock).mockResolvedValue(
-				createSuccessResult({ embeddings: embeddingMap, stats: { uniqueTexts: 1 } })
-			);
-			(deduplicateTriples as jest.Mock).mockResolvedValue(
-				createSuccessResult({ uniqueTriples: mockTriples })
-			);
-			(batchStoreKnowledge as jest.Mock).mockResolvedValue(
-				createSuccessResult({ triplesStored: 1, conceptsStored: 1 })
+			(
+				extractKnowledgeTriples as jest.MockedFunction<typeof extractKnowledgeTriples>
+			).mockResolvedValue({
+				success: true,
+				data: {
+					triples: mockTriples,
+					concepts: mockConcepts,
+					conceptualizations: [] as ExtractKTSuccess['data']['conceptualizations'],
+				},
+			} as ExtractKTResult);
+			(generateEmbeddingMap as jest.MockedFunction<typeof generateEmbeddingMap>).mockResolvedValue({
+				success: true,
+				data: {
+					embeddings: embeddingMap,
+					stats: { totalTexts: 1, uniqueTexts: 1, duplicatesAverted: 0, batchCalls: 1 },
+				},
+			} as EmbeddingMapResult);
+			(deduplicateTriples as jest.MockedFunction<typeof deduplicateTriples>).mockResolvedValue({
+				success: true,
+				data: {
+					uniqueTriples: mockTriples,
+					duplicatesRemoved: 0,
+					mergedMetadata: [] as DedupSuccess['data']['mergedMetadata'],
+				},
+			} as DedupTriplesResult);
+			(batchStoreKnowledge as jest.MockedFunction<typeof batchStoreKnowledge>).mockResolvedValue(
+				createSuccessResult({
+					triplesStored: 1,
+					conceptsStored: 1,
+					conceptualizationsStored: 0,
+					vectorsGenerated: 2,
+					duplicatesSkipped: 0,
+				})
 			);
 
-			await handler.execute(job as any);
+			await handler.execute(job as unknown as ProcessingJob);
 
 			expect(batchStoreKnowledge).toHaveBeenCalledWith({
 				triples: mockTriples,
@@ -248,18 +369,38 @@ describe('BatchExtractionJobHandler', () => {
 				metadata: createTestJobMetadata(),
 			});
 
-			(extractKnowledgeTriples as jest.Mock).mockResolvedValue(
-				createSuccessResult({ triples: [createTestTriple()], concepts: [] })
+			(
+				extractKnowledgeTriples as jest.MockedFunction<typeof extractKnowledgeTriples>
+			).mockResolvedValue({
+				success: true,
+				data: {
+					triples: [createTestTriple()],
+					concepts: [] as ExtractKTSuccess['data']['concepts'],
+					conceptualizations: [] as ExtractKTSuccess['data']['conceptualizations'],
+				},
+			} as ExtractKTResult);
+			(generateEmbeddingMap as jest.MockedFunction<typeof generateEmbeddingMap>).mockResolvedValue(
+				createTestEmbeddingMap()
 			);
-			(generateEmbeddingMap as jest.Mock).mockResolvedValue(createTestEmbeddingMap());
-			(deduplicateTriples as jest.Mock).mockResolvedValue(
-				createSuccessResult({ uniqueTriples: [createTestTriple()] })
-			);
-			(batchStoreKnowledge as jest.Mock).mockResolvedValue(
-				createSuccessResult({ triplesStored: 1, conceptsStored: 0 })
+			(deduplicateTriples as jest.MockedFunction<typeof deduplicateTriples>).mockResolvedValue({
+				success: true,
+				data: {
+					uniqueTriples: [createTestTriple()],
+					duplicatesRemoved: 0,
+					mergedMetadata: [] as DedupSuccess['data']['mergedMetadata'],
+				},
+			} as DedupTriplesResult);
+			(batchStoreKnowledge as jest.MockedFunction<typeof batchStoreKnowledge>).mockResolvedValue(
+				createSuccessResult({
+					triplesStored: 1,
+					conceptsStored: 0,
+					conceptualizationsStored: 0,
+					vectorsGenerated: 1,
+					duplicatesSkipped: 0,
+				})
 			);
 
-			await handler.execute(job as any);
+			await handler.execute(job as unknown as ProcessingJob);
 
 			expect(schedulePostProcessingJobs).toHaveBeenCalledWith(
 				'parent-job-id',
@@ -274,15 +415,30 @@ describe('BatchExtractionJobHandler', () => {
 		it('should update progress throughout processing', async () => {
 			const job = createTestJob({ metadata: createTestJobMetadata() });
 
-			(extractKnowledgeTriples as jest.Mock).mockResolvedValue(
-				createSuccessResult({ triples: [], concepts: [] })
+			(
+				extractKnowledgeTriples as jest.MockedFunction<typeof extractKnowledgeTriples>
+			).mockResolvedValue({
+				success: true,
+				data: {
+					triples: [] as ExtractKTSuccess['data']['triples'],
+					concepts: [] as ExtractKTSuccess['data']['concepts'],
+					conceptualizations: [] as ExtractKTSuccess['data']['conceptualizations'],
+				},
+			} as ExtractKTResult);
+			(generateEmbeddingMap as jest.MockedFunction<typeof generateEmbeddingMap>).mockResolvedValue(
+				createTestEmbeddingMap()
 			);
-			(generateEmbeddingMap as jest.Mock).mockResolvedValue(createTestEmbeddingMap());
-			(batchStoreKnowledge as jest.Mock).mockResolvedValue(
-				createSuccessResult({ triplesStored: 0, conceptsStored: 0 })
+			(batchStoreKnowledge as jest.MockedFunction<typeof batchStoreKnowledge>).mockResolvedValue(
+				createSuccessResult({
+					triplesStored: 0,
+					conceptsStored: 0,
+					conceptualizationsStored: 0,
+					vectorsGenerated: 0,
+					duplicatesSkipped: 0,
+				})
 			);
 
-			await handler.execute(job as any);
+			await handler.execute(job as unknown as ProcessingJob);
 
 			expect(updateJobProgress).toHaveBeenCalledWith(job.id, 10);
 			expect(updateJobProgress).toHaveBeenCalledWith(job.id, 80);
@@ -293,14 +449,21 @@ describe('BatchExtractionJobHandler', () => {
 		it('should handle embedding generation failure', async () => {
 			const job = createTestJob({ metadata: createTestJobMetadata() });
 
-			(extractKnowledgeTriples as jest.Mock).mockResolvedValue(
-				createSuccessResult({ triples: [createTestTriple()], concepts: [] })
-			);
-			(generateEmbeddingMap as jest.Mock).mockResolvedValue(
+			(
+				extractKnowledgeTriples as jest.MockedFunction<typeof extractKnowledgeTriples>
+			).mockResolvedValue({
+				success: true,
+				data: {
+					triples: [createTestTriple()],
+					concepts: [] as ExtractKTSuccess['data']['concepts'],
+					conceptualizations: [] as ExtractKTSuccess['data']['conceptualizations'],
+				},
+			} as ExtractKTResult);
+			(generateEmbeddingMap as jest.MockedFunction<typeof generateEmbeddingMap>).mockResolvedValue(
 				createErrorResult('Embedding service failed')
 			);
 
-			const result = await handler.execute(job as any);
+			const result = await handler.execute(job as ProcessingJob);
 
 			expect(result.success).toBe(false);
 			expect(result.error?.message).toContain('Embedding generation failed');
@@ -310,15 +473,24 @@ describe('BatchExtractionJobHandler', () => {
 		it('should handle storage failure', async () => {
 			const job = createTestJob({ metadata: createTestJobMetadata() });
 
-			(extractKnowledgeTriples as jest.Mock).mockResolvedValue(
-				createSuccessResult({ triples: [], concepts: [] })
+			(
+				extractKnowledgeTriples as jest.MockedFunction<typeof extractKnowledgeTriples>
+			).mockResolvedValue({
+				success: true,
+				data: {
+					triples: [] as ExtractKTSuccess['data']['triples'],
+					concepts: [] as ExtractKTSuccess['data']['concepts'],
+					conceptualizations: [] as ExtractKTSuccess['data']['conceptualizations'],
+				},
+			} as ExtractKTResult);
+			(generateEmbeddingMap as jest.MockedFunction<typeof generateEmbeddingMap>).mockResolvedValue(
+				createTestEmbeddingMap()
 			);
-			(generateEmbeddingMap as jest.Mock).mockResolvedValue(createTestEmbeddingMap());
-			(batchStoreKnowledge as jest.Mock).mockResolvedValue(
+			(batchStoreKnowledge as jest.MockedFunction<typeof batchStoreKnowledge>).mockResolvedValue(
 				createErrorResult('Database connection failed')
 			);
 
-			const result = await handler.execute(job as any);
+			const result = await handler.execute(job as ProcessingJob);
 
 			expect(result.success).toBe(false);
 			expect(result.error?.message).toContain('Storage failed');
@@ -332,25 +504,50 @@ describe('BatchExtractionJobHandler', () => {
 			});
 
 			const chunks = createTestChunks(3);
-			(chunkText as jest.Mock).mockReturnValue(chunks);
+			(chunkText as jest.MockedFunction<typeof chunkText>).mockReturnValue(chunks);
 
 			// Mock some successful and some failed extractions
-			(extractKnowledgeTriples as jest.Mock)
-				.mockResolvedValueOnce(createSuccessResult({ triples: [createTestTriple()], concepts: [] }))
+			(extractKnowledgeTriples as jest.MockedFunction<typeof extractKnowledgeTriples>)
+				.mockResolvedValueOnce({
+					success: true,
+					data: {
+						triples: [createTestTriple()],
+						concepts: [],
+						conceptualizations: [],
+					},
+				} as ExtractKTResult)
 				.mockRejectedValueOnce(new Error('AI service timeout'))
-				.mockResolvedValueOnce(
-					createSuccessResult({ triples: [createTestTriple()], concepts: [] })
-				);
+				.mockResolvedValueOnce({
+					success: true,
+					data: {
+						triples: [createTestTriple()],
+						concepts: [],
+						conceptualizations: [],
+					},
+				} as ExtractKTResult);
 
-			(generateEmbeddingMap as jest.Mock).mockResolvedValue(createTestEmbeddingMap());
-			(deduplicateTriples as jest.Mock).mockResolvedValue(
-				createSuccessResult({ uniqueTriples: [createTestTriple(), createTestTriple()] })
+			(generateEmbeddingMap as jest.MockedFunction<typeof generateEmbeddingMap>).mockResolvedValue(
+				createTestEmbeddingMap()
 			);
-			(batchStoreKnowledge as jest.Mock).mockResolvedValue(
-				createSuccessResult({ triplesStored: 2, conceptsStored: 0 })
+			(deduplicateTriples as jest.MockedFunction<typeof deduplicateTriples>).mockResolvedValue({
+				success: true,
+				data: {
+					uniqueTriples: [createTestTriple(), createTestTriple()],
+					duplicatesRemoved: 0,
+					mergedMetadata: [] as DedupSuccess['data']['mergedMetadata'],
+				},
+			} as DedupTriplesResult);
+			(batchStoreKnowledge as jest.MockedFunction<typeof batchStoreKnowledge>).mockResolvedValue(
+				createSuccessResult({
+					triplesStored: 2,
+					conceptsStored: 0,
+					conceptualizationsStored: 0,
+					vectorsGenerated: 2,
+					duplicatesSkipped: 0,
+				})
 			);
 
-			const result = await handler.execute(job as any);
+			const result = await handler.execute(job as ProcessingJob);
 
 			expect(result.success).toBe(true);
 			expect(result.data?.triplesStored).toBe(2); // Only successful chunks
@@ -359,11 +556,11 @@ describe('BatchExtractionJobHandler', () => {
 		it('should handle unexpected errors gracefully', async () => {
 			const job = createTestJob({ metadata: createTestJobMetadata() });
 
-			(extractKnowledgeTriples as jest.Mock).mockRejectedValue(
-				new Error('Unexpected extraction error')
-			);
+			(
+				extractKnowledgeTriples as jest.MockedFunction<typeof extractKnowledgeTriples>
+			).mockRejectedValue(new Error('Unexpected extraction error'));
 
-			const result = await handler.execute(job as any);
+			const result = await handler.execute(job as ProcessingJob);
 
 			expect(result.success).toBe(false);
 			expect(result.error?.message).toBe('Unexpected extraction error');
@@ -380,15 +577,30 @@ describe('BatchExtractionJobHandler', () => {
 				metadata: createTestJobMetadata({ resourceLimits: customLimits }),
 			});
 
-			(extractKnowledgeTriples as jest.Mock).mockResolvedValue(
-				createSuccessResult({ triples: [], concepts: [] })
+			(
+				extractKnowledgeTriples as jest.MockedFunction<typeof extractKnowledgeTriples>
+			).mockResolvedValue({
+				success: true,
+				data: {
+					triples: [] as ExtractKTSuccess['data']['triples'],
+					concepts: [] as ExtractKTSuccess['data']['concepts'],
+					conceptualizations: [] as ExtractKTSuccess['data']['conceptualizations'],
+				},
+			} as ExtractKTResult);
+			(generateEmbeddingMap as jest.MockedFunction<typeof generateEmbeddingMap>).mockResolvedValue(
+				createTestEmbeddingMap()
 			);
-			(generateEmbeddingMap as jest.Mock).mockResolvedValue(createTestEmbeddingMap());
-			(batchStoreKnowledge as jest.Mock).mockResolvedValue(
-				createSuccessResult({ triplesStored: 0, conceptsStored: 0 })
+			(batchStoreKnowledge as jest.MockedFunction<typeof batchStoreKnowledge>).mockResolvedValue(
+				createSuccessResult({
+					triplesStored: 0,
+					conceptsStored: 0,
+					conceptualizationsStored: 0,
+					vectorsGenerated: 0,
+					duplicatesSkipped: 0,
+				})
 			);
 
-			await handler.execute(job as any);
+			await handler.execute(job as unknown as ProcessingJob);
 
 			// The resource limits should be passed to the ResourceManager
 			// This is implicitly tested through the successful execution

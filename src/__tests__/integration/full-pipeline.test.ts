@@ -57,7 +57,7 @@ describe('Full Pipeline Integration', () => {
 		(createAIProvider as jest.Mock).mockReturnValue(mockAIProvider);
 		(createEmbeddingService as jest.Mock).mockReturnValue(mockEmbeddingService);
 		(getQStash as jest.Mock).mockReturnValue(mockQStash);
-		(env as any) = { ...mockEnv };
+		Object.assign(env, { ...mockEnv });
 	});
 
 	afterAll(async () => {
@@ -140,7 +140,7 @@ describe('Full Pipeline Integration', () => {
 			// Step 5: Verify vectors were generated
 			const vectors = await db.vectorEmbedding.findMany({
 				where: {
-					source_id: { in: storedTriples.map(t => t.id) },
+					knowledge_triple_id: { in: storedTriples.map(t => t.id) },
 				},
 			});
 			expect(vectors.length).toBeGreaterThan(0);
@@ -209,7 +209,7 @@ describe('Full Pipeline Integration', () => {
 		});
 
 		it('should create child jobs for post-processing', async () => {
-			(env as any).ENABLE_SEMANTIC_DEDUP = true;
+			Object.assign(env, { ENABLE_SEMANTIC_DEDUP: true });
 
 			// Setup basic AI responses
 			mockAIProvider.generateText.mockResolvedValue(
@@ -522,7 +522,7 @@ describe('Full Pipeline Integration', () => {
 
 			// Verify vectors were still generated
 			const vectors = await db.vectorEmbedding.findMany({
-				where: { source_id: { in: storedTriples.map(t => t.id) } },
+				where: { knowledge_triple_id: { in: storedTriples.map(t => t.id) } },
 			});
 			expect(vectors.length).toBeGreaterThan(0);
 		});

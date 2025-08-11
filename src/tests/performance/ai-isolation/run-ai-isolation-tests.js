@@ -454,7 +454,7 @@ function generateCrossTestRecommendations(metrics, bottlenecks) {
 /**
  * Save comprehensive report to file
  */
-function saveReport(reportData) {
+async function saveReport(reportData) {
 	const timestamp = new Date().toISOString().replace(/[:.]/g, '-');
 	const filename = `ai-isolation-report-${timestamp}.json`;
 	const filepath = resolve(__dirname, '../reports', filename);
@@ -531,7 +531,7 @@ async function runAIIsolationTests() {
 		const totalDuration = overallEndTime - overallStartTime;
 
 		// Generate comprehensive cross-test analysis
-		console.log('\n' + '='.repeat(80));
+		console.log(`\n${'='.repeat(80)}`);
 		console.log('📋 COMPREHENSIVE AI PERFORMANCE ANALYSIS');
 		console.log('='.repeat(80));
 

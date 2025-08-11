@@ -67,3 +67,4 @@ prisma/migrations/
 # Local files
 .ignore
 .claude
+.mcp.json
