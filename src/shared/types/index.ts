@@ -23,7 +23,6 @@ export type { AIResponseWithUsage } from '~/shared/types/core.js';
 export type {
 	ConceptSearchResult,
 	EntityEnumerationOptions,
-	LegacySearchResult,
 	SearchOptions,
 	SearchResult,
 	TemporalFilter,

@@ -32,9 +32,7 @@ model KnowledgeTriple {
   confidence Decimal? @db.Decimal(3, 2) // 0.00 to 1.00
 
   // Relationships
-  entity_vectors       EntityVector[]
-  relationship_vectors RelationshipVector[]
-  semantic_vectors     SemanticVector[]
+  vector_embeddings    VectorEmbedding[]
   conceptualizations   ConceptualizationRelationship[]
 
   @@unique([subject, predicate, object, type])
@@ -70,7 +68,7 @@ model ConceptNode {
   extracted_at DateTime
 
   // Relationships
-  concept_vectors    ConceptVector[]
+  vector_embeddings  VectorEmbedding[]
   conceptualizations ConceptualizationRelationship[]
 
   @@unique([concept, abstraction_level, source, source_type])
@@ -120,8 +118,8 @@ model ConceptualizationRelationship {
   @@map("conceptualization_relationships")
 }
 
-// Entity Vectors - Vector embeddings for entities
-model EntityVector {
+// Unified Vector Embeddings - Consolidated vector storage for all embedding types
+model VectorEmbedding {
   id         String   @id @default(cuid())
   created_at DateTime @default(now())
   updated_at DateTime @updatedAt
@@ -132,94 +130,27 @@ model EntityVector {
   embedding Unsupported("vector(1536)") // OpenAI text-embedding-3-small dimensions
 
   // Metadata
-  entity_name String
-  role        String @default("entity")
+  vector_type VectorType
+  entity_name String?    // Only used for entity vectors
 
-  // Foreign key relationships
-  knowledge_triple_id String
-  knowledge_triple    KnowledgeTriple @relation(fields: [knowledge_triple_id], references: [id], onDelete: Cascade)
+  // Polymorphic relationships - only one should be set
+  knowledge_triple_id String?
+  knowledge_triple    KnowledgeTriple? @relation(fields: [knowledge_triple_id], references: [id], onDelete: Cascade)
+  
+  concept_node_id String?
+  concept_node    ConceptNode? @relation(fields: [concept_node_id], references: [id], onDelete: Cascade)
 
   // Indexes
   @@index([vector_id])
+  @@index([vector_type])
   @@index([entity_name])
   @@index([knowledge_triple_id])
-  // Vector index will be created manually: CREATE INDEX ON table_name USING ivfflat (embedding vector_cosine_ops)
-  @@map("entity_vectors")
-}
-
-// Relationship Vectors - Vector embeddings for predicates/relationships
-model RelationshipVector {
-  id         String   @id @default(cuid())
-  created_at DateTime @default(now())
-  updated_at DateTime @updatedAt
-
-  // Vector data
-  vector_id String                      @unique // Corresponds to file-based vector ID
-  text      String
-  embedding Unsupported("vector(1536)") // OpenAI text-embedding-3-small dimensions
-
-  // Metadata
-  role String @default("relationship")
-
-  // Foreign key relationships
-  knowledge_triple_id String
-  knowledge_triple    KnowledgeTriple @relation(fields: [knowledge_triple_id], references: [id], onDelete: Cascade)
-
-  // Indexes
-  @@index([vector_id])
-  @@index([knowledge_triple_id])
-  // Vector index will be created manually: CREATE INDEX ON table_name USING ivfflat (embedding vector_cosine_ops)
-  @@map("relationship_vectors")
-}
-
-// Semantic Vectors - Vector embeddings for full triple semantic content
-model SemanticVector {
-  id         String   @id @default(cuid())
-  created_at DateTime @default(now())
-  updated_at DateTime @updatedAt
-
-  // Vector data
-  vector_id String                      @unique // Corresponds to file-based vector ID
-  text      String
-  embedding Unsupported("vector(1536)") // OpenAI text-embedding-3-small dimensions
-
-  // Metadata
-  role String @default("semantic")
-
-  // Foreign key relationships
-  knowledge_triple_id String
-  knowledge_triple    KnowledgeTriple @relation(fields: [knowledge_triple_id], references: [id], onDelete: Cascade)
-
-  // Indexes
-  @@index([vector_id])
-  @@index([knowledge_triple_id])
-  // Vector index will be created manually: CREATE INDEX ON table_name USING ivfflat (embedding vector_cosine_ops)
-  @@map("semantic_vectors")
-}
-
-// Concept Vectors - Vector embeddings for concepts
-model ConceptVector {
-  id         String   @id @default(cuid())
-  created_at DateTime @default(now())
-  updated_at DateTime @updatedAt
-
-  // Vector data
-  vector_id String                      @unique // Corresponds to file-based vector ID
-  text      String
-  embedding Unsupported("vector(1536)") // OpenAI text-embedding-3-small dimensions
-
-  // Metadata
-  role String @default("concept")
-
-  // Foreign key relationships
-  concept_node_id String
-  concept_node    ConceptNode @relation(fields: [concept_node_id], references: [id], onDelete: Cascade)
-
-  // Indexes
-  @@index([vector_id])
   @@index([concept_node_id])
-  // Vector index will be created manually: CREATE INDEX ON table_name USING ivfflat (embedding vector_cosine_ops)
-  @@map("concept_vectors")
+  // Compound indexes for efficient queries
+  @@index([vector_type, knowledge_triple_id])
+  @@index([vector_type, concept_node_id])
+  // Vector index will be created manually: CREATE INDEX ON vector_embeddings USING ivfflat (embedding vector_cosine_ops)
+  @@map("vector_embeddings")
 }
 
 // Token Usage Tracking - Monitor API usage and costs with advanced token types
@@ -402,4 +333,13 @@ enum JobStage {
   DEDUPLICATION    // Stage 3: Duplicate removal
 
   @@map("job_stage")
+}
+
+enum VectorType {
+  ENTITY           // Entity vector embeddings
+  RELATIONSHIP     // Relationship/predicate vector embeddings
+  SEMANTIC         // Full triple semantic content embeddings
+  CONCEPT          // Concept vector embeddings
+
+  @@map("vector_type")
 }

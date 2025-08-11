@@ -61,13 +61,6 @@ export interface SearchResult {
 	};
 }
 
-// Legacy SearchResult for backward compatibility
-export interface LegacySearchResult {
-	id: string;
-	text: string;
-	last_seen: string;
-	confidence?: number;
-}
 
 export interface EntityEnumerationOptions {
 	role?: 'subject' | 'object' | 'both';

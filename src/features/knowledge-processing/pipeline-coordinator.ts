@@ -7,6 +7,7 @@ import type { ProcessKnowledgeArgs } from '~/server/transport-manager.js';
 import { db } from '~/shared/database/client.js';
 import { env } from '~/shared/env.js';
 import { getQStash } from '~/shared/services/qstash.js';
+import { debugLog, warnLog } from '~/shared/utils/conditional-logging.js';
 import type { ExtractionMetrics, JobMetadata } from './job-types.js';
 
 /**
@@ -59,10 +60,10 @@ export async function initiateKnowledgePipeline(args: ProcessKnowledgeArgs): Pro
 		});
 	} else {
 		// If QStash is not configured, mark job for immediate processing
-		console.warn('[PipelineCoordinator] QStash not configured, job will need manual processing');
+		warnLog('[PipelineCoordinator] QStash not configured, job will need manual processing');
 	}
 
-	console.debug(`[PipelineCoordinator] Pipeline initiated with parent job ${parentJob.id}`);
+	debugLog(`[PipelineCoordinator] Pipeline initiated with parent job ${parentJob.id}`);
 	return parentJob.id;
 }
 
@@ -76,7 +77,7 @@ export async function schedulePostProcessingJobs(
 ): Promise<void> {
 	const qstash = getQStash();
 	if (!qstash) {
-		console.warn(
+		warnLog(
 			'[PipelineCoordinator] QStash not configured, skipping post-processing job scheduling'
 		);
 		return;
@@ -106,7 +107,7 @@ export async function schedulePostProcessingJobs(
 		delay: Math.max(5, baseDelay * 0.1), // Minimum 5 second delay
 	});
 
-	console.debug(`[PipelineCoordinator] Scheduled concept generation job ${conceptJob.id}`);
+	debugLog(`[PipelineCoordinator] Scheduled concept generation job ${conceptJob.id}`);
 
 	// Only schedule deduplication if enabled
 	if (env.ENABLE_SEMANTIC_DEDUP) {
@@ -130,7 +131,7 @@ export async function schedulePostProcessingJobs(
 			delay: Math.max(10, baseDelay * 0.2), // Minimum 10 second delay
 		});
 
-		console.debug(`[PipelineCoordinator] Scheduled deduplication job ${dedupJob.id}`);
+		debugLog(`[PipelineCoordinator] Scheduled deduplication job ${dedupJob.id}`);
 	}
 }
 

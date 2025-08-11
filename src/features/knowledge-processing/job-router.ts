@@ -23,12 +23,6 @@ export async function routeJob(job: ProcessingJob): Promise<JobResult> {
 	const handler = JOB_HANDLERS.find(h => h.canHandle(job.job_type));
 
 	if (!handler) {
-		// For backwards compatibility, handle PROCESS_KNOWLEDGE jobs
-		if (job.job_type === 'PROCESS_KNOWLEDGE') {
-			console.warn('[JobRouter] Legacy PROCESS_KNOWLEDGE job type, routing to extraction handler');
-			return new BatchExtractionJobHandler().execute(job);
-		}
-
 		throw new Error(`No handler found for job type: ${job.job_type}`);
 	}
 

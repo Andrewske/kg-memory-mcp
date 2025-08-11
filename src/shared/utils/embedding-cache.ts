@@ -1,6 +1,7 @@
 import { env } from '~/shared/env.js';
 import type { Concept, Triple } from '~/shared/types/core.js';
 import type { EmbeddingService } from '~/shared/types/services.js';
+import { debugLog, errorLog, infoLog } from '~/shared/utils/conditional-logging.js';
 
 export interface EmbeddingMap {
 	/** Map from text to embedding vector */
@@ -26,62 +27,35 @@ export async function generateEmbeddingMap(
 	includeSemanticDuplication = true
 ): Promise<{ success: true; data: EmbeddingMap } | { success: false; error: any }> {
 	try {
-		const allTexts: string[] = [];
-		const textSet = new Set<string>();
+		// Collect unique texts using Set for automatic deduplication
+		const uniqueTexts = new Set<string>();
 
 		// Collect all unique texts from triples
 		for (const triple of triples) {
-			// Entity texts (subject and object)
-			const subject = triple.subject;
-			const object = triple.object;
-			const predicate = triple.predicate;
-
-			if (!textSet.has(subject)) {
-				textSet.add(subject);
-				allTexts.push(subject);
-			}
-			if (!textSet.has(object)) {
-				textSet.add(object);
-				allTexts.push(object);
-			}
-			if (!textSet.has(predicate)) {
-				textSet.add(predicate);
-				allTexts.push(predicate);
-			}
-
+			uniqueTexts.add(triple.subject);
+			uniqueTexts.add(triple.object);
+			uniqueTexts.add(triple.predicate);
 			// Semantic text (full triple content)
-			const semanticText = `${subject} ${predicate} ${object}`;
-			if (!textSet.has(semanticText)) {
-				textSet.add(semanticText);
-				allTexts.push(semanticText);
-			}
-
-			// Include semantic deduplication texts if enabled
-			if (includeSemanticDuplication && env.ENABLE_SEMANTIC_DEDUP) {
-				// This is the same as semantic text above, so already included
-			}
+			uniqueTexts.add(`${triple.subject} ${triple.predicate} ${triple.object}`);
 		}
 
 		// Collect concept texts
 		for (const concept of concepts) {
-			const conceptText = concept.concept;
-			if (!textSet.has(conceptText)) {
-				textSet.add(conceptText);
-				allTexts.push(conceptText);
-			}
+			uniqueTexts.add(concept.concept);
 		}
 
-		const totalTexts = allTexts.length;
-		const uniqueTexts = textSet.size;
-		const duplicatesAverted = totalTexts - uniqueTexts;
+		// Convert to array for batching
+		const allTexts = Array.from(uniqueTexts);
+		const totalTextsBeforeDedup = triples.length * 4 + concepts.length; // Rough estimate
+		const duplicatesAverted = Math.max(0, totalTextsBeforeDedup - uniqueTexts.size);
 
-		console.log(
-			`[EMBEDDING MAP] Generating embeddings for ${uniqueTexts} unique texts (${duplicatesAverted} duplicates averted)`
+		infoLog(
+			`[EMBEDDING MAP] Generating embeddings for ${uniqueTexts.size} unique texts (${duplicatesAverted} duplicates averted)`
 		);
-		console.log(
+		debugLog(
 			`[EMBEDDING MAP] Text breakdown: entities, relationships, semantic content, concepts`
 		);
-		console.log(`[EMBEDDING MAP] Sample texts:`, allTexts.slice(0, 3));
+		debugLog(`[EMBEDDING MAP] Sample texts:`, allTexts.slice(0, 3));
 
 		// Generate embeddings in batches
 		const embeddingMap = new Map<string, number[]>();
@@ -92,7 +66,7 @@ export async function generateEmbeddingMap(
 		const source_type = triples[0]?.source_type || 'unknown';
 		const source = triples[0]?.source || 'unknown';
 
-		console.log(
+		debugLog(
 			`[EMBEDDING MAP] Processing ${Math.ceil(allTexts.length / batchSize)} batches with batch size ${batchSize}`
 		);
 
@@ -100,8 +74,8 @@ export async function generateEmbeddingMap(
 			const batch = allTexts.slice(i, i + batchSize);
 			batchCalls++;
 
-			console.log(`[EMBEDDING MAP] Batch ${batchCalls}: Processing ${batch.length} texts`);
-			console.log(`[EMBEDDING MAP] Sample from batch: "${batch[0]}"`);
+			debugLog(`[EMBEDDING MAP] Batch ${batchCalls}: Processing ${batch.length} texts`);
+			debugLog(`[EMBEDDING MAP] Sample from batch: "${batch[0]}"`);
 
 			const embeddingResult = await embeddingService.embedBatch(batch, {
 				source_type,
@@ -109,7 +83,7 @@ export async function generateEmbeddingMap(
 			});
 
 			if (!embeddingResult.success) {
-				console.error(
+				errorLog(
 					`[EMBEDDING MAP] ❌ Failed to generate embeddings for batch ${batchCalls}:`,
 					embeddingResult.error
 				);
@@ -128,30 +102,30 @@ export async function generateEmbeddingMap(
 				embeddingMap.set(batch[j], embeddingResult.data[j]);
 			}
 
-			console.log(
+			debugLog(
 				`[EMBEDDING MAP] ✅ Batch ${batchCalls} completed: ${batch.length} embeddings stored`
 			);
 		}
 
-		console.log(
+		infoLog(
 			`[EMBEDDING MAP] ✅ Complete! Generated ${embeddingMap.size} embeddings in ${batchCalls} API calls`
 		);
-		console.log(`[EMBEDDING MAP] Efficiency: ${duplicatesAverted} duplicate embeddings averted`);
+		infoLog(`[EMBEDDING MAP] Efficiency: ${duplicatesAverted} duplicate embeddings averted`);
 
 		return {
 			success: true,
 			data: {
 				embeddings: embeddingMap,
 				stats: {
-					totalTexts,
-					uniqueTexts,
+					totalTexts: totalTextsBeforeDedup,
+					uniqueTexts: uniqueTexts.size,
 					duplicatesAverted,
 					batchCalls,
 				},
 			},
 		};
 	} catch (error) {
-		console.error(`[EMBEDDING MAP] ❌ Unexpected error:`, error);
+		errorLog(`[EMBEDDING MAP] ❌ Unexpected error:`, error);
 		return {
 			success: false,
 			error: {
