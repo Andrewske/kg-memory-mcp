@@ -2,7 +2,7 @@ export default {
   preset: 'ts-jest/presets/default-esm',
   testEnvironment: 'node',
   roots: ['<rootDir>/src'],
-  testMatch: ['**/__tests__/**/*.ts', '**/?(*.)+(spec|test).ts'],
+  testMatch: ['**/__tests__/**/*.test.ts', '**/?(*.)+(spec|test).ts'],
   transform: {
     '^.+\\.ts$': ['ts-jest', {
       useESM: true,
@@ -23,6 +23,7 @@ export default {
     'src/**/*.ts',
     '!src/**/*.d.ts',
     '!src/tests/**',
+    '!src/__tests__/**',
     '!src/index.ts'
   ],
   coverageDirectory: 'coverage',
