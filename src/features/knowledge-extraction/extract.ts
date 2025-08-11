@@ -214,8 +214,9 @@ async function extractFourStage(data: ProcessKnowledgeArgs) {
 
 /**
  * Extract triples for a specific relationship type
+ * Exported for performance testing
  */
-async function extractByType(data: ProcessKnowledgeArgs, type: TripleType) {
+export async function extractByType(data: ProcessKnowledgeArgs, type: TripleType) {
 	try {
 		const prompt = createTypeSpecificPrompt(data, type);
 
@@ -297,7 +298,7 @@ Text: ${data.text}${temporalContext}
 Respond with a JSON object containing an array of relationships.`;
 }
 
-function createTypeSpecificPrompt(data: ProcessKnowledgeArgs, type: string): string {
+export function createTypeSpecificPrompt(data: ProcessKnowledgeArgs, type: string): string {
 	const typeDescriptions: Record<string, string> = {
 		'entity-entity': 'relationships between people, places, things, or concepts',
 		'entity-event': 'how entities are involved in or affected by events',

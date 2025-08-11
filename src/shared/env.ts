@@ -56,11 +56,11 @@ const envSchema = z.object({
 	// Database
 	DB_MAX_CONNECTIONS: z
 		.string()
-		.default('10')
+		.default('20')
 		.transform(val => parseInt(val)),
 	DB_CONNECTION_TIMEOUT: z
 		.string()
-		.default('5000')
+		.default('10000')
 		.transform(val => parseInt(val)),
 
 	// Extraction

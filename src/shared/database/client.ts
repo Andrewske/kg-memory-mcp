@@ -8,6 +8,14 @@ declare global {
 const createPrismaClient = () =>
 	new PrismaClient({
 		log: env.NODE_ENV === 'development' ? ['error', 'warn'] : ['error'],
+		datasources: {
+			db: {
+				url: env.DATABASE_URL,
+			},
+		},
+		// Connection pool optimization for better performance
+		// Note: Prisma doesn't expose connection pool config directly,
+		// but we can set it via DATABASE_URL query params if needed
 	});
 
 const globalForPrisma = globalThis as unknown as {

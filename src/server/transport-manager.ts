@@ -11,9 +11,9 @@ import { deduplicateTriples } from '~/features/deduplication/deduplicate.js';
 import { extractKnowledgeTriples } from '~/features/knowledge-extraction/extract.js';
 import type { FusionSearchResult } from '~/features/knowledge-graph/fusion-search.js';
 import { searchFusion } from '~/features/knowledge-graph/fusion-search.js';
-import { getStats, storeConcepts, storeTriples } from '~/features/knowledge-graph/operations.js';
+import { getStats } from '~/features/knowledge-graph/operations.js';
 import { searchConcepts } from '~/features/knowledge-graph/search.js';
-import { createConceptualizations } from '~/shared/database/concept-operations.js';
+import { batchStoreKnowledge } from '~/shared/database/batch-storage.js';
 import { env } from '~/shared/env.js';
 import { createEmbeddingService } from '~/shared/services/embedding-service.js';
 import type { GraphStats, ToolResult } from '~/shared/types/api.js';
@@ -33,11 +33,13 @@ export type ProcessKnowledgeArgs = {
 export async function processKnowledge(args: ProcessKnowledgeArgs): Promise<ToolResult> {
 	try {
 		const startTime = Date.now();
+		const phaseTimings: Record<string, number> = {};
 
-		console.debug('[ProcessKnowledge] Starting Phase 2 optimized processing with:', {
+		console.debug('[ProcessKnowledge] Starting Phase 3 optimized processing with:', {
 			textLength: args.text.length,
 			source: args.source,
 			source_type: args.source_type,
+			estimatedTokens: Math.ceil(args.text.length / 4), // Rough estimation
 		});
 
 		const embeddingService = createEmbeddingService({
@@ -47,8 +49,10 @@ export async function processKnowledge(args: ProcessKnowledgeArgs): Promise<Tool
 		});
 
 		// Extract knowledge
-		console.debug('[ProcessKnowledge] Phase 2: Extracting triples...');
+		const extractionStartTime = Date.now();
+		console.debug('[ProcessKnowledge] Phase 3: Extracting triples...');
 		const extractionResult = await extractKnowledgeTriples(args);
+		phaseTimings.extraction = Date.now() - extractionStartTime;
 		if (!extractionResult.success || !extractionResult.data) {
 			console.error('[ProcessKnowledge] Extraction failed:', extractionResult.error);
 			return {
@@ -61,11 +65,13 @@ export async function processKnowledge(args: ProcessKnowledgeArgs): Promise<Tool
 		}
 
 		let { triples, concepts, conceptualizations } = extractionResult.data;
-		console.debug(`[ProcessKnowledge] Phase 2: Extracted ${triples.length} triples and ${concepts.length} concepts`);
+		console.debug(`[ProcessKnowledge] Phase 3: Extracted ${triples.length} triples and ${concepts.length} concepts in ${phaseTimings.extraction}ms`);
 
 		// Phase 2 optimization: Generate comprehensive embedding map once for all operations
-		console.debug('[ProcessKnowledge] Phase 2: Generating comprehensive embedding map...');
+		const embeddingStartTime = Date.now();
+		console.debug('[ProcessKnowledge] Phase 3: Generating comprehensive embedding map...');
 		const embeddingMapResult = await generateEmbeddingMap(triples, concepts, embeddingService, env.ENABLE_SEMANTIC_DEDUP);
+		phaseTimings.embeddingGeneration = Date.now() - embeddingStartTime;
 		
 		if (!embeddingMapResult.success) {
 			console.error('[ProcessKnowledge] Phase 2: Embedding map generation failed:', embeddingMapResult.error);
@@ -80,54 +86,47 @@ export async function processKnowledge(args: ProcessKnowledgeArgs): Promise<Tool
 
 		const embeddingMap = embeddingMapResult.data.embeddings;
 		const embeddingStats = embeddingMapResult.data.stats;
-		console.debug(`[ProcessKnowledge] Phase 2: ✅ Generated embedding map - ${embeddingStats.uniqueTexts} unique embeddings, ${embeddingStats.duplicatesAverted} duplicates averted, ${embeddingStats.batchCalls} API calls`);
+		console.debug(`[ProcessKnowledge] Phase 3: ✅ Generated embedding map in ${phaseTimings.embeddingGeneration}ms - ${embeddingStats.uniqueTexts} unique embeddings, ${embeddingStats.duplicatesAverted} duplicates averted, ${embeddingStats.batchCalls} API calls`);
 
 		// Always deduplicate triples using embedding map
+		const deduplicationStartTime = Date.now();
 		if (triples.length > 0) {
-			console.debug('[ProcessKnowledge] Phase 2: Deduplicating triples using embedding map...');
+			console.debug('[ProcessKnowledge] Phase 3: Deduplicating triples using embedding map...');
 			const deduplicationResult = await deduplicateTriples(triples, embeddingMap);
 			if (deduplicationResult.success) {
 				const originalCount = triples.length;
 				triples = deduplicationResult.data?.uniqueTriples ?? [];
 				console.debug(
-					`[ProcessKnowledge] Phase 2: Deduplicated: ${originalCount} → ${triples.length} triples using embedding map`
+					`[ProcessKnowledge] Phase 3: Deduplicated: ${originalCount} → ${triples.length} triples using embedding map`
 				);
 			}
 		}
+		phaseTimings.deduplication = Date.now() - deduplicationStartTime;
 
-		// Store triples with optimized vector generation using embedding map
-		console.debug('[ProcessKnowledge] Phase 2: Storing triples using embedding map...');
-		const storeResult = await storeTriples(triples, embeddingMap);
-		if (!storeResult.success) {
-			console.error('[ProcessKnowledge] Phase 2: Storage failed:', storeResult.error);
+		// Phase 3 optimization: Batch store all knowledge data in single atomic transaction
+		const storageStartTime = Date.now();
+		console.debug('[ProcessKnowledge] Phase 3: Batch storing all knowledge data in atomic transaction...');
+		const batchStorageResult = await batchStoreKnowledge({
+			triples,
+			concepts,
+			conceptualizations,
+			embeddingMap,
+		});
+		phaseTimings.storage = Date.now() - storageStartTime;
+
+		if (!batchStorageResult.success) {
+			console.error('[ProcessKnowledge] Phase 3: Batch storage failed:', batchStorageResult.error);
 			return {
 				success: false,
 				error: {
-					message: storeResult.error.message,
-					operation: 'knowledge_storage',
+					message: `Batch storage failed: ${batchStorageResult.error.message}`,
+					operation: 'batch_knowledge_storage',
 				},
 			};
 		}
 
-		// Store concepts with optimized vector generation using embedding map
-		if (concepts.length > 0) {
-			console.debug(`[ProcessKnowledge] Phase 2: Storing ${concepts.length} concepts using embedding map...`);
-			const conceptResult = await storeConcepts(concepts, embeddingMap);
-			if (!conceptResult.success) {
-				console.warn('[ProcessKnowledge] Phase 2: Concept storage failed:', conceptResult.error);
-				// Don't fail the entire operation if concept storage fails
-			}
-		}
-
-		// Store conceptualizations
-		if (conceptualizations.length > 0) {
-			console.debug(`[ProcessKnowledge] Phase 2: Storing ${conceptualizations.length} conceptualizations...`);
-			const conceptualizationResult = await createConceptualizations(conceptualizations);
-			if (!conceptualizationResult.success) {
-				console.warn('[ProcessKnowledge] Phase 2: Conceptualization storage failed:', conceptualizationResult.error);
-				// Don't fail the entire operation if conceptualization storage fails
-			}
-		}
+		const storageStats = batchStorageResult.data;
+		console.debug(`[ProcessKnowledge] Phase 3: ✅ Batch storage completed in ${phaseTimings.storage}ms:`, storageStats);
 
 		// Queue background conceptualization if requested
 		// if (triples.length > 0) {
@@ -182,9 +181,11 @@ export async function processKnowledge(args: ProcessKnowledgeArgs): Promise<Tool
 		// }
 
 		const duration = Date.now() - startTime;
-		console.debug(`[ProcessKnowledge] Phase 2 optimization completed in ${duration}ms`, {
-			triplesStored: triples.length,
-			conceptsStored: concepts.length,
+		phaseTimings.total = duration;
+		
+		console.debug(`[ProcessKnowledge] Phase 3 optimization completed in ${duration}ms`, {
+			...storageStats,
+			phaseTimings,
 			embeddingEfficiency: {
 				uniqueEmbeddings: embeddingStats.uniqueTexts,
 				duplicatesAverted: embeddingStats.duplicatesAverted,
@@ -196,20 +197,22 @@ export async function processKnowledge(args: ProcessKnowledgeArgs): Promise<Tool
 		return {
 			success: true,
 			data: {
-				triplesStored: triples.length,
-				conceptsStored: concepts.length,
-				conceptualizationsStored: conceptualizations.length,
+				...storageStats,
 				metadata: {
 					source: args.source,
 					source_type: args.source_type,
-					embeddingOptimization: {
-						phase: 'Phase 2 - Embedding Map Optimization',
-						uniqueEmbeddings: embeddingStats.uniqueTexts,
-						duplicatesAverted: embeddingStats.duplicatesAverted,
-						totalBatchCalls: embeddingStats.batchCalls,
-						efficiency: embeddingStats.duplicatesAverted > 0 
-							? Math.round((embeddingStats.duplicatesAverted / embeddingStats.totalTexts) * 100) 
-							: 0,
+					optimizations: {
+						phase: 'Phase 3 - Batch Transaction Storage + Embedding Map',
+						batchTransaction: true,
+						embeddingOptimization: {
+							uniqueEmbeddings: embeddingStats.uniqueTexts,
+							duplicatesAverted: embeddingStats.duplicatesAverted,
+							totalBatchCalls: embeddingStats.batchCalls,
+							efficiency: embeddingStats.duplicatesAverted > 0 
+								? Math.round((embeddingStats.duplicatesAverted / embeddingStats.totalTexts) * 100) 
+								: 0,
+						},
+						performanceTimings: phaseTimings,
 					},
 				},
 			},
