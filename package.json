@@ -23,6 +23,8 @@
 		"test": "jest",
 		"test:watch": "jest --watch",
 		"test:coverage": "jest --coverage",
+		"benchmark": "npx tsx src/tests/performance/benchmark.js",
+		"benchmark:full": "npx tsx src/tests/performance/benchmark.js --full",
 		"prepare": "npm run build",
 		"lint": "biome check .",
 		"lint:fix": "biome check . --write",

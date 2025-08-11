@@ -24,8 +24,8 @@ export function redirectConsoleToFiles(logDir: string = './logs') {
 
 	// Use timestamped files to avoid conflicts
 	const timestamp = new Date().toISOString().replace(/[:.]/g, '-');
-	const logFile = path.join(logDir, `mcp-${timestamp}.log`);
-	const errorFile = path.join(logDir, `mcp-error-${timestamp}.log`);
+	const logFile = path.join(logDir, 'logs', `mcp-${timestamp}.log`);
+	const errorFile = path.join(logDir, 'errors', `mcp-error-${timestamp}.log`);
 
 	// Create write streams for different log levels
 	const infoStream = fs.createWriteStream(logFile, { flags: 'a' });
