@@ -1,39 +1,45 @@
 /**
- * Job router for dispatching jobs to appropriate handlers
+ * Job router for dispatching jobs to appropriate functional handlers
  */
 
-import { JobStatus, type ProcessingJob } from '@prisma/client';
+import { JobStatus, JobType, type ProcessingJob } from '@prisma/client';
 import { db } from '~/shared/database/client.js';
-import { BatchExtractionJobHandler } from './handlers/batch-extraction-handler.js';
-import { ConceptJobHandler } from './handlers/concept-handler.js';
-import { DeduplicationJobHandler } from './handlers/deduplication-handler.js';
-import type { JobHandler, JobResult } from './job-types.js';
-
-// Initialize job handlers
-const JOB_HANDLERS: JobHandler[] = [
-	new BatchExtractionJobHandler(),
-	new ConceptJobHandler(),
-	new DeduplicationJobHandler(),
-];
+import { executeExtraction } from './handlers/extraction-function.js';
+import { executeConcepts } from './handlers/concept-function.js';
+import { executeDeduplication } from './handlers/deduplication-function.js';
+import type { JobResult } from './job-types.js';
 
 /**
- * Route a job to the appropriate handler
+ * Route a job to the appropriate functional handler
  */
 export async function routeJob(job: ProcessingJob): Promise<JobResult> {
-	const handler = JOB_HANDLERS.find(h => h.canHandle(job.job_type));
-
-	if (!handler) {
-		throw new Error(`No handler found for job type: ${job.job_type}`);
-	}
-
 	// Update job status to processing
 	await updateJobStatus(job.id, JobStatus.PROCESSING);
 
 	const startTime = Date.now();
-	console.debug(`[JobRouter] Routing ${job.job_type} job ${job.id} to handler`);
+	console.debug(`[JobRouter] Routing ${job.job_type} job ${job.id} to functional handler`);
 
 	try {
-		const result = await handler.execute(job);
+		let result: JobResult;
+
+		// Route to appropriate functional handler based on job type
+		switch (job.job_type) {
+			case JobType.EXTRACT_KNOWLEDGE_BATCH:
+			case JobType.PROCESS_KNOWLEDGE:
+				result = await executeExtraction(job, false); // With QStash updates
+				break;
+
+			case JobType.GENERATE_CONCEPTS:
+				result = await executeConcepts(job, false); // With QStash updates
+				break;
+
+			case JobType.DEDUPLICATE_KNOWLEDGE:
+				result = await executeDeduplication(job, false); // With QStash updates
+				break;
+
+			default:
+				throw new Error(`No handler found for job type: ${job.job_type}`);
+		}
 
 		const duration = Date.now() - startTime;
 		console.debug(`[JobRouter] Job ${job.id} completed in ${duration}ms`, {

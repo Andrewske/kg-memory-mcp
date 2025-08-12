@@ -355,7 +355,7 @@ describe('Resource Manager', () => {
 			]);
 
 			expect(raceResult).toBe('timeout');
-			
+
 			// The operation will remain pending, but that's expected behavior
 		}, 5000);
 	});

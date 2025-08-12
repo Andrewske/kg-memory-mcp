@@ -58,17 +58,18 @@ export async function searchByEmbedding(
 			types: options?.types ? [options.types] : undefined,
 		});
 
-		// Perform vector similarity search using semantic vectors
+		// Perform vector similarity search using unified VectorEmbedding table
 		// This searches by the semantic meaning of complete triples
 		const query = `
 			SELECT DISTINCT kt.*, 
-				   (sv.embedding <-> $1::vector) as distance,
-				   (1 - (sv.embedding <-> $1::vector)) as similarity
+				   (ve.embedding <-> $1::vector) as distance,
+				   (1 - (ve.embedding <-> $1::vector)) as similarity
 			FROM knowledge_triples kt
-			JOIN semantic_vectors sv ON kt.id = sv.knowledge_triple_id
-			WHERE ${whereClause}
-				AND (1 - (sv.embedding <-> $1::vector)) >= $3
-			ORDER BY sv.embedding <-> $1::vector ASC
+			JOIN vector_embeddings ve ON kt.id = ve.knowledge_triple_id
+			WHERE ve.vector_type = 'SEMANTIC'
+				AND ${whereClause}
+				AND (1 - (ve.embedding <-> $1::vector)) >= $3
+			ORDER BY ve.embedding <-> $1::vector ASC
 			LIMIT $2
 		`;
 

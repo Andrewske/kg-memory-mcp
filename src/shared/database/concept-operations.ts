@@ -90,15 +90,16 @@ export async function searchConceptsByEmbedding(
 		// Convert embedding to pgvector format
 		const vectorString = convertEmbeddingToVector(embedding);
 
-		// Perform vector similarity search using concept vectors
+		// Perform vector similarity search using unified VectorEmbedding table
 		const query = `
 			SELECT DISTINCT cn.*, 
-				   (cv.embedding <-> $1::vector) as distance,
-				   (1 - (cv.embedding <-> $1::vector)) as similarity
+				   (ve.embedding <-> $1::vector) as distance,
+				   (1 - (ve.embedding <-> $1::vector)) as similarity
 			FROM concept_nodes cn
-			JOIN concept_vectors cv ON cn.id = cv.concept_node_id
-			WHERE (1 - (cv.embedding <-> $1::vector)) >= $3
-			ORDER BY cv.embedding <-> $1::vector ASC
+			JOIN vector_embeddings ve ON cn.id = ve.concept_node_id
+			WHERE ve.vector_type = 'CONCEPT'
+				AND (1 - (ve.embedding <-> $1::vector)) >= $3
+			ORDER BY ve.embedding <-> $1::vector ASC
 			LIMIT $2
 		`;
 

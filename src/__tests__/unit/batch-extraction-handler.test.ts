@@ -1,9 +1,9 @@
 /**
- * Unit tests for BatchExtractionJobHandler
+ * Unit tests for executeExtraction function
  */
 
 import { beforeEach, describe, expect, it, jest } from '@jest/globals';
-import { JobStatus, JobType, type ProcessingJob } from '@prisma/client';
+import { type ProcessingJob } from '@prisma/client';
 
 // Mock dependencies before imports
 jest.mock('~/features/deduplication/deduplicate.js');
@@ -17,7 +17,7 @@ jest.mock('~/shared/env.js');
 
 import { deduplicateTriples } from '~/features/deduplication/deduplicate.js';
 import { extractKnowledgeTriples } from '~/features/knowledge-extraction/extract.js';
-import { BatchExtractionJobHandler } from '~/features/knowledge-processing/handlers/batch-extraction-handler.js';
+import { executeExtraction } from '~/features/knowledge-processing/handlers/extraction-function.js';
 import {
 	schedulePostProcessingJobs,
 	updateJobProgress,
@@ -49,13 +49,11 @@ type DedupTriplesResult = Awaited<ReturnType<typeof deduplicateTriples>>;
 type DedupSuccess = Extract<DedupTriplesResult, { success: true }>;
 type EmbeddingMapResult = Awaited<ReturnType<typeof generateEmbeddingMap>>;
 
-describe('BatchExtractionJobHandler', () => {
-	let handler: BatchExtractionJobHandler;
+describe('executeExtraction', () => {
 	let mockEmbeddingService: ReturnType<typeof createMockEmbeddingService>;
 
 	beforeEach(() => {
 		jest.clearAllMocks();
-		handler = new BatchExtractionJobHandler();
 		mockEmbeddingService = createMockEmbeddingService();
 
 		// Setup environment mocks
@@ -76,22 +74,7 @@ describe('BatchExtractionJobHandler', () => {
 		).mockResolvedValue();
 	});
 
-	describe('canHandle', () => {
-		it('should handle EXTRACT_KNOWLEDGE_BATCH jobs', () => {
-			expect(handler.canHandle(JobType.EXTRACT_KNOWLEDGE_BATCH)).toBe(true);
-		});
-
-		it('should handle PROCESS_KNOWLEDGE jobs', () => {
-			expect(handler.canHandle(JobType.PROCESS_KNOWLEDGE)).toBe(true);
-		});
-
-		it('should not handle other job types', () => {
-			expect(handler.canHandle(JobType.GENERATE_CONCEPTS)).toBe(false);
-			expect(handler.canHandle(JobType.DEDUPLICATE_KNOWLEDGE)).toBe(false);
-		});
-	});
-
-	describe('execute', () => {
+	describe('functional execution', () => {
 		it('should process small text without chunking', async () => {
 			const job = createTestJob({
 				text: 'Short text that does not need chunking.',
@@ -129,7 +112,7 @@ describe('BatchExtractionJobHandler', () => {
 				})
 			);
 
-			const result = await handler.execute(job as ProcessingJob);
+			const result = await executeExtraction(job as ProcessingJob, true); // Skip QStash updates in tests
 
 			expect(result.success).toBe(true);
 			expect(result.data).toMatchObject({
@@ -181,7 +164,7 @@ describe('BatchExtractionJobHandler', () => {
 				})
 			);
 
-			const result = await handler.execute(job as ProcessingJob);
+			const result = await executeExtraction(job as ProcessingJob, true); // Skip QStash updates in tests
 
 			expect(result.success).toBe(true);
 			expect(chunkText).toHaveBeenCalledWith(largeText, {
@@ -225,7 +208,7 @@ describe('BatchExtractionJobHandler', () => {
 				})
 			);
 
-			await handler.execute(job as unknown as ProcessingJob);
+			await executeExtraction(job as unknown as ProcessingJob, true); // Skip QStash updates in tests
 
 			expect(generateEmbeddingMap).toHaveBeenCalledWith(
 				mockTriples,
@@ -276,7 +259,7 @@ describe('BatchExtractionJobHandler', () => {
 				})
 			);
 
-			await handler.execute(job as unknown as ProcessingJob);
+			await executeExtraction(job as unknown as ProcessingJob, true); // Skip QStash updates in tests
 
 			expect(deduplicateTriples).toHaveBeenCalledWith(mockTriples, embeddingMap);
 		});
@@ -307,7 +290,7 @@ describe('BatchExtractionJobHandler', () => {
 				})
 			);
 
-			await handler.execute(job as unknown as ProcessingJob);
+			await executeExtraction(job as unknown as ProcessingJob, true); // Skip QStash updates in tests
 
 			expect(deduplicateTriples).not.toHaveBeenCalled();
 		});
@@ -353,7 +336,7 @@ describe('BatchExtractionJobHandler', () => {
 				})
 			);
 
-			await handler.execute(job as unknown as ProcessingJob);
+			await executeExtraction(job as unknown as ProcessingJob, true); // Skip QStash updates in tests
 
 			expect(batchStoreKnowledge).toHaveBeenCalledWith({
 				triples: mockTriples,
@@ -400,7 +383,7 @@ describe('BatchExtractionJobHandler', () => {
 				})
 			);
 
-			await handler.execute(job as unknown as ProcessingJob);
+			await executeExtraction(job as unknown as ProcessingJob, true); // Skip QStash updates in tests
 
 			expect(schedulePostProcessingJobs).toHaveBeenCalledWith(
 				'parent-job-id',
@@ -438,7 +421,7 @@ describe('BatchExtractionJobHandler', () => {
 				})
 			);
 
-			await handler.execute(job as unknown as ProcessingJob);
+			await executeExtraction(job as unknown as ProcessingJob, true); // Skip QStash updates in tests
 
 			expect(updateJobProgress).toHaveBeenCalledWith(job.id, 10);
 			expect(updateJobProgress).toHaveBeenCalledWith(job.id, 80);
@@ -463,7 +446,7 @@ describe('BatchExtractionJobHandler', () => {
 				createErrorResult('Embedding service failed')
 			);
 
-			const result = await handler.execute(job as ProcessingJob);
+			const result = await executeExtraction(job as ProcessingJob, true); // Skip QStash updates in tests
 
 			expect(result.success).toBe(false);
 			expect(result.error?.message).toContain('Embedding generation failed');
@@ -490,7 +473,7 @@ describe('BatchExtractionJobHandler', () => {
 				createErrorResult('Database connection failed')
 			);
 
-			const result = await handler.execute(job as ProcessingJob);
+			const result = await executeExtraction(job as ProcessingJob, true); // Skip QStash updates in tests
 
 			expect(result.success).toBe(false);
 			expect(result.error?.message).toContain('Storage failed');
@@ -547,7 +530,7 @@ describe('BatchExtractionJobHandler', () => {
 				})
 			);
 
-			const result = await handler.execute(job as ProcessingJob);
+			const result = await executeExtraction(job as ProcessingJob, true); // Skip QStash updates in tests
 
 			expect(result.success).toBe(true);
 			expect(result.data?.triplesStored).toBe(2); // Only successful chunks
@@ -560,7 +543,7 @@ describe('BatchExtractionJobHandler', () => {
 				extractKnowledgeTriples as jest.MockedFunction<typeof extractKnowledgeTriples>
 			).mockRejectedValue(new Error('Unexpected extraction error'));
 
-			const result = await handler.execute(job as ProcessingJob);
+			const result = await executeExtraction(job as ProcessingJob, true); // Skip QStash updates in tests
 
 			expect(result.success).toBe(false);
 			expect(result.error?.message).toBe('Unexpected extraction error');
@@ -600,7 +583,7 @@ describe('BatchExtractionJobHandler', () => {
 				})
 			);
 
-			await handler.execute(job as unknown as ProcessingJob);
+			await executeExtraction(job as unknown as ProcessingJob, true); // Skip QStash updates in tests
 
 			// The resource limits should be passed to the ResourceManager
 			// This is implicitly tested through the successful execution

@@ -17,7 +17,7 @@ jest.mock('~/shared/database/client.js', () => ({
 			deleteMany: jest.fn(),
 		},
 		$disconnect: jest.fn(),
-	}
+	},
 }));
 jest.mock('~/shared/services/qstash.js');
 jest.mock('~/shared/env.js');

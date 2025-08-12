@@ -228,13 +228,9 @@ describe('Embedding Cache Optimization', () => {
 
 			// Mock first batch success, second batch failure, third batch success
 			mockEmbeddingService.embedBatch
-				.mockResolvedValueOnce(
-					createSuccessResult(Array(5).fill([0.1, 0.2, 0.3]))
-				)
+				.mockResolvedValueOnce(createSuccessResult(Array(5).fill([0.1, 0.2, 0.3])))
 				.mockResolvedValueOnce(createErrorResult('Temporary service error'))
-				.mockResolvedValueOnce(
-					createSuccessResult(Array(5).fill([0.4, 0.5, 0.6]))
-				);
+				.mockResolvedValueOnce(createSuccessResult(Array(5).fill([0.4, 0.5, 0.6])));
 
 			const result = await generateEmbeddingMap(triples, concepts, mockEmbeddingService, false);
 

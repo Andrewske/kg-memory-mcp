@@ -10,10 +10,10 @@ import { db } from '~/shared/database/client.js';
 // Test database cleanup
 export async function cleanupTestDatabase(): Promise<void> {
 	// Skip cleanup if db is mocked or undefined
-	if (!db || typeof db === 'object' && 'jest' in db) {
+	if (!db || (typeof db === 'object' && 'jest' in db)) {
 		return;
 	}
-	
+
 	try {
 		// Clean up in reverse dependency order
 		await db.vectorEmbedding?.deleteMany({});
@@ -48,13 +48,13 @@ export async function createTestJob(
 		stage: null,
 		metrics: null,
 	};
-	
+
 	// Merge overrides
 	const finalData = { ...defaultData, ...overrides };
-	
+
 	// Remove fields that shouldn't be in create data
 	const { id, created_at, updated_at, ...dataToCreate } = finalData as any;
-	
+
 	return await db.processingJob.create({
 		data: dataToCreate,
 	});
