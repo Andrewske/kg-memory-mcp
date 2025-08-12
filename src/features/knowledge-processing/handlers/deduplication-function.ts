@@ -55,11 +55,13 @@ export async function executeDeduplication(
 
 		await updateProgress(10);
 
-		// Get all triples for this source
+		// Get all triples for this source (account for chunk suffixes)
 		console.debug('[Deduplication] Loading triples from database...');
 		const triples = await db.knowledgeTriple.findMany({
 			where: {
-				source: metadata.source,
+				source: { 
+					startsWith: metadata.source 
+				},
 				source_type: metadata.source_type,
 			},
 			select: {

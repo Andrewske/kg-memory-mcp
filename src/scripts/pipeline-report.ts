@@ -100,10 +100,24 @@ async function runPipelineReport(config: PipelineConfig) {
 			throw new Error(`Extraction failed: ${extractionResult.error?.message}`);
 		}
 
-		// Query created triples
+		// Wait for post-transaction operations to complete (vector generation)
+		console.log('[PIPELINE REPORT] Waiting 2s for all database operations to complete...');
+		await new Promise(resolve => setTimeout(resolve, 2000));
+
+		// Query created triples (need to account for chunk suffixes added by extraction)
+		console.log(`[PIPELINE REPORT] Querying triples with source pattern: ${config.source}*`);
 		const createdTriples = await db.knowledgeTriple.findMany({
-			where: { source: config.source },
+			where: {
+				source: {
+					startsWith: config.source,
+				},
+			},
 		});
+		console.log(`[PIPELINE REPORT] Found ${createdTriples.length} triples matching source pattern`);
+		if (createdTriples.length > 0) {
+			const sampleSources = [...new Set(createdTriples.slice(0, 5).map(t => t.source))];
+			console.log(`[PIPELINE REPORT] Sample triple sources found:`, sampleSources);
+		}
 		createdTriples.forEach(t => tracker.tripleIds.add(t.id));
 
 		// Stage 2: Run concept generation
@@ -115,12 +129,18 @@ async function runPipelineReport(config: PipelineConfig) {
 		const conceptResult = await executeConcepts(mockConceptJob, true);
 		const conceptDuration = Date.now() - conceptStartTime;
 
-		// Query created concepts
+		// Query created concepts (account for potential source variations)
+		console.log(`[PIPELINE REPORT] Querying concepts with source pattern: ${config.source}*`);
 		const createdConcepts = await db.conceptNode.findMany({
 			where: {
-				source: config.source,
+				source: {
+					startsWith: config.source,
+				},
 			},
 		});
+		console.log(
+			`[PIPELINE REPORT] Found ${createdConcepts.length} concepts matching source pattern`
+		);
 		createdConcepts.forEach(c => tracker.conceptIds.add(c.id));
 
 		// Stage 3: Optional deduplication
@@ -165,25 +185,45 @@ async function runPipelineReport(config: PipelineConfig) {
 		};
 
 		// Query token usage and vectors outside transaction
+		console.log(
+			`[PIPELINE REPORT] Querying token usage with source pattern: ${config.source}* after ${new Date(startTime).toISOString()}`
+		);
 		const tokenUsage = await db.tokenUsage.findMany({
 			where: {
-				source: config.source,
+				source: {
+					startsWith: config.source,
+				},
 				timestamp: { gte: new Date(startTime) },
 			},
 			orderBy: { timestamp: 'asc' },
 		});
+		console.log(
+			`[PIPELINE REPORT] Found ${tokenUsage.length} token usage records matching criteria`
+		);
 		tokenUsage.forEach(t => tracker.tokenUsageIds.add(t.id));
 
-		// FIXED: Query unified VectorEmbedding table with correct schema
+		// FIXED: Query unified VectorEmbedding table with correct schema and source pattern
+		console.log(`[PIPELINE REPORT] Querying vectors with source pattern: ${config.source}*`);
 		const vectors = await db.vectorEmbedding.findMany({
 			where: {
 				vector_type: { in: ['ENTITY', 'RELATIONSHIP', 'SEMANTIC', 'CONCEPT'] },
 				OR: [
-					{ knowledge_triple: { source: config.source } },
-					{ concept_node: { source: config.source } },
+					{
+						knowledge_triple_id: {
+							in: createdTriples.map(t => t.id),
+						},
+					},
+					{
+						concept_node_id: {
+							in: createdConcepts.map(c => c.id),
+						},
+					},
 				],
 			},
 		});
+		console.log(
+			`[PIPELINE REPORT] Found ${vectors.length} vectors matching stored triples/concepts`
+		);
 		vectors.forEach(v => tracker.vectorIds.add(v.id));
 
 		// Generate report
@@ -490,14 +530,25 @@ function groupConceptsByLevel(concepts: Array<{ abstraction_level?: string }>) {
 }
 
 function getDefaultTestText(): string {
-	return `John Smith is a senior software engineer at Tech Corp. 
-He has been working on artificial intelligence projects for five years.
-The company recently launched a revolutionary AI product.
-John feels excited about the project's potential impact.
-Sarah Johnson, the product manager, collaborated closely with John.
-The AI system processes natural language and generates intelligent responses.
-Tech Corp's stock price increased significantly after the product launch.
-The development team worked tirelessly for eighteen months on this project.`;
+	return `The evolution of artificial intelligence represents one of the most significant technological revolutions of the 21st century. From its early beginnings in academic research labs to its current widespread application across industries, AI has fundamentally changed how we approach complex problems and automate tasks.
+
+Machine learning, a subset of AI, has proven particularly transformative. Supervised learning algorithms enable systems to recognize patterns in labeled training data, making predictions on new, unseen examples. Unsupervised learning techniques discover hidden structures in data without explicit labels. Reinforcement learning allows agents to learn optimal behaviors through interaction with their environment, receiving rewards or penalties for their actions.
+
+Deep learning, inspired by the structure and function of biological neural networks, has achieved remarkable breakthroughs in recent years. Convolutional Neural Networks (CNNs) excel at computer vision tasks, enabling accurate image classification, object detection, and semantic segmentation. Recurrent Neural Networks (RNNs) and their advanced variants like Long Short-Term Memory (LSTM) networks have revolutionized natural language processing, enabling sophisticated text generation, machine translation, and sentiment analysis.
+
+The transformer architecture, introduced in the "Attention Is All You Need" paper, has become the foundation for modern large language models. These models, trained on vast amounts of text data, demonstrate remarkable capabilities in understanding context, generating coherent text, and even exhibiting emergent reasoning abilities. GPT models, BERT, and their successors have transformed how we interact with AI systems.
+
+Computer vision applications span numerous domains. In healthcare, AI systems analyze medical images to detect tumors, identify fractures, and assist in diagnosis. Autonomous vehicles rely on computer vision to navigate safely, recognizing traffic signs, pedestrians, and other vehicles. Retail companies use visual recognition for inventory management and customer behavior analysis.
+
+Natural language processing has enabled the development of sophisticated chatbots, virtual assistants, and translation services. These systems can understand context, maintain conversations, and provide relevant responses. Search engines use NLP to better understand user queries and deliver more accurate results. Content moderation systems automatically identify and flag inappropriate content across social media platforms.
+
+The democratization of AI tools has accelerated innovation across industries. Cloud-based AI services from major technology companies make advanced capabilities accessible to organizations without extensive AI expertise. Open-source frameworks like TensorFlow, PyTorch, and scikit-learn have lowered barriers to entry for AI development.
+
+However, the rapid advancement of AI also presents significant challenges. Algorithmic bias can perpetuate or amplify existing social inequalities. Privacy concerns arise when AI systems process personal data. The potential for job displacement as AI automates various tasks requires careful consideration and planning for workforce transitions.
+
+Ethical AI development has become a critical focus area. Researchers and practitioners emphasize the importance of fairness, accountability, transparency, and explainability in AI systems. Regulatory frameworks are evolving to provide guidelines for responsible AI deployment while fostering continued innovation.
+
+The future of AI promises even more transformative applications. Advances in quantum computing may enable new AI algorithms. Brain-computer interfaces could create direct connections between human cognition and AI systems. As we continue to push the boundaries of what's possible with artificial intelligence, careful consideration of its societal impact remains paramount.`;
 }
 
 /**

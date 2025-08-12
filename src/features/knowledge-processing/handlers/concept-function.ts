@@ -65,14 +65,17 @@ export async function executeConcepts(
 
 		await updateProgress(20);
 
-		// Read all triples stored by extraction job
+		// Read all triples stored by extraction job (account for chunk suffixes)
 		console.debug('[ConceptGeneration] Loading triples from database...');
 		const allTriples = await db.knowledgeTriple.findMany({
 			where: {
-				source: metadata.source,
+				source: { 
+					startsWith: metadata.source 
+				},
 				source_type: metadata.source_type,
 			},
 		});
+		console.debug(`[ConceptGeneration] Found ${allTriples.length} triples matching source pattern: ${metadata.source}*`);
 
 		if (allTriples.length === 0) {
 			console.warn('[ConceptGeneration] No triples found for conceptualization');
