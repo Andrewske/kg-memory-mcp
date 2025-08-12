@@ -55,7 +55,7 @@ export function chunkText(text: string, options: ChunkingOptions): TextChunk[] {
 
 	for (let i = 0; i < paragraphs.length; i++) {
 		const paragraph = paragraphs[i].trim();
-		const paragraphWithSpacing = i > 0 ? '\n\n' + paragraph : paragraph;
+		const paragraphWithSpacing = i > 0 ? `\n\n${paragraph}` : paragraph;
 
 		// If this paragraph alone exceeds max size, split it by sentences
 		if (paragraph.length > maxChars) {
@@ -78,7 +78,7 @@ export function chunkText(text: string, options: ChunkingOptions): TextChunk[] {
 			// Split large paragraph by sentences
 			const sentences = paragraph.split(/\. (?=[A-Z])/);
 			for (const sentence of sentences) {
-				const sentenceWithPunct = sentence.endsWith('.') ? sentence : sentence + '.';
+				const sentenceWithPunct = sentence.endsWith('.') ? sentence : `${sentence}.`;
 
 				if (currentChunk.length + sentenceWithPunct.length > maxChars) {
 					// Finish current chunk

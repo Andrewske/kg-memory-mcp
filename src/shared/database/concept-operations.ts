@@ -7,6 +7,7 @@ import {
 } from '~/shared/database/database-utils.js';
 import type { Concept } from '~/shared/types/core.js';
 import type { Result } from '~/shared/types/services.js';
+import { createContext, logError } from '~/shared/utils/debug-logger.js';
 
 /**
  * Store concept nodes in the database
@@ -117,7 +118,13 @@ export async function searchConceptsByEmbedding(
 			data: results,
 		};
 	} catch (error) {
-		console.error('Concept embedding search error:', error);
+		const context = createContext('CONCEPT_OPERATIONS', 'search_concepts_by_embedding', {
+			topK,
+			minScore,
+		});
+		logError(context, error instanceof Error ? error : new Error(String(error)), {
+			operation: 'concept_embedding_search',
+		});
 		return {
 			success: false,
 			error: {
@@ -139,7 +146,12 @@ export async function getConceptsByIds(ids: string[]): Promise<Concept[]> {
 		});
 		return concepts;
 	} catch (error) {
-		console.error('Error getting concepts by IDs:', error);
+		const context = createContext('CONCEPT_OPERATIONS', 'get_concepts_by_ids', {
+			idCount: ids.length,
+		});
+		logError(context, error instanceof Error ? error : new Error(String(error)), {
+			operation: 'get_concepts_by_ids',
+		});
 		return [];
 	}
 }
@@ -204,7 +216,12 @@ export async function getConceptualizationsByConcept(
 
 		return relationships;
 	} catch (error) {
-		console.error('Error getting conceptualizations by concept:', error);
+		const context = createContext('CONCEPT_OPERATIONS', 'get_conceptualizations_by_concept', {
+			concept,
+		});
+		logError(context, error instanceof Error ? error : new Error(String(error)), {
+			operation: 'get_conceptualizations_by_concept',
+		});
 		return [];
 	}
 }
@@ -234,7 +251,12 @@ export async function getTriplesByConceptualization(concept: string): Promise<Kn
 
 		return triples;
 	} catch (error) {
-		console.error('Error getting triples by conceptualization:', error);
+		const context = createContext('CONCEPT_OPERATIONS', 'get_triples_by_conceptualization', {
+			concept,
+		});
+		logError(context, error instanceof Error ? error : new Error(String(error)), {
+			operation: 'get_triples_by_conceptualization',
+		});
 		return [];
 	}
 }

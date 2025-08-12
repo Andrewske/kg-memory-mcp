@@ -4,6 +4,7 @@
 
 import { JobStatus, JobType, type ProcessingJob } from '@prisma/client';
 import { db } from '~/shared/database/client.js';
+import { createContext, log, logError } from '~/shared/utils/debug-logger.js';
 import { executeConcepts } from './handlers/concept-function.js';
 import { executeDeduplication } from './handlers/deduplication-function.js';
 import { executeExtraction } from './handlers/extraction-function.js';
@@ -13,11 +14,19 @@ import type { JobResult } from './job-types.js';
  * Route a job to the appropriate functional handler
  */
 export async function routeJob(job: ProcessingJob): Promise<JobResult> {
+	const context = createContext('JOB_ROUTER', 'route_job', {
+		jobId: job.id,
+		jobType: job.job_type,
+	});
+
 	// Update job status to processing
 	await updateJobStatus(job.id, JobStatus.PROCESSING);
 
-	const startTime = Date.now();
-	console.debug(`[JobRouter] Routing ${job.job_type} job ${job.id} to functional handler`);
+	log('DEBUG', context, 'Routing job to functional handler', {
+		jobId: job.id,
+		jobType: job.job_type,
+		status: JobStatus.PROCESSING,
+	});
 
 	try {
 		let result: JobResult;
@@ -41,8 +50,7 @@ export async function routeJob(job: ProcessingJob): Promise<JobResult> {
 				throw new Error(`No handler found for job type: ${job.job_type}`);
 		}
 
-		const duration = Date.now() - startTime;
-		console.debug(`[JobRouter] Job ${job.id} completed in ${duration}ms`, {
+		log('INFO', context, 'Job completed successfully', {
 			success: result.success,
 			data: result.data,
 		});
@@ -56,7 +64,9 @@ export async function routeJob(job: ProcessingJob): Promise<JobResult> {
 		return result;
 	} catch (error) {
 		const errorMessage = error instanceof Error ? error.message : 'Unknown error';
-		console.error(`[JobRouter] Job ${job.id} failed:`, error);
+		logError(context, error instanceof Error ? error : new Error(String(error)), {
+			operation: 'job_routing',
+		});
 
 		await updateJobStatus(job.id, JobStatus.FAILED, null, errorMessage);
 

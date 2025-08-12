@@ -18,7 +18,6 @@ import { retryAIOperation, withCircuitBreaker } from '~/shared/utils/retry-mecha
 import { trackTokenUsage } from '~/shared/utils/token-tracking.js';
 import { errorScenarios, mockAIExtractions, testTexts } from '../fixtures/test-data.js';
 import {
-	createErrorResult,
 	createMockAIProvider,
 	createSuccessResult,
 	createTestArgs,
@@ -263,7 +262,7 @@ describe('Knowledge Extraction', () => {
 
 			// Mock retry mechanism to propagate the error
 			(retryAIOperation as jest.MockedFunction<typeof retryAIOperation>).mockImplementation(
-				async <T>() => {
+				async <_T>() => {
 					throw new Error('AI service unavailable');
 				}
 			);

@@ -3,9 +3,9 @@
  * Standalone TypeScript script that tests the knowledge processing pipeline
  */
 
-import { JobStatus, JobType, VectorType, type ProcessingJob } from '@prisma/client';
-import fs from 'fs/promises';
-import path from 'path';
+import fs from 'node:fs/promises';
+import path from 'node:path';
+import { JobStatus, JobType, type ProcessingJob, VectorType } from '@prisma/client';
 import { z } from 'zod';
 import { executeConcepts } from '~/features/knowledge-processing/handlers/concept-function.js';
 import { executeDeduplication } from '~/features/knowledge-processing/handlers/deduplication-function.js';
@@ -301,7 +301,9 @@ async function runPipelineReport(config: PipelineConfig) {
 		// FIXED: Query unified VectorEmbedding table with correct schema and source pattern
 		const vectorQuery = {
 			where: {
-				vector_type: { in: [VectorType.ENTITY, VectorType.RELATIONSHIP, VectorType.SEMANTIC, VectorType.CONCEPT] },
+				vector_type: {
+					in: [VectorType.ENTITY, VectorType.RELATIONSHIP, VectorType.SEMANTIC, VectorType.CONCEPT],
+				},
 				OR: [
 					{
 						knowledge_triple_id: {

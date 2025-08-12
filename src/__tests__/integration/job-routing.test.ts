@@ -109,7 +109,7 @@ describe('Job Routing Integration', () => {
 
 		it('should route GENERATE_CONCEPTS jobs to ConceptJobHandler', async () => {
 			// First create some triples for the concept handler to work with
-			const triples = await db.knowledgeTriple.createMany({
+			const _triples = await db.knowledgeTriple.createMany({
 				data: sampleTriples.entityEntity.map(triple => ({
 					...triple,
 					source: 'concept-test',
@@ -332,7 +332,7 @@ describe('Job Routing Integration', () => {
 
 			// Check status shortly after starting
 			await new Promise(resolve => setTimeout(resolve, 50));
-			const runningJob = await db.processingJob.findUnique({
+			const _runningJob = await db.processingJob.findUnique({
 				where: { id: job.id },
 			});
 

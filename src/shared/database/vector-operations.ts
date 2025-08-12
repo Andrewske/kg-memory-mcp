@@ -7,13 +7,7 @@ import {
 import type { Triple } from '~/shared/types/core.js';
 import type { SearchOptions } from '~/shared/types/search.js';
 import type { Result } from '~/shared/types/services.js';
-import {
-	createContext,
-	log,
-	logDataFlow,
-	logError,
-	logQueryResult,
-} from '~/shared/utils/debug-logger.js';
+import { createContext, log } from '~/shared/utils/debug-logger.js';
 
 /**
  * Search triples by entity vector similarity
@@ -290,7 +284,7 @@ export async function createVectors(vectors: {
 		if (allVectors.length > 0) {
 			// Build the VALUES clause for bulk insert
 			const values = allVectors
-				.map((v, i) => {
+				.map((_v, i) => {
 					const base = i * 8;
 					return `($${base + 1}, $${base + 2}, $${base + 3}, $${base + 4}::vector, $${base + 5}, $${base + 6}, $${base + 7}, $${base + 8}, NOW(), NOW())`;
 				})

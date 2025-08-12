@@ -403,12 +403,12 @@ async function searchByConceptVector(
 
 		// Apply source filtering
 		if (options?.sources && options.sources.length > 0) {
-			filteredTriples = filteredTriples.filter(triple => options.sources!.includes(triple.source));
+			filteredTriples = filteredTriples.filter(triple => options.sources?.includes(triple.source));
 		}
 
 		// Apply type filtering
 		if (options?.types && options.types.length > 0) {
-			filteredTriples = filteredTriples.filter(triple => options.types!.includes(triple.type));
+			filteredTriples = filteredTriples.filter(triple => options.types?.includes(triple.type));
 		}
 
 		// Limit results

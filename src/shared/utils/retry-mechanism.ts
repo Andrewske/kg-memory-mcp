@@ -140,7 +140,7 @@ export async function withRetry<T>(
  */
 export async function retryAIOperation<T>(
 	operation: () => Promise<T>,
-	operationName: string,
+	_operationName: string,
 	customOptions?: Partial<RetryOptions>
 ): Promise<T> {
 	return withRetry(operation, {

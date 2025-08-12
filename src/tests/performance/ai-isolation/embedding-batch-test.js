@@ -489,7 +489,7 @@ function generateEmbeddingRecommendations(batchAnalysis, duplicateResult) {
 // Run the test if called directly
 if (import.meta.url === `file://${process.argv[1]}`) {
 	runEmbeddingBatchTest()
-		.then(results => {
+		.then(_results => {
 			console.log('\n✅ Embedding batch performance test completed successfully');
 			process.exit(0);
 		})

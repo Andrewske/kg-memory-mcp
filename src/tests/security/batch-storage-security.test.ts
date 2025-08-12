@@ -7,7 +7,7 @@ import { beforeEach, describe, expect, it } from '@jest/globals';
 import { TripleType } from '@prisma/client';
 import { Decimal } from '@prisma/client/runtime/library';
 import { type BatchStorageInput, batchStoreKnowledge } from '../../shared/database/batch-storage';
-import type { Concept, Triple } from '../../shared/types/core';
+import type { Triple } from '../../shared/types/core';
 
 describe('Batch Storage Security Tests', () => {
 	let mockEmbeddingMap: Map<string, number[]>;

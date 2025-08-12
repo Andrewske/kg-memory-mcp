@@ -147,7 +147,7 @@ describe('Full Pipeline Integration', () => {
 
 			// Step 6: Verify extraction job completion
 			const updatedExtractionJob = await db.processingJob.findUnique({
-				where: { id: extractionJob!.id },
+				where: { id: extractionJob?.id },
 			});
 			expect(updatedExtractionJob?.status).toBe(JobStatus.COMPLETED);
 			expect(updatedExtractionJob?.progress).toBe(100);
@@ -253,7 +253,7 @@ describe('Full Pipeline Integration', () => {
 	describe('Concept Generation Integration', () => {
 		it('should generate and store concepts from extracted triples', async () => {
 			// First create some triples
-			const triples = await db.knowledgeTriple.createMany({
+			const _triples = await db.knowledgeTriple.createMany({
 				data: sampleTriples.entityEntity.map(triple => ({
 					...triple,
 					source: 'test-concept-source',

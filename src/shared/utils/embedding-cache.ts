@@ -1,7 +1,7 @@
 import { env } from '~/shared/env.js';
 import type { Concept, Triple } from '~/shared/types/core.js';
 import type { EmbeddingService } from '~/shared/types/services.js';
-import { debugLog, errorLog, infoLog } from '~/shared/utils/conditional-logging.js';
+import { createContext, log, logError } from '~/shared/utils/debug-logger.js';
 
 export interface EmbeddingMap {
 	/** Map from text to embedding vector */
@@ -24,8 +24,13 @@ export async function generateEmbeddingMap(
 	triples: Triple[],
 	concepts: Concept[] = [],
 	embeddingService: EmbeddingService,
-	includeSemanticDuplication = true
+	_includeSemanticDuplication = true
 ): Promise<{ success: true; data: EmbeddingMap } | { success: false; error: any }> {
+	const context = createContext('EMBEDDING_CACHE', 'generate_embedding_map', {
+		tripleCount: triples.length,
+		conceptCount: concepts.length,
+	});
+
 	try {
 		// Collect unique texts using Set for automatic deduplication
 		const uniqueTexts = new Set<string>();
@@ -49,11 +54,12 @@ export async function generateEmbeddingMap(
 		const totalTextsBeforeDedup = triples.length * 4 + concepts.length; // Rough estimate
 		const duplicatesAverted = Math.max(0, totalTextsBeforeDedup - uniqueTexts.size);
 
-		infoLog(
-			`[EMBEDDING MAP] Generating embeddings for ${uniqueTexts.size} unique texts (${duplicatesAverted} duplicates averted)`
-		);
-		debugLog(`[EMBEDDING MAP] Text breakdown: entities, relationships, semantic content, concepts`);
-		debugLog(`[EMBEDDING MAP] Sample texts:`, allTexts.slice(0, 3));
+		log('INFO', context, 'Generating embeddings', {
+			uniqueTexts: uniqueTexts.size,
+			duplicatesAverted,
+			textTypes: ['entities', 'relationships', 'semantic_content', 'concepts'],
+		});
+		log('DEBUG', context, 'Sample texts', { sampleTexts: allTexts.slice(0, 3) });
 
 		// Generate embeddings in batches
 		const embeddingMap = new Map<string, number[]>();
@@ -64,16 +70,20 @@ export async function generateEmbeddingMap(
 		const source_type = triples[0]?.source_type || 'unknown';
 		const source = triples[0]?.source || 'unknown';
 
-		debugLog(
-			`[EMBEDDING MAP] Processing ${Math.ceil(allTexts.length / batchSize)} batches with batch size ${batchSize}`
-		);
+		log('DEBUG', context, 'Processing batches', {
+			totalBatches: Math.ceil(allTexts.length / batchSize),
+			batchSize,
+		});
 
 		for (let i = 0; i < allTexts.length; i += batchSize) {
 			const batch = allTexts.slice(i, i + batchSize);
 			batchCalls++;
 
-			debugLog(`[EMBEDDING MAP] Batch ${batchCalls}: Processing ${batch.length} texts`);
-			debugLog(`[EMBEDDING MAP] Sample from batch: "${batch[0]}"`);
+			log('DEBUG', context, 'Processing batch', {
+				batchNumber: batchCalls,
+				batchSize: batch.length,
+				sampleText: batch[0],
+			});
 
 			const embeddingResult = await embeddingService.embedBatch(batch, {
 				source_type,
@@ -81,8 +91,9 @@ export async function generateEmbeddingMap(
 			});
 
 			if (!embeddingResult.success) {
-				errorLog(
-					`[EMBEDDING MAP] ❌ Failed to generate embeddings for batch ${batchCalls}:`,
+				logError(
+					context,
+					`Failed to generate embeddings for batch ${batchCalls}`,
 					embeddingResult.error
 				);
 				return {
@@ -100,15 +111,17 @@ export async function generateEmbeddingMap(
 				embeddingMap.set(batch[j], embeddingResult.data[j]);
 			}
 
-			debugLog(
-				`[EMBEDDING MAP] ✅ Batch ${batchCalls} completed: ${batch.length} embeddings stored`
-			);
+			log('DEBUG', context, 'Batch completed', {
+				batchNumber: batchCalls,
+				embeddingsStored: batch.length,
+			});
 		}
 
-		infoLog(
-			`[EMBEDDING MAP] ✅ Complete! Generated ${embeddingMap.size} embeddings in ${batchCalls} API calls`
-		);
-		infoLog(`[EMBEDDING MAP] Efficiency: ${duplicatesAverted} duplicate embeddings averted`);
+		log('INFO', context, 'Embedding generation complete', {
+			totalEmbeddings: embeddingMap.size,
+			apiCalls: batchCalls,
+			duplicatesAverted,
+		});
 
 		return {
 			success: true,
@@ -123,7 +136,9 @@ export async function generateEmbeddingMap(
 			},
 		};
 	} catch (error) {
-		errorLog(`[EMBEDDING MAP] ❌ Unexpected error:`, error);
+		logError(context, error instanceof Error ? error : new Error(String(error)), {
+			operation: 'generate_embedding_map',
+		});
 		return {
 			success: false,
 			error: {

@@ -110,7 +110,7 @@ describe('Knowledge Processing Pipeline Integration', () => {
 				job_type: JobType.PROCESS_KNOWLEDGE,
 				text: testText,
 				metadata: {
-					source: testSource + '_status',
+					source: `${testSource}_status`,
 					source_type: testSourceType,
 					source_date: new Date().toISOString(),
 				},
@@ -119,14 +119,14 @@ describe('Knowledge Processing Pipeline Integration', () => {
 		});
 
 		// Create child jobs
-		const childJob = await db.processingJob.create({
+		const _childJob = await db.processingJob.create({
 			data: {
 				job_type: JobType.EXTRACT_KNOWLEDGE_BATCH,
 				parent_job_id: parentJob.id,
 				stage: 'EXTRACTION',
 				text: testText,
 				metadata: {
-					source: testSource + '_status',
+					source: `${testSource}_status`,
 					source_type: testSourceType,
 					source_date: new Date().toISOString(),
 				},
@@ -153,7 +153,7 @@ describe('Knowledge Processing Pipeline Integration', () => {
 				job_type: JobType.PROCESS_KNOWLEDGE,
 				text: testText,
 				metadata: {
-					source: testSource + '_complete',
+					source: `${testSource}_complete`,
 					source_type: testSourceType,
 					source_date: new Date().toISOString(),
 				},
@@ -169,7 +169,7 @@ describe('Knowledge Processing Pipeline Integration', () => {
 				stage: 'EXTRACTION',
 				text: testText,
 				metadata: {
-					source: testSource + '_complete',
+					source: `${testSource}_complete`,
 					source_type: testSourceType,
 					source_date: new Date().toISOString(),
 				},
@@ -189,7 +189,7 @@ describe('Knowledge Processing Pipeline Integration', () => {
 				job_type: JobType.PROCESS_KNOWLEDGE,
 				text: testText,
 				metadata: {
-					source: testSource + '_partial',
+					source: `${testSource}_partial`,
 					source_type: testSourceType,
 					source_date: new Date().toISOString(),
 				},
@@ -206,7 +206,7 @@ describe('Knowledge Processing Pipeline Integration', () => {
 					stage: 'EXTRACTION',
 					text: testText,
 					metadata: {
-						source: testSource + '_partial',
+						source: `${testSource}_partial`,
 						source_type: testSourceType,
 						source_date: new Date().toISOString(),
 					},
@@ -219,7 +219,7 @@ describe('Knowledge Processing Pipeline Integration', () => {
 					stage: 'CONCEPTS',
 					text: '',
 					metadata: {
-						source: testSource + '_partial',
+						source: `${testSource}_partial`,
 						source_type: testSourceType,
 						source_date: new Date().toISOString(),
 					},

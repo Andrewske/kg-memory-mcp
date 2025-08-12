@@ -7,7 +7,7 @@ import type { ProcessKnowledgeArgs } from '~/server/transport-manager.js';
 import { db } from '~/shared/database/client.js';
 import { env } from '~/shared/env.js';
 import { getQStash } from '~/shared/services/qstash.js';
-import { debugLog, warnLog } from '~/shared/utils/conditional-logging.js';
+import { createContext, log } from '~/shared/utils/debug-logger.js';
 import type { ExtractionMetrics, JobMetadata } from './job-types.js';
 
 /**
@@ -15,6 +15,10 @@ import type { ExtractionMetrics, JobMetadata } from './job-types.js';
  * Creates a parent job and schedules the extraction job
  */
 export async function initiateKnowledgePipeline(args: ProcessKnowledgeArgs): Promise<string> {
+	const context = createContext('PIPELINE_COORDINATOR', 'initiate_pipeline', {
+		source: args.source,
+	});
+
 	// Create parent tracking job
 	const parentJob = await db.processingJob.create({
 		data: {
@@ -60,10 +64,13 @@ export async function initiateKnowledgePipeline(args: ProcessKnowledgeArgs): Pro
 		});
 	} else {
 		// If QStash is not configured, mark job for immediate processing
-		warnLog('[PipelineCoordinator] QStash not configured, job will need manual processing');
+		log('WARN', context, 'QStash not configured, job will need manual processing');
 	}
 
-	debugLog(`[PipelineCoordinator] Pipeline initiated with parent job ${parentJob.id}`);
+	log('DEBUG', context, 'Pipeline initiated', {
+		parentJobId: parentJob.id,
+		extractionJobId: extractionJob.id,
+	});
 	return parentJob.id;
 }
 
@@ -75,9 +82,13 @@ export async function schedulePostProcessingJobs(
 	parentJobId: string,
 	extractionMetrics: ExtractionMetrics
 ): Promise<void> {
+	const context = createContext('PIPELINE_COORDINATOR', 'schedule_post_processing', {
+		parentJobId,
+	});
+
 	const qstash = getQStash();
 	if (!qstash) {
-		warnLog('[PipelineCoordinator] QStash not configured, skipping post-processing job scheduling');
+		log('WARN', context, 'QStash not configured, skipping post-processing job scheduling');
 		return;
 	}
 
@@ -105,7 +116,10 @@ export async function schedulePostProcessingJobs(
 		delay: Math.max(6, baseDelay * 0.1), // Minimum 6 second delay
 	});
 
-	debugLog(`[PipelineCoordinator] Scheduled concept generation job ${conceptJob.id}`);
+	log('DEBUG', context, 'Scheduled concept generation job', {
+		conceptJobId: conceptJob.id,
+		delay: Math.max(6, baseDelay * 0.1),
+	});
 
 	// Only schedule deduplication if enabled
 	if (env.ENABLE_SEMANTIC_DEDUP) {
@@ -129,7 +143,10 @@ export async function schedulePostProcessingJobs(
 			delay: Math.max(10, baseDelay * 0.2), // Minimum 10 second delay
 		});
 
-		debugLog(`[PipelineCoordinator] Scheduled deduplication job ${dedupJob.id}`);
+		log('DEBUG', context, 'Scheduled deduplication job', {
+			dedupJobId: dedupJob.id,
+			delay: Math.max(10, baseDelay * 0.2),
+		});
 	}
 }
 

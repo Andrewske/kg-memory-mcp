@@ -2,7 +2,7 @@
  * Unit tests for resource management and concurrency control
  */
 
-import { beforeEach, describe, expect, it, jest } from '@jest/globals';
+import { describe, expect, it } from '@jest/globals';
 
 import { ResourceManager, Semaphore } from '~/features/knowledge-processing/resource-manager.js';
 import { setupTestSuite, waitFor } from '../helpers/test-setup.js';
@@ -54,7 +54,7 @@ describe('Resource Manager', () => {
 
 		it('should handle operation failures without blocking the queue', async () => {
 			const semaphore = new Semaphore(1);
-			const results: (number | Error)[] = [];
+			const _results: (number | Error)[] = [];
 
 			const operations = [
 				semaphore

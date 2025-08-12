@@ -27,7 +27,7 @@ function generateTemporalMetadata(triples: Triple[]): SearchResult['temporal'] {
 		return undefined;
 	}
 
-	const dates = triplesWithDates.map(t => new Date(t.source_date!));
+	const dates = triplesWithDates.map(t => new Date(t.source_date as string));
 	const earliest = new Date(Math.min(...dates.map(d => d.getTime())));
 	const latest = new Date(Math.max(...dates.map(d => d.getTime())));
 

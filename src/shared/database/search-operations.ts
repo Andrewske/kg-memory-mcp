@@ -8,7 +8,7 @@ import { createContext, log, logError, logQueryResult } from '~/shared/utils/deb
 /**
  * Search triples by text content
  */
-export async function searchByText(query: string, searchType: string): Promise<Result<Triple[]>> {
+export async function searchByText(query: string, _searchType: string): Promise<Result<Triple[]>> {
 	try {
 		// Simple text search - in real implementation, this would use full-text search
 		const results = await db.knowledgeTriple.findMany({
@@ -84,7 +84,7 @@ export async function searchByEmbedding(
 		`;
 
 		log('DEBUG', searchContext, 'Executing semantic vector query', {
-			queryPreview: query.slice(0, 200) + '...',
+			queryPreview: `${query.slice(0, 200)}...`,
 			paramCount: params.length,
 			paramPreview: params.slice(1).slice(0, 3), // Skip embedding, show first 3 other params
 		});

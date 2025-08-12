@@ -36,7 +36,7 @@ const FIXTURES_DIR = resolve(__dirname, '../fixtures');
 /**
  * Load test text from fixtures
  */
-function loadTestText(filename) {
+function _loadTestText(filename) {
 	try {
 		const filePath = resolve(FIXTURES_DIR, filename);
 		return readFileSync(filePath, 'utf8');
@@ -204,7 +204,7 @@ async function measurePromptComplexity(aiProvider) {
 
 				results.push({
 					name,
-					prompt: prompt.substring(0, 100) + '...',
+					prompt: `${prompt.substring(0, 100)}...`,
 					expectedTokens,
 					duration,
 					tokensPerMs,
@@ -639,7 +639,7 @@ function generateLatencyRecommendations(testResults) {
 // Run the test if called directly
 if (import.meta.url === `file://${process.argv[1]}`) {
 	runAPILatencyTest()
-		.then(results => {
+		.then(_results => {
 			console.log('\n✅ API latency performance test completed successfully');
 			process.exit(0);
 		})

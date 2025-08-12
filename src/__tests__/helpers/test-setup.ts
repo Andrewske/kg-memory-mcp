@@ -3,7 +3,7 @@
  */
 
 import { afterAll, afterEach, beforeAll, beforeEach } from '@jest/globals';
-import { JobStage, JobStatus, JobType, type ProcessingJob } from '@prisma/client';
+import { JobStatus, JobType, type ProcessingJob } from '@prisma/client';
 import type { ProcessKnowledgeArgs } from '~/server/transport-manager.js';
 import { db } from '~/shared/database/client.js';
 
@@ -52,8 +52,8 @@ export async function createTestJob(
 	// Merge overrides
 	const finalData = { ...defaultData, ...overrides };
 
-	// Remove fields that shouldn't be in create data
-	const { id, created_at, updated_at, ...dataToCreate } = finalData as any;
+	// Remove fields that shouldn't be in create data  
+	const { id: _id, created_at: _created_at, updated_at: _updated_at, ...dataToCreate } = finalData as any;
 
 	return await db.processingJob.create({
 		data: dataToCreate,

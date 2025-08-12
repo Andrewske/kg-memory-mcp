@@ -7,6 +7,13 @@ import { deduplicateTriples } from '~/features/deduplication/deduplicate.js';
 import { db } from '~/shared/database/client.js';
 import { env } from '~/shared/env.js';
 import { createEmbeddingService } from '~/shared/services/embedding-service.js';
+import {
+	createContext,
+	log,
+	logDataFlow,
+	logError,
+	logQueryResult,
+} from '~/shared/utils/debug-logger.js';
 import type { JobMetadata, JobResult } from '../job-types.js';
 import { updateJobProgress } from '../pipeline-coordinator.js';
 
@@ -32,8 +39,13 @@ export async function executeDeduplication(
 
 	const metadata = job.metadata as unknown as JobMetadata;
 
+	const context = createContext('DEDUPLICATION', 'execute_deduplication', {
+		jobId: job.id,
+		source: metadata.source,
+	});
+
 	try {
-		console.debug('[Deduplication] Starting deduplication', {
+		log('DEBUG', context, 'Starting deduplication', {
 			jobId: job.id,
 			source: metadata.source,
 			source_type: metadata.source_type,
@@ -41,7 +53,9 @@ export async function executeDeduplication(
 
 		// Check if semantic deduplication is enabled
 		if (!env.ENABLE_SEMANTIC_DEDUP) {
-			console.debug('[Deduplication] Semantic deduplication is disabled');
+			log('DEBUG', context, 'Semantic deduplication is disabled', {
+				reason: 'ENABLE_SEMANTIC_DEDUP=false',
+			});
 			await updateProgress(100);
 			return {
 				success: true,
@@ -56,7 +70,9 @@ export async function executeDeduplication(
 		await updateProgress(10);
 
 		// Get all triples for this source (account for chunk suffixes)
-		console.debug('[Deduplication] Loading triples from database...');
+		log('DEBUG', context, 'Loading triples from database', {
+			sourcePattern: `${metadata.source}*`,
+		});
 		const triples = await db.knowledgeTriple.findMany({
 			where: {
 				source: {
@@ -79,7 +95,7 @@ export async function executeDeduplication(
 		});
 
 		if (triples.length === 0) {
-			console.debug('[Deduplication] No triples found for deduplication');
+			log('DEBUG', context, 'No triples found for deduplication', { source: metadata.source });
 			await updateProgress(100);
 			return {
 				success: true,
@@ -90,7 +106,14 @@ export async function executeDeduplication(
 			};
 		}
 
-		console.debug(`[Deduplication] Found ${triples.length} triples to deduplicate`);
+		logQueryResult(
+			context,
+			{
+				query: { source: { startsWith: metadata.source }, source_type: metadata.source_type },
+			},
+			triples,
+			'Found triples to deduplicate'
+		);
 		await updateProgress(30);
 
 		// Initialize embedding service
@@ -101,7 +124,9 @@ export async function executeDeduplication(
 		});
 
 		// Generate embeddings for deduplication
-		console.debug('[Deduplication] Generating embeddings for triples...');
+		log('DEBUG', context, 'Generating embeddings for deduplication', {
+			tripleCount: triples.length,
+		});
 		const allTexts = new Set<string>();
 		for (const triple of triples) {
 			allTexts.add(triple.subject);
@@ -128,7 +153,7 @@ export async function executeDeduplication(
 		});
 
 		// Run deduplication
-		console.debug('[Deduplication] Running semantic deduplication...');
+		log('DEBUG', context, 'Running semantic deduplication', { embeddingCount: embeddingMap.size });
 		const deduplicationResult = await deduplicateTriples(triples, embeddingMap);
 
 		if (!deduplicationResult.success) {
@@ -144,14 +169,23 @@ export async function executeDeduplication(
 		const uniqueTriples = deduplicationResult.data?.uniqueTriples ?? triples;
 		const duplicateCount = triples.length - uniqueTriples.length;
 
-		console.debug(`[Deduplication] Found ${duplicateCount} duplicates`);
+		logDataFlow(
+			context,
+			{
+				input: triples,
+				output: uniqueTriples,
+				counts: { inputCount: triples.length, outputCount: uniqueTriples.length },
+				transformations: ['semantic_deduplication'],
+			},
+			`Found ${duplicateCount} duplicates`
+		);
 		await updateProgress(60);
 
 		// Remove duplicates from database if any found
 		if (duplicateCount > 0) {
-			console.debug('[Deduplication] Removing duplicates from database...');
-			const uniqueIds = new Set(uniqueTriples.map((t: any) => t.id));
-			const duplicateIds = triples.filter((t: any) => !uniqueIds.has(t.id)).map((t: any) => t.id);
+			log('DEBUG', context, 'Removing duplicates from database', { duplicateCount });
+			const uniqueIds = new Set(uniqueTriples.map((t: { id: string }) => t.id));
+			const duplicateIds = triples.filter((t: { id: string }) => !uniqueIds.has(t.id)).map((t: { id: string }) => t.id);
 
 			// Use transaction to remove duplicates and their associated vectors
 			await db.$transaction([
@@ -165,7 +199,10 @@ export async function executeDeduplication(
 				}),
 			]);
 
-			console.debug(`[Deduplication] Removed ${duplicateCount} duplicates and their vectors`);
+			log('INFO', context, 'Successfully removed duplicates and vectors', {
+				duplicatesRemoved: duplicateCount,
+				vectorsRemoved: duplicateCount,
+			});
 		}
 
 		await updateProgress(100);
@@ -180,7 +217,9 @@ export async function executeDeduplication(
 			},
 		};
 	} catch (error) {
-		console.error('[Deduplication] Failed:', error);
+		logError(context, error instanceof Error ? error : new Error(String(error)), {
+			operation: 'deduplication',
+		});
 		return {
 			success: false,
 			error: {

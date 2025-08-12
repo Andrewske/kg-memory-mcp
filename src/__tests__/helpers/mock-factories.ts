@@ -2,7 +2,7 @@
  * Mock factory functions for testing Knowledge Graph MCP Server
  */
 
-import type { JobStage, JobStatus, JobType, ProcessingJob } from '@prisma/client';
+import type { JobStatus, JobType, ProcessingJob } from '@prisma/client';
 import { Decimal } from '@prisma/client/runtime/library';
 import type { ExtractionMetrics, JobMetadata } from '~/features/knowledge-processing/job-types.js';
 import type { ProcessKnowledgeArgs } from '~/server/transport-manager.js';
@@ -135,10 +135,10 @@ export function createMockQStash() {
 // Mock Resource Manager
 export function createMockResourceManager() {
 	return {
-		withAI: jest.fn().mockImplementation(async (callback: () => Promise<any>) => await callback()),
+		withAI: jest.fn().mockImplementation(async <T>(callback: () => Promise<T>) => await callback()),
 		withDatabase: jest
 			.fn()
-			.mockImplementation(async (callback: () => Promise<any>) => await callback()),
+			.mockImplementation(async <T>(callback: () => Promise<T>) => await callback()),
 		getStatus: jest.fn().mockReturnValue({
 			database: { available: 2, waiting: 0 },
 			ai: { available: 2, waiting: 0 },

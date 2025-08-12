@@ -21,8 +21,8 @@ async function extractUsingTextGeneration<T>(
 	prompt: string,
 	schema: z.ZodType<T>,
 	data: ProcessKnowledgeArgs,
-	operationContext: any
-): Promise<Result<{ data: T; usage?: any }>> {
+	operationContext: Record<string, unknown>
+): Promise<Result<{ data: T; usage?: Record<string, number> }>> {
 	const aiProvider = createAIProvider();
 
 	// Modify prompt to request pure JSON output
@@ -95,12 +95,15 @@ IMPORTANT: Return ONLY a valid JSON object, no markdown formatting, no code bloc
 		// Pre-filter data to remove empty fields before schema validation
 		if (parsedData?.triples && Array.isArray(parsedData.triples)) {
 			parsedData.triples = parsedData.triples.filter(
-				(triple: any) =>
+				(triple: Record<string, unknown>) =>
 					triple.subject &&
+					typeof triple.subject === 'string' &&
 					triple.subject.trim() !== '' &&
 					triple.predicate &&
+					typeof triple.predicate === 'string' &&
 					triple.predicate.trim() !== '' &&
 					triple.object &&
+					typeof triple.object === 'string' &&
 					triple.object.trim() !== ''
 			);
 		}
@@ -327,12 +330,15 @@ async function extractFourStage(data: ProcessKnowledgeArgs) {
 						const partialData = JSON.parse(error.cause.text);
 						if (partialData?.triples) {
 							const validTriples = partialData.triples.filter(
-								(triple: any) =>
+								(triple: Record<string, unknown>) =>
 									triple.subject &&
+									typeof triple.subject === 'string' &&
 									triple.subject.trim() !== '' &&
 									triple.predicate &&
+									typeof triple.predicate === 'string' &&
 									triple.predicate.trim() !== '' &&
 									triple.object &&
+									typeof triple.object === 'string' &&
 									triple.object.trim() !== ''
 							);
 							if (validTriples.length > 0) {
@@ -340,7 +346,7 @@ async function extractFourStage(data: ProcessKnowledgeArgs) {
 									`[ExtractFourStage] Salvaged ${validTriples.length} valid triples from failed ${type} extraction`
 								);
 								// Map to proper format
-								const mappedTriples = validTriples.map((triple: any) => ({
+								const mappedTriples = validTriples.map((triple: Record<string, unknown>) => ({
 									subject: triple.subject,
 									predicate: triple.predicate,
 									object: triple.object,

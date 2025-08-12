@@ -2,7 +2,7 @@
  * Unit tests for pipeline coordinator functions
  */
 
-import { afterEach, beforeEach, describe, expect, it, jest } from '@jest/globals';
+import { beforeEach, describe, expect, it, jest } from '@jest/globals';
 import { JobStage, JobStatus, JobType } from '@prisma/client';
 
 // Mock dependencies before imports

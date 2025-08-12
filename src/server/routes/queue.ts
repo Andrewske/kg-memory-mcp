@@ -2,7 +2,8 @@ import { JobStatus } from '@prisma/client';
 import { routeJob } from '~/features/knowledge-processing/job-router.js';
 import type { ProcessKnowledgeArgs } from '~/server/transport-manager.js';
 import { db } from '~/shared/database/client.js';
-import { addJobToQueue, getJob, updateJobStatus } from '~/shared/services/queue-service.js';
+import { addJobToQueue } from '~/shared/services/queue-service.js';
+import { createContext, log, logError } from '~/shared/utils/debug-logger.js';
 
 // Queue processing for large jobs
 export async function queueKnowledgeProcessing(data: {
@@ -45,7 +46,10 @@ export async function getPipelineStatusEndpoint(params: { parentJobId: string })
 		};
 	} catch (error) {
 		const errorMessage = error instanceof Error ? error.message : 'Unknown error';
-		console.error(`[QueueRoute] Failed to get pipeline status:`, error);
+		const context = createContext('QUEUE_ROUTE', 'get_pipeline_status', { parentJobId });
+		logError(context, error instanceof Error ? error : new Error(String(error)), {
+			operation: 'get_pipeline_status',
+		});
 
 		return {
 			success: false,
@@ -78,8 +82,13 @@ export async function handleProcessJob(body: { jobId: string }) {
 		};
 	}
 
+	const context = createContext('QUEUE_ROUTE', 'handle_process_job', {
+		jobId,
+		jobType: job.job_type,
+	});
+
 	try {
-		console.debug(`[QueueRoute] Processing job ${jobId} of type ${job.job_type}`);
+		log('DEBUG', context, 'Processing job', { jobId, jobType: job.job_type });
 
 		// Route job to appropriate handler
 		const result = await routeJob(job);
@@ -95,7 +104,10 @@ export async function handleProcessJob(body: { jobId: string }) {
 		};
 	} catch (error) {
 		const errorMessage = error instanceof Error ? error.message : 'Unknown error';
-		console.error(`[QueueRoute] Job ${jobId} failed:`, error);
+		logError(context, error instanceof Error ? error : new Error(String(error)), {
+			operation: 'handle_process_job',
+			jobId,
+		});
 
 		// Update job status to failed
 		await db.processingJob.update({

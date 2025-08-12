@@ -8,6 +8,13 @@ import {
 	generateConcepts,
 } from '~/features/conceptualization/conceptualize.js';
 import { db } from '~/shared/database/client.js';
+import {
+	createContext,
+	log,
+	logDataFlow,
+	logError,
+	logQueryResult,
+} from '~/shared/utils/debug-logger.js';
 import type { JobMetadata, JobResult } from '../job-types.js';
 import { updateJobProgress } from '../pipeline-coordinator.js';
 
@@ -33,8 +40,13 @@ export async function executeConcepts(
 
 	const metadata = job.metadata as unknown as JobMetadata;
 
+	const context = createContext('CONCEPT_GENERATION', 'execute_concepts', {
+		jobId: job.id,
+		source: metadata.source,
+	});
+
 	try {
-		console.debug('[ConceptGeneration] Starting concept generation', {
+		log('DEBUG', context, 'Starting concept generation', {
 			jobId: job.id,
 			source: metadata.source,
 			source_type: metadata.source_type,
@@ -51,7 +63,10 @@ export async function executeConcepts(
 		});
 
 		if (existingConceptsCount > 0) {
-			console.debug(`[ConceptGeneration] Concepts already exist for source ${metadata.source}`);
+			log('DEBUG', context, 'Concepts already exist, skipping generation', {
+				source: metadata.source,
+				existingCount: existingConceptsCount,
+			});
 			await updateProgress(100);
 			return {
 				success: true,
@@ -66,7 +81,9 @@ export async function executeConcepts(
 		await updateProgress(20);
 
 		// Read all triples stored by extraction job (account for chunk suffixes)
-		console.debug('[ConceptGeneration] Loading triples from database...');
+		log('DEBUG', context, 'Loading triples from database', {
+			sourcePattern: `${metadata.source}*`,
+		});
 		const allTriples = await db.knowledgeTriple.findMany({
 			where: {
 				source: {
@@ -75,12 +92,17 @@ export async function executeConcepts(
 				source_type: metadata.source_type,
 			},
 		});
-		console.debug(
-			`[ConceptGeneration] Found ${allTriples.length} triples matching source pattern: ${metadata.source}*`
+		logQueryResult(
+			context,
+			{
+				query: { source: { startsWith: metadata.source }, source_type: metadata.source_type },
+			},
+			allTriples,
+			`Found triples matching source pattern: ${metadata.source}*`
 		);
 
 		if (allTriples.length === 0) {
-			console.warn('[ConceptGeneration] No triples found for conceptualization');
+			log('WARN', context, 'No triples found for conceptualization', { source: metadata.source });
 			await updateProgress(100);
 			return {
 				success: true,
@@ -92,19 +114,34 @@ export async function executeConcepts(
 			};
 		}
 
-		console.debug(`[ConceptGeneration] Found ${allTriples.length} triples for conceptualization`);
+		log('DEBUG', context, 'Processing triples for conceptualization', {
+			tripleCount: allTriples.length,
+		});
 		await updateProgress(40);
 
 		// Extract elements for conceptualization
 		const conceptInput = extractElementsFromTriples(allTriples);
-		console.debug(
-			`[ConceptGeneration] Extracted ${conceptInput.entities.length} entities and ${conceptInput.events.length} events`
+		logDataFlow(
+			context,
+			{
+				input: allTriples,
+				output: conceptInput,
+				counts: {
+					inputCount: allTriples.length,
+					outputCount: conceptInput.entities.length + conceptInput.events.length,
+				},
+				transformations: ['element_extraction'],
+			},
+			'Elements extracted from triples'
 		);
 
 		await updateProgress(50);
 
 		// Generate concepts using AI
-		console.debug('[ConceptGeneration] Generating concepts...');
+		log('DEBUG', context, 'Starting AI concept generation', {
+			entityCount: conceptInput.entities.length,
+			eventCount: conceptInput.events.length,
+		});
 		const conceptResult = await generateConcepts(conceptInput, {
 			source: metadata.source,
 			source_type: metadata.source_type,
@@ -122,14 +159,27 @@ export async function executeConcepts(
 
 		const concepts = conceptResult.data?.concepts || [];
 		const relationships = conceptResult.data?.relationships || [];
-		console.debug(
-			`[ConceptGeneration] Generated ${concepts.length} concepts and ${relationships.length} relationships`
+		logDataFlow(
+			context,
+			{
+				input: conceptInput,
+				output: { concepts, relationships },
+				counts: {
+					inputCount: conceptInput.entities.length + conceptInput.events.length,
+					outputCount: concepts.length + relationships.length,
+				},
+				transformations: ['ai_concept_generation'],
+			},
+			'AI concept generation completed'
 		);
 
 		await updateProgress(70);
 
 		// Store concepts and relationships in database
-		console.debug('[ConceptGeneration] Storing concepts and relationships...');
+		log('DEBUG', context, 'Starting database storage', {
+			conceptCount: concepts.length,
+			relationshipCount: relationships.length,
+		});
 		const storageResult = await storeConceptsAndRelationships(concepts, relationships, allTriples);
 
 		if (!storageResult.success) {
@@ -147,7 +197,9 @@ export async function executeConcepts(
 			},
 		};
 	} catch (error) {
-		console.error('[ConceptGeneration] Failed:', error);
+		logError(context, error instanceof Error ? error : new Error(String(error)), {
+			operation: 'concept_generation',
+		});
 		return {
 			success: false,
 			error: {
@@ -164,9 +216,14 @@ async function storeConceptsAndRelationships(
 	relationships: any[],
 	triples: any[]
 ): Promise<JobResult> {
+	const context = createContext('CONCEPT_GENERATION', 'store_concepts_and_relationships', {
+		conceptCount: concepts.length,
+		relationshipCount: relationships.length,
+	});
+
 	try {
 		// Create a map of triple IDs for efficient lookup
-		const tripleIdMap = new Map(
+		const _tripleIdMap = new Map(
 			triples.map(t => [`${t.subject}-${t.predicate}-${t.object}`, t.id])
 		);
 
@@ -223,14 +280,16 @@ async function storeConceptsAndRelationships(
 			};
 		});
 
-		console.debug('[ConceptGeneration] Storage completed:', result);
+		log('INFO', context, 'Storage completed successfully', result);
 
 		return {
 			success: true,
 			data: result,
 		};
 	} catch (error) {
-		console.error('[ConceptGeneration] Storage failed:', error);
+		logError(context, error instanceof Error ? error : new Error(String(error)), {
+			operation: 'concept_storage',
+		});
 		return {
 			success: false,
 			error: {

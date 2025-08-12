@@ -14,9 +14,9 @@
  *   npx tsx src/tests/performance/benchmark.js
  */
 
-import { readFileSync, writeFileSync } from 'fs';
-import { resolve } from 'path';
-import { performance } from 'perf_hooks';
+import { readFileSync, writeFileSync } from 'node:fs';
+import { resolve } from 'node:path';
+import { performance } from 'node:perf_hooks';
 import { processKnowledge } from '../../server/transport-manager.js';
 
 const testDir = resolve(process.cwd(), 'src/tests/performance');
@@ -122,7 +122,7 @@ function generateReport(results) {
 	const successful = results.filter(r => r.success);
 	const failed = results.filter(r => !r.success);
 
-	console.log('\n' + '='.repeat(70));
+	console.log(`\n${'='.repeat(70)}`);
 	console.log('🏁 PERFORMANCE BASELINE REPORT - PHASE 0');
 	console.log('='.repeat(70));
 	console.log(`Generated: ${new Date().toISOString()}`);

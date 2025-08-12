@@ -2,6 +2,7 @@ import { db } from '~/shared/database/client.js';
 import { generateTripleId } from '~/shared/database/database-utils.js';
 import type { Triple } from '~/shared/types/core.js';
 import type { Result } from '~/shared/types/services.js';
+import { createContext, logError } from '~/shared/utils/debug-logger.js';
 
 /**
  * Store knowledge triples in the database
@@ -50,7 +51,12 @@ export async function checkExistingTriples(ids: string[]): Promise<string[]> {
 		});
 		return existing.map(t => t.id);
 	} catch (error) {
-		console.error('Error checking existing triples:', error);
+		const context = createContext('TRIPLE_OPERATIONS', 'check_existing_triples', {
+			idCount: ids.length,
+		});
+		logError(context, error instanceof Error ? error : new Error(String(error)), {
+			operation: 'check_existing_triples',
+		});
 		return [];
 	}
 }
@@ -65,7 +71,10 @@ export async function tripleExists(id: string): Promise<boolean> {
 		});
 		return count > 0;
 	} catch (error) {
-		console.error('Error checking triple existence:', error);
+		const context = createContext('TRIPLE_OPERATIONS', 'triple_exists', { id });
+		logError(context, error instanceof Error ? error : new Error(String(error)), {
+			operation: 'triple_exists',
+		});
 		return false;
 	}
 }
@@ -80,7 +89,12 @@ export async function getTriplesByIds(ids: string[]): Promise<Triple[]> {
 		});
 		return triples;
 	} catch (error) {
-		console.error('Error getting triples by IDs:', error);
+		const context = createContext('TRIPLE_OPERATIONS', 'get_triples_by_ids', {
+			idCount: ids.length,
+		});
+		logError(context, error instanceof Error ? error : new Error(String(error)), {
+			operation: 'get_triples_by_ids',
+		});
 		return [];
 	}
 }

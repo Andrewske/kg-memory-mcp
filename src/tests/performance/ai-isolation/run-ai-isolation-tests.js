@@ -465,7 +465,7 @@ async function saveReport(reportData) {
 		const { mkdirSync } = await import('node:fs');
 		try {
 			mkdirSync(reportsDir, { recursive: true });
-		} catch (e) {
+		} catch (_e) {
 			// Directory might already exist
 		}
 

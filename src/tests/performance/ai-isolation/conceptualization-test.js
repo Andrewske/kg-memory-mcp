@@ -34,7 +34,7 @@ const FIXTURES_DIR = resolve(__dirname, '../fixtures');
 /**
  * Load test text from fixtures
  */
-function loadTestText(filename) {
+function _loadTestText(filename) {
 	try {
 		const filePath = resolve(FIXTURES_DIR, filename);
 		return readFileSync(filePath, 'utf8');
@@ -539,7 +539,7 @@ function generateConceptualizationRecommendations(results, scalingAnalysis, comp
 // Run the test if called directly
 if (import.meta.url === `file://${process.argv[1]}`) {
 	runConceptualizationTest()
-		.then(results => {
+		.then(_results => {
 			console.log('\n✅ Conceptualization performance test completed successfully');
 			process.exit(0);
 		})

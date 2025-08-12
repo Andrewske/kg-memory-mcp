@@ -12,10 +12,9 @@ import {
 	getAllTriples,
 } from '~/shared/database/triple-operations.js';
 import { createVectors } from '~/shared/database/vector-operations.js';
-import { env } from '~/shared/env.js';
 import type { GraphStats } from '~/shared/types/api.js';
 import type { Concept, Triple } from '~/shared/types/core.js';
-import type { EmbeddingService, Result } from '~/shared/types/services.js';
+import type { Result } from '~/shared/types/services.js';
 
 export interface EntityEnumerationOptions {
 	role?: 'subject' | 'object' | 'both';

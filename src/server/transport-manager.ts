@@ -13,6 +13,7 @@ import {
 } from '~/features/knowledge-processing/pipeline-coordinator.js';
 import type { GraphStats, ToolResult } from '~/shared/types/api.js';
 import type { Concept } from '~/shared/types/core.js';
+import { createContext, log, logError } from '~/shared/utils/debug-logger.js';
 
 export type ProcessKnowledgeArgs = {
 	text: string;
@@ -58,8 +59,13 @@ export async function getPipelineStatusTool(args: { parentJobId: string }): Prom
  * Simply initiates the pipeline and returns job tracking information
  */
 export async function processKnowledge(args: ProcessKnowledgeArgs): Promise<ToolResult> {
+	const context = createContext('TRANSPORT_MANAGER', 'process_knowledge', {
+		source: args.source,
+		textLength: args.text.length,
+	});
+
 	try {
-		console.debug('[ProcessKnowledge] Initiating 3-job pipeline', {
+		log('DEBUG', context, 'Initiating 3-job pipeline', {
 			textLength: args.text.length,
 			source: args.source,
 			source_type: args.source_type,
@@ -86,7 +92,9 @@ export async function processKnowledge(args: ProcessKnowledgeArgs): Promise<Tool
 			},
 		};
 	} catch (error) {
-		console.error('[ProcessKnowledge] Pipeline initiation failed:', error);
+		logError(context, error instanceof Error ? error : new Error(String(error)), {
+			operation: 'pipeline_initiation',
+		});
 		return {
 			success: false,
 			error: {
@@ -223,8 +231,9 @@ export async function getKnowledgeGraphStats(): Promise<ToolResult<GraphStats>> 
  * Tool dispatcher that maps tool names to functions
  */
 export async function executeToolFunction(toolName: string, args: any): Promise<ToolResult<any>> {
+	const context = createContext('TOOL_DISPATCHER', 'execute_tool', { toolName });
 	const startTime = Date.now();
-	console.debug(`[ToolDispatcher] Executing ${toolName}...`);
+	log('DEBUG', context, 'Executing tool', { toolName });
 
 	let result: ToolResult;
 	switch (toolName) {
@@ -244,7 +253,7 @@ export async function executeToolFunction(toolName: string, args: any): Promise<
 			result = await getKnowledgeGraphStats();
 			break;
 		default:
-			console.warn(`[ToolDispatcher] Unknown tool requested: ${toolName}`);
+			log('WARN', context, 'Unknown tool requested', { toolName });
 			result = {
 				success: false,
 				error: {
@@ -255,7 +264,9 @@ export async function executeToolFunction(toolName: string, args: any): Promise<
 	}
 
 	const duration = Date.now() - startTime;
-	console.debug(`[ToolDispatcher] ${toolName} completed in ${duration}ms`, {
+	log('DEBUG', context, 'Tool execution completed', {
+		toolName,
+		duration,
 		success: result.success,
 		error: result.success ? undefined : result.error?.operation,
 	});

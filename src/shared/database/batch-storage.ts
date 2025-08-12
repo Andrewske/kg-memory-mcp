@@ -5,14 +5,7 @@ import { db } from '~/shared/database/client.js';
 import { generateTripleId } from '~/shared/database/database-utils.js';
 import type { Concept, Triple } from '~/shared/types/core.js';
 import type { Result } from '~/shared/types/services.js';
-import {
-	createContext,
-	log,
-	logDataFlow,
-	logError,
-	logStateChange,
-	withTiming,
-} from '~/shared/utils/debug-logger.js';
+import { createContext, log, logDataFlow, logError } from '~/shared/utils/debug-logger.js';
 
 // Note: sanitizeForLogging is now provided by the debug logger
 
@@ -414,7 +407,7 @@ export async function batchStoreKnowledge(
 					id: generateTripleId(triple),
 				}));
 
-				const storedTriples = triplesWithIds.filter(t => {
+				const storedTriples = triplesWithIds.filter(_t => {
 					// This is a simplified check - in practice we'd need to track which were actually stored
 					return true; // For now, assume all non-duplicates were stored
 				});
@@ -514,16 +507,23 @@ export async function batchStoreKnowledge(
 async function generateAndStoreVectorsPostTransaction(
 	triples: (Triple & { id: string })[],
 	embeddingMap: Map<string, number[]>
-): Promise<{ success: true; data: { vectorsStored: number; lookupMisses: number } } | { success: false; error: any }> {
+): Promise<
+	| { success: true; data: { vectorsStored: number; lookupMisses: number } }
+	| { success: false; error: any }
+> {
 	try {
-		const storageContext = createContext('BATCH_STORAGE', 'generate_and_store_vectors_post_transaction', {
-			tripleCount: triples.length,
-			embeddingMapSize: embeddingMap.size
-		});
-		
+		const storageContext = createContext(
+			'BATCH_STORAGE',
+			'generate_and_store_vectors_post_transaction',
+			{
+				tripleCount: triples.length,
+				embeddingMapSize: embeddingMap.size,
+			}
+		);
+
 		log('INFO', storageContext, 'Starting vector generation for triples using embedding map', {
 			tripleCount: triples.length,
-			embeddingMapSize: embeddingMap.size
+			embeddingMapSize: embeddingMap.size,
 		});
 
 		const allVectors: any[] = [];
@@ -620,7 +620,7 @@ async function generateAndStoreVectorsPostTransaction(
 				success: true,
 				data: {
 					vectorsStored: 0,
-					lookupMisses
+					lookupMisses,
 				},
 			};
 		}
@@ -666,9 +666,9 @@ async function generateAndStoreVectorsPostTransaction(
 				`;
 				successCount++;
 			} catch (error) {
-				log('WARN', storageContext, 'Failed to create vector', { 
-					vectorText: vector.text, 
-					error: error instanceof Error ? error.message : String(error)
+				log('WARN', storageContext, 'Failed to create vector', {
+					vectorText: vector.text,
+					error: error instanceof Error ? error.message : String(error),
 				});
 				// Continue with other vectors instead of failing entirely
 			}
@@ -677,14 +677,14 @@ async function generateAndStoreVectorsPostTransaction(
 		log('INFO', storageContext, 'Successfully stored vectors', {
 			successCount,
 			totalVectors: allVectors.length,
-			lookupMisses
+			lookupMisses,
 		});
 
 		return {
 			success: true,
 			data: {
 				vectorsStored: successCount,
-				lookupMisses
+				lookupMisses,
 			},
 		};
 	} catch (error) {

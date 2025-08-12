@@ -9,6 +9,7 @@ import type { ProcessKnowledgeArgs } from '~/server/transport-manager.js';
 import { batchStoreKnowledge } from '~/shared/database/batch-storage.js';
 import { env } from '~/shared/env.js';
 import { createEmbeddingService } from '~/shared/services/embedding-service.js';
+import { createContext, log, logDataFlow, logError } from '~/shared/utils/debug-logger.js';
 import { generateEmbeddingMap } from '~/shared/utils/embedding-cache.js';
 import { chunkText, type TextChunk } from '~/shared/utils/text-chunking.js';
 import type { JobMetadata, JobResult } from '../job-types.js';
@@ -42,8 +43,13 @@ export async function executeExtraction(
 		maxMemoryMB: 2048,
 	};
 
+	const context = createContext('BATCH_EXTRACTION', 'execute_extraction', {
+		jobId: job.id,
+		textLength: job.text.length,
+	});
+
 	try {
-		console.debug('[BatchExtraction] Starting coordinated extraction', {
+		log('DEBUG', context, 'Starting coordinated extraction', {
 			jobId: job.id,
 			textLength: job.text.length,
 			resourceLimits,
@@ -63,7 +69,10 @@ export async function executeExtraction(
 					})
 				: [{ text: job.text, estimatedTokens, start: 0, end: job.text.length }];
 
-		console.debug(`[BatchExtraction] Processing ${chunks.length} chunks`);
+		log('DEBUG', context, 'Text chunking completed', {
+			chunkCount: chunks.length,
+			estimatedTokens,
+		});
 		await updateProgress(10);
 
 		// Process chunks with controlled parallelization
@@ -84,8 +93,17 @@ export async function executeExtraction(
 			if (result.data?.triples) allTriples.push(...result.data.triples);
 			if (result.data?.concepts) allConcepts.push(...result.data.concepts);
 		}
-		console.debug(
-			`[BatchExtraction] Extracted ${allTriples.length} triples and ${allConcepts.length} concepts`
+		logDataFlow(
+			context,
+			{
+				input: chunkResults,
+				output: { allTriples, allConcepts },
+				counts: {
+					inputCount: chunkResults.length,
+					outputCount: allTriples.length + allConcepts.length,
+				},
+			},
+			'Chunk results merged'
 		);
 
 		// Generate comprehensive embedding map ONCE for all operations
@@ -95,7 +113,10 @@ export async function executeExtraction(
 			batchSize: env.BATCH_SIZE,
 		});
 
-		console.debug('[BatchExtraction] Generating comprehensive embedding map...');
+		log('DEBUG', context, 'Generating comprehensive embedding map', {
+			tripleCount: allTriples.length,
+			conceptCount: allConcepts.length,
+		});
 		const embeddingMapResult = await generateEmbeddingMap(
 			allTriples,
 			allConcepts,
@@ -114,28 +135,41 @@ export async function executeExtraction(
 		}
 
 		const embeddingStats = embeddingMapResult.data.stats;
-		console.debug(
-			`[BatchExtraction] Generated ${embeddingStats.uniqueTexts} unique embeddings, ${embeddingStats.duplicatesAverted} duplicates averted`
-		);
+		log('DEBUG', context, 'Embedding generation completed', {
+			uniqueEmbeddings: embeddingStats.uniqueTexts,
+			duplicatesAverted: embeddingStats.duplicatesAverted,
+			batchCalls: embeddingStats.batchCalls,
+		});
 
 		// Deduplicate triples using embedding map
 		let dedupTriples = allTriples;
 		if (allTriples.length > 0) {
-			console.debug('[BatchExtraction] Deduplicating triples...');
+			log('DEBUG', context, 'Starting triple deduplication', { tripleCount: allTriples.length });
 			const deduplicationResult = await deduplicateTriples(
 				allTriples,
 				embeddingMapResult.data.embeddings
 			);
 			if (deduplicationResult.success) {
 				dedupTriples = deduplicationResult.data?.uniqueTriples ?? allTriples;
-				console.debug(
-					`[BatchExtraction] Deduplicated: ${allTriples.length} → ${dedupTriples.length} triples`
+				logDataFlow(
+					context,
+					{
+						input: allTriples,
+						output: dedupTriples,
+						counts: { inputCount: allTriples.length, outputCount: dedupTriples.length },
+						transformations: ['deduplication'],
+					},
+					'Triple deduplication completed'
 				);
 			}
 		}
 
 		// Batch store all knowledge data in atomic transaction
-		console.debug('[BatchExtraction] Storing knowledge in atomic transaction...');
+		log('DEBUG', context, 'Starting atomic storage', {
+			tripleCount: dedupTriples.length,
+			conceptCount: allConcepts.length,
+			embeddingCount: Object.keys(embeddingMapResult.data.embeddings).length,
+		});
 		const storageResult = await batchStoreKnowledge({
 			triples: dedupTriples,
 			concepts: allConcepts,
@@ -155,7 +189,7 @@ export async function executeExtraction(
 			};
 		}
 
-		console.debug('[BatchExtraction] Storage completed:', storageResult.data);
+		log('INFO', context, 'Storage completed successfully', storageResult.data);
 
 		// Schedule post-processing jobs (concepts and deduplication) - only if not skipping QStash
 		if (job.parent_job_id && !skipQStashUpdates) {
@@ -184,7 +218,9 @@ export async function executeExtraction(
 			},
 		};
 	} catch (error) {
-		console.error('[BatchExtraction] Failed:', error);
+		logError(context, error instanceof Error ? error : new Error(String(error)), {
+			operation: 'batch_extraction',
+		});
 		return {
 			success: false,
 			error: {
@@ -200,7 +236,7 @@ async function processChunksWithResourceLimits(
 	chunks: TextChunk[],
 	metadata: JobMetadata,
 	resourceManager: ResourceManager,
-	jobId: string,
+	_jobId: string,
 	updateProgress: (progress: number) => Promise<void>
 ): Promise<any[]> {
 	// Use semaphore for controlled concurrency
@@ -212,7 +248,15 @@ async function processChunksWithResourceLimits(
 			const progress = 10 + (index / chunks.length) * 70; // 10-80% range
 			await updateProgress(Math.round(progress));
 
-			console.debug(`[BatchExtraction] Processing chunk ${index + 1}/${chunks.length}`);
+			log(
+				'DEBUG',
+				createContext('BATCH_EXTRACTION', 'process_chunk', {
+					chunkIndex: index + 1,
+					totalChunks: chunks.length,
+				}),
+				'Processing chunk',
+				{ chunkIndex: index + 1, totalChunks: chunks.length }
+			);
 
 			// Use resource manager for AI calls
 			return await resourceManager.withAI(async () => {
@@ -241,8 +285,15 @@ async function processChunksWithResourceLimits(
 	// Log any failures but continue with successful results
 	const failedCount = results.length - successfulResults.length;
 	if (failedCount > 0) {
-		console.warn(
-			`[BatchExtraction] ${failedCount}/${chunks.length} chunks failed, continuing with partial results`
+		log(
+			'WARN',
+			createContext('BATCH_EXTRACTION', 'process_chunks', { totalChunks: chunks.length }),
+			'Some chunks failed, continuing with partial results',
+			{
+				failedCount,
+				totalChunks: chunks.length,
+				successfulCount: successfulResults.length,
+			}
 		);
 	}
 

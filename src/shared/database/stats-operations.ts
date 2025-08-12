@@ -1,6 +1,7 @@
 import type { TokenUsage, TripleType } from '@prisma/client';
 import { db } from '~/shared/database/client.js';
 import type { Result } from '~/shared/types/services.js';
+import { createContext, logError } from '~/shared/utils/debug-logger.js';
 
 /**
  * Get total count of knowledge triples
@@ -9,7 +10,10 @@ export async function getTripleCount(): Promise<number> {
 	try {
 		return await db.knowledgeTriple.count();
 	} catch (error) {
-		console.error('Error getting triple count:', error);
+		const context = createContext('STATS_OPERATIONS', 'get_triple_count');
+		logError(context, error instanceof Error ? error : new Error(String(error)), {
+			operation: 'get_triple_count',
+		});
 		return 0;
 	}
 }
@@ -21,7 +25,10 @@ export async function getConceptCount(): Promise<number> {
 	try {
 		return await db.conceptNode.count();
 	} catch (error) {
-		console.error('Error getting concept count:', error);
+		const context = createContext('STATS_OPERATIONS', 'get_concept_count');
+		logError(context, error instanceof Error ? error : new Error(String(error)), {
+			operation: 'get_concept_count',
+		});
 		return 0;
 	}
 }
@@ -49,7 +56,10 @@ export async function getTripleCountByType(): Promise<Record<TripleType, number>
 
 		return result;
 	} catch (error) {
-		console.error('Error getting triple count by type:', error);
+		const context = createContext('STATS_OPERATIONS', 'get_triple_count_by_type');
+		logError(context, error instanceof Error ? error : new Error(String(error)), {
+			operation: 'get_triple_count_by_type',
+		});
 		return {
 			ENTITY_ENTITY: 0,
 			ENTITY_EVENT: 0,
