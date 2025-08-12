@@ -2,7 +2,7 @@
  * Functional deduplication handler - Pure function extracted from DeduplicationJobHandler
  */
 
-import { type ProcessingJob } from '@prisma/client';
+import type { ProcessingJob } from '@prisma/client';
 import { deduplicateTriples } from '~/features/deduplication/deduplicate.js';
 import { db } from '~/shared/database/client.js';
 import { env } from '~/shared/env.js';
@@ -59,8 +59,8 @@ export async function executeDeduplication(
 		console.debug('[Deduplication] Loading triples from database...');
 		const triples = await db.knowledgeTriple.findMany({
 			where: {
-				source: { 
-					startsWith: metadata.source 
+				source: {
+					startsWith: metadata.source,
 				},
 				source_type: metadata.source_type,
 			},

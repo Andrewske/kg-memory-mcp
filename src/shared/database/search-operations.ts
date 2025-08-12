@@ -3,6 +3,7 @@ import { buildTemporalFilter, buildVectorSearchParams } from '~/shared/database/
 import type { Triple } from '~/shared/types/core.js';
 import type { SearchOptions } from '~/shared/types/search.js';
 import type { Result } from '~/shared/types/services.js';
+import { createContext, log, logError, logQueryResult } from '~/shared/utils/debug-logger.js';
 
 /**
  * Search triples by text content
@@ -47,9 +48,18 @@ export async function searchByEmbedding(
 	options?: SearchOptions
 ): Promise<Result<Triple[]>> {
 	try {
-		console.log(
-			`[DB DEBUG] searchByEmbedding: topK=${topK}, minScore=${minScore}, embedding length=${embedding.length}`
-		);
+		const searchContext = createContext('DATABASE_SEARCH', 'search_by_embedding', {
+			topK,
+			minScore,
+			embeddingLength: embedding.length,
+			hasSearchOptions: !!options,
+		});
+
+		log('DEBUG', searchContext, 'Starting vector search', {
+			topK,
+			minScore,
+			embeddingLength: embedding.length,
+		});
 
 		// Build filter conditions for joins using utility
 		const { whereClause, params } = buildVectorSearchParams(embedding, topK, minScore, {
@@ -73,13 +83,24 @@ export async function searchByEmbedding(
 			LIMIT $2
 		`;
 
-		console.log(`[DB DEBUG] Executing semantic vector query: ${query.slice(0, 200)}...`);
-		console.log(`[DB DEBUG] Query params: ${params.slice(1)}`); // Skip the long embedding
+		log('DEBUG', searchContext, 'Executing semantic vector query', {
+			queryPreview: query.slice(0, 200) + '...',
+			paramCount: params.length,
+			paramPreview: params.slice(1).slice(0, 3), // Skip embedding, show first 3 other params
+		});
 
 		const results = await db.$queryRawUnsafe(query, ...params);
 
-		console.log(
-			`[DB DEBUG] Semantic vector query returned ${Array.isArray(results) ? results.length : 'non-array'} results`
+		logQueryResult(
+			searchContext,
+			{
+				queryType: 'vector_search',
+				topK,
+				minScore,
+				hasFilter: !!options,
+			},
+			Array.isArray(results) ? results : [],
+			'Semantic vector query executed'
 		);
 
 		if (!Array.isArray(results)) {
@@ -94,7 +115,14 @@ export async function searchByEmbedding(
 			data: results,
 		};
 	} catch (error) {
-		console.error('Vector search error:', error);
+		const errorContext = createContext('DATABASE_SEARCH', 'search_by_embedding_error', {
+			topK,
+			minScore,
+			embeddingLength: embedding.length,
+		});
+
+		logError(errorContext, error instanceof Error ? error : new Error(String(error)));
+
 		return {
 			success: false,
 			error: {
@@ -333,7 +361,13 @@ export async function searchByConcept(
 			data: results,
 		};
 	} catch (error) {
-		console.error('Concept search error:', error);
+		const errorContext = createContext('DATABASE_SEARCH', 'search_concepts_error', {
+			searchQuery: conceptQuery,
+			hasTopK: !!topK,
+		});
+
+		logError(errorContext, error instanceof Error ? error : new Error(String(error)));
+
 		return {
 			success: false,
 			error: {

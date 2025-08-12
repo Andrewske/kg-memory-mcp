@@ -116,6 +116,24 @@ const envSchema = z.object({
 		.string()
 		.transform(val => val === 'true')
 		.default('false'),
+
+	// Debug Logging Categories
+	DEBUG_EXTRACTION: z
+		.string()
+		.transform(val => val === 'true')
+		.default('false'),
+	DEBUG_DATABASE: z
+		.string()
+		.transform(val => val === 'true')
+		.default('false'),
+	DEBUG_PIPELINE: z
+		.string()
+		.transform(val => val === 'true')
+		.default('false'),
+	DEBUG_TIMING: z
+		.string()
+		.transform(val => val === 'true')
+		.default('false'),
 });
 
 // Helper to process env vars

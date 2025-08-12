@@ -3,16 +3,25 @@
  * Standalone TypeScript script that tests the knowledge processing pipeline
  */
 
-import { JobType, JobStatus, type ProcessingJob } from '@prisma/client';
-import { executeExtraction } from '~/features/knowledge-processing/handlers/extraction-function.js';
-import { executeConcepts } from '~/features/knowledge-processing/handlers/concept-function.js';
-import { executeDeduplication } from '~/features/knowledge-processing/handlers/deduplication-function.js';
-import { db } from '~/shared/database/client.js';
-import { env } from '~/shared/env.js';
-import { redirectConsoleToFiles } from '~/shared/utils/console-redirect.js';
+import { JobStatus, JobType, VectorType, type ProcessingJob } from '@prisma/client';
 import fs from 'fs/promises';
 import path from 'path';
 import { z } from 'zod';
+import { executeConcepts } from '~/features/knowledge-processing/handlers/concept-function.js';
+import { executeDeduplication } from '~/features/knowledge-processing/handlers/deduplication-function.js';
+import { executeExtraction } from '~/features/knowledge-processing/handlers/extraction-function.js';
+import { db } from '~/shared/database/client.js';
+import { env } from '~/shared/env.js';
+import { redirectConsoleToFiles } from '~/shared/utils/console-redirect.js';
+import {
+	createContext,
+	log,
+	logDataFlow,
+	logError,
+	logQueryResult,
+	logSourceTransformation,
+	withTiming,
+} from '~/shared/utils/debug-logger.js';
 
 // Configuration validation schema
 const PipelineConfigSchema = z.object({
@@ -73,6 +82,16 @@ async function runPipelineReport(config: PipelineConfig) {
 	// Setup unique log capture for this run
 	const timestamp = new Date().toISOString().replace(/[:.]/g, '-');
 
+	// Create pipeline context for structured logging
+	const pipelineContext = createContext('PIPELINE_REPORT', 'full_pipeline_test', {
+		source: config.source,
+		testTextLength: config.testText.length,
+		model: config.model || env.AI_MODEL,
+		extractionMethod: config.extractionMethod || env.EXTRACTION_METHOD,
+		enableDedup: config.enableDedup || false,
+		timestamp,
+	});
+
 	// FIXED: Create subdirectories that redirectConsoleToFiles expects
 	await fs.mkdir(path.join(logDir, 'logs'), { recursive: true });
 	await fs.mkdir(path.join(logDir, 'errors'), { recursive: true });
@@ -80,11 +99,14 @@ async function runPipelineReport(config: PipelineConfig) {
 	const restoreConsole = redirectConsoleToFiles(logDir);
 
 	try {
-		console.log('=== Pipeline Report Test Started ===');
-		console.log('Configuration:', JSON.stringify(config, null, 2));
+		log('INFO', pipelineContext, 'Pipeline report test started', { config });
 
 		// Stage 1: Create mock job and run extraction
-		const extractionStartTime = Date.now();
+		const extractionContext = createContext('PIPELINE_REPORT', 'extraction_stage', {
+			source: config.source,
+			jobType: JobType.EXTRACT_KNOWLEDGE_BATCH,
+		});
+
 		const mockExtractionJob = await createMockJob(
 			JobType.EXTRACT_KNOWLEDGE_BATCH,
 			config.testText,
@@ -92,55 +114,102 @@ async function runPipelineReport(config: PipelineConfig) {
 		);
 		tracker.processingJobIds.add(mockExtractionJob.id);
 
-		console.log('Stage 1: Running extraction...');
-		const extractionResult = await executeExtraction(mockExtractionJob, true);
-		const extractionDuration = Date.now() - extractionStartTime;
+		log('INFO', extractionContext, 'Stage 1: Running extraction', { jobId: mockExtractionJob.id });
+
+		const extractionTiming = await withTiming(
+			extractionContext,
+			async () => {
+				return await executeExtraction(mockExtractionJob, true);
+			},
+			'Extraction execution'
+		);
+
+		const extractionResult = extractionTiming.result;
+		const extractionDuration = extractionTiming.duration;
 
 		if (!extractionResult.success) {
+			logError(extractionContext, `Extraction failed: ${extractionResult.error?.message}`);
 			throw new Error(`Extraction failed: ${extractionResult.error?.message}`);
 		}
 
 		// Wait for post-transaction operations to complete (vector generation)
-		console.log('[PIPELINE REPORT] Waiting 2s for all database operations to complete...');
+		log('DEBUG', extractionContext, 'Waiting for post-transaction operations to complete', {
+			waitTime: '2s',
+		});
 		await new Promise(resolve => setTimeout(resolve, 2000));
 
 		// Query created triples (need to account for chunk suffixes added by extraction)
-		console.log(`[PIPELINE REPORT] Querying triples with source pattern: ${config.source}*`);
-		const createdTriples = await db.knowledgeTriple.findMany({
+		const tripleQuery = {
 			where: {
 				source: {
 					startsWith: config.source,
 				},
 			},
+		};
+
+		log('DEBUG', extractionContext, 'Querying triples with source pattern', {
+			sourcePattern: `${config.source}*`,
+			query: tripleQuery,
 		});
-		console.log(`[PIPELINE REPORT] Found ${createdTriples.length} triples matching source pattern`);
+
+		const createdTriples = await db.knowledgeTriple.findMany(tripleQuery);
+
+		logQueryResult(extractionContext, tripleQuery, createdTriples, 'Triple query completed');
+
+		// Log source transformations to detect mismatches
 		if (createdTriples.length > 0) {
-			const sampleSources = [...new Set(createdTriples.slice(0, 5).map(t => t.source))];
-			console.log(`[PIPELINE REPORT] Sample triple sources found:`, sampleSources);
+			const uniqueSources = [...new Set(createdTriples.map(t => t.source))];
+			uniqueSources.forEach(source => {
+				if (source !== config.source) {
+					logSourceTransformation(extractionContext, config.source!, source, 'chunk_suffix_added');
+				}
+			});
 		}
+
 		createdTriples.forEach(t => tracker.tripleIds.add(t.id));
 
 		// Stage 2: Run concept generation
-		const conceptStartTime = Date.now();
+		const conceptContext = createContext('PIPELINE_REPORT', 'concept_stage', {
+			source: config.source,
+			jobType: JobType.GENERATE_CONCEPTS,
+		});
+
 		const mockConceptJob = await createMockJob(JobType.GENERATE_CONCEPTS, config.testText, config);
 		tracker.processingJobIds.add(mockConceptJob.id);
 
-		console.log('Stage 2: Running concept generation...');
-		const conceptResult = await executeConcepts(mockConceptJob, true);
-		const conceptDuration = Date.now() - conceptStartTime;
+		log('INFO', conceptContext, 'Stage 2: Running concept generation', {
+			jobId: mockConceptJob.id,
+		});
+
+		const conceptTiming = await withTiming(
+			conceptContext,
+			async () => {
+				return await executeConcepts(mockConceptJob, true);
+			},
+			'Concept generation execution'
+		);
+
+		const conceptResult = conceptTiming.result;
+		const conceptDuration = conceptTiming.duration;
 
 		// Query created concepts (account for potential source variations)
-		console.log(`[PIPELINE REPORT] Querying concepts with source pattern: ${config.source}*`);
-		const createdConcepts = await db.conceptNode.findMany({
+		const conceptQuery = {
 			where: {
 				source: {
 					startsWith: config.source,
 				},
 			},
+		};
+
+		log('DEBUG', conceptContext, 'Querying concepts with source pattern', {
+			sourcePattern: `${config.source}*`,
+			query: conceptQuery,
 		});
-		console.log(
-			`[PIPELINE REPORT] Found ${createdConcepts.length} concepts matching source pattern`
-		);
+
+		const createdConcepts = await db.conceptNode.findMany(conceptQuery);
+
+		logQueryResult(conceptContext, conceptQuery, createdConcepts, 'Concept query completed');
+
 		createdConcepts.forEach(c => tracker.conceptIds.add(c.id));
 
 		// Stage 3: Optional deduplication
@@ -148,7 +217,11 @@ async function runPipelineReport(config: PipelineConfig) {
 		let dedupResult: any = { success: true };
 
 		if (config.enableDedup) {
-			const dedupStartTime = Date.now();
+			const dedupContext = createContext('PIPELINE_REPORT', 'deduplication_stage', {
+				source: config.source,
+				jobType: JobType.DEDUPLICATE_KNOWLEDGE,
+			});
+
 			const mockDedupJob = await createMockJob(
 				JobType.DEDUPLICATE_KNOWLEDGE,
 				config.testText,
@@ -156,12 +229,25 @@ async function runPipelineReport(config: PipelineConfig) {
 			);
 			tracker.processingJobIds.add(mockDedupJob.id);
 
-			console.log('Stage 3: Running deduplication...');
-			dedupResult = await executeDeduplication(mockDedupJob, true);
-			dedupDuration = Date.now() - dedupStartTime;
+			log('INFO', dedupContext, 'Stage 3: Running deduplication', { jobId: mockDedupJob.id });
+
+			const dedupTiming = await withTiming(
+				dedupContext,
+				async () => {
+					return await executeDeduplication(mockDedupJob, true);
+				},
+				'Deduplication execution'
+			);
+
+			dedupResult = dedupTiming.result;
+			dedupDuration = dedupTiming.duration;
 
 			if (!dedupResult.success) {
-				console.error('Deduplication failed, continuing with partial results:', dedupResult.error);
+				logError(
+					dedupContext,
+					'Deduplication failed, continuing with partial results',
+					dedupResult.error
+				);
 			}
 		}
 
@@ -185,28 +271,37 @@ async function runPipelineReport(config: PipelineConfig) {
 		};
 
 		// Query token usage and vectors outside transaction
-		console.log(
-			`[PIPELINE REPORT] Querying token usage with source pattern: ${config.source}* after ${new Date(startTime).toISOString()}`
-		);
-		const tokenUsage = await db.tokenUsage.findMany({
+		const analysisContext = createContext('PIPELINE_REPORT', 'post_processing_analysis', {
+			source: config.source,
+			startTime: new Date(startTime).toISOString(),
+		});
+
+		const tokenUsageQuery = {
 			where: {
 				source: {
 					startsWith: config.source,
 				},
 				timestamp: { gte: new Date(startTime) },
 			},
-			orderBy: { timestamp: 'asc' },
+			orderBy: { timestamp: 'asc' } as const,
+		};
+
+		log('DEBUG', analysisContext, 'Querying token usage with source pattern', {
+			sourcePattern: `${config.source}*`,
+			afterTime: new Date(startTime).toISOString(),
+			query: tokenUsageQuery,
 		});
-		console.log(
-			`[PIPELINE REPORT] Found ${tokenUsage.length} token usage records matching criteria`
-		);
+
+		const tokenUsage = await db.tokenUsage.findMany(tokenUsageQuery);
+
+		logQueryResult(analysisContext, tokenUsageQuery, tokenUsage, 'Token usage query completed');
+
 		tokenUsage.forEach(t => tracker.tokenUsageIds.add(t.id));
 
 		// FIXED: Query unified VectorEmbedding table with correct schema and source pattern
-		console.log(`[PIPELINE REPORT] Querying vectors with source pattern: ${config.source}*`);
-		const vectors = await db.vectorEmbedding.findMany({
+		const vectorQuery = {
 			where: {
-				vector_type: { in: ['ENTITY', 'RELATIONSHIP', 'SEMANTIC', 'CONCEPT'] },
+				vector_type: { in: [VectorType.ENTITY, VectorType.RELATIONSHIP, VectorType.SEMANTIC, VectorType.CONCEPT] },
 				OR: [
 					{
 						knowledge_triple_id: {
@@ -220,10 +315,30 @@ async function runPipelineReport(config: PipelineConfig) {
 					},
 				],
 			},
+		};
+
+		log('DEBUG', analysisContext, 'Querying vectors with unified schema', {
+			vectorTypes: ['ENTITY', 'RELATIONSHIP', 'SEMANTIC', 'CONCEPT'],
+			tripleIds: createdTriples.map(t => t.id).slice(0, 5), // Sample for logging
+			conceptIds: createdConcepts.map(c => c.id).slice(0, 5), // Sample for logging
+			query: vectorQuery,
 		});
-		console.log(
-			`[PIPELINE REPORT] Found ${vectors.length} vectors matching stored triples/concepts`
+
+		const vectors = await db.vectorEmbedding.findMany(vectorQuery);
+
+		logQueryResult(analysisContext, vectorQuery, vectors, 'Vector query completed');
+
+		// Log data flow to track relationship between triples/concepts and vectors
+		logDataFlow(
+			analysisContext,
+			{
+				input: { tripleCount: createdTriples.length, conceptCount: createdConcepts.length },
+				output: { vectorCount: vectors.length },
+				transformations: ['vector_generation_post_transaction'],
+			},
+			'Vector generation data flow'
 		);
+
 		vectors.forEach(v => tracker.vectorIds.add(v.id));
 
 		// Generate report
@@ -241,20 +356,49 @@ async function runPipelineReport(config: PipelineConfig) {
 		// Save report
 		const reportPath = path.join(logDir, `report-${timestamp}.md`);
 		await fs.writeFile(reportPath, report);
-		console.log(`✅ Report generated: ${reportPath}`);
+		log('INFO', pipelineContext, 'Report generated successfully', { reportPath });
 
 		// Cleanup created records
-		await cleanup(tracker);
+		const cleanupContext = createContext('PIPELINE_REPORT', 'cleanup', {
+			source: config.source,
+			recordCounts: {
+				processingJobs: tracker.processingJobIds.size,
+				triples: tracker.tripleIds.size,
+				concepts: tracker.conceptIds.size,
+				vectors: tracker.vectorIds.size,
+				tokenUsage: tracker.tokenUsageIds.size,
+			},
+		});
+
+		await withTiming(
+			cleanupContext,
+			async () => {
+				await cleanup(tracker);
+			},
+			'Cleanup execution'
+		);
+
+		log('INFO', pipelineContext, 'Pipeline test completed successfully', {
+			totalDuration: Date.now() - startTime,
+			reportPath,
+		});
 
 		return { success: true, reportPath };
 	} catch (error) {
-		console.error('❌ Pipeline test failed:', error);
+		logError(pipelineContext, error instanceof Error ? error : new Error(String(error)));
 
 		// Attempt cleanup on failure
 		try {
+			const cleanupContext = createContext('PIPELINE_REPORT', 'cleanup_on_failure', {
+				source: config.source,
+			});
 			await cleanup(tracker);
+			log('INFO', cleanupContext, 'Cleanup completed after failure');
 		} catch (cleanupError) {
-			console.error('Cleanup failed:', cleanupError);
+			logError(
+				pipelineContext,
+				cleanupError instanceof Error ? cleanupError : new Error('Cleanup failed')
+			);
 		}
 
 		throw error;
@@ -291,11 +435,28 @@ async function createMockJob(
  * Comprehensive cleanup - removes all test data
  */
 async function cleanup(tracker: CleanupTracker): Promise<void> {
-	console.log('🧹 Starting cleanup...');
+	const cleanupContext = createContext('PIPELINE_REPORT', 'cleanup_database', {
+		recordCounts: {
+			processingJobs: tracker.processingJobIds.size,
+			triples: tracker.tripleIds.size,
+			concepts: tracker.conceptIds.size,
+			vectors: tracker.vectorIds.size,
+			tokenUsage: tracker.tokenUsageIds.size,
+		},
+	});
+
+	log('INFO', cleanupContext, 'Starting cleanup', {
+		totalRecords:
+			tracker.processingJobIds.size +
+			tracker.tripleIds.size +
+			tracker.conceptIds.size +
+			tracker.vectorIds.size +
+			tracker.tokenUsageIds.size,
+	});
 
 	try {
 		// Delete in reverse dependency order using transactions
-		await db.$transaction([
+		const deleteOperations = [
 			// Delete vectors first (no foreign key dependencies)
 			...(tracker.vectorIds.size > 0
 				? [
@@ -349,11 +510,17 @@ async function cleanup(tracker: CleanupTracker): Promise<void> {
 						}),
 					]
 				: []),
-		]);
+		];
 
-		console.log('✅ Cleanup completed successfully');
+		log('DEBUG', cleanupContext, 'Executing cleanup transaction', {
+			operationCount: deleteOperations.length,
+		});
+
+		await db.$transaction(deleteOperations);
+
+		log('INFO', cleanupContext, 'Cleanup completed successfully');
 	} catch (error) {
-		console.error('❌ Cleanup failed:', error);
+		logError(cleanupContext, error instanceof Error ? error : new Error(String(error)));
 		throw error;
 	}
 }
@@ -578,14 +745,26 @@ async function main() {
 	// Validate configuration
 	const config = PipelineConfigSchema.parse(rawConfig);
 
-	console.log('🚀 Starting Pipeline Report Test...');
+	const mainContext = createContext('PIPELINE_REPORT', 'main', {
+		source: config.source,
+		args: args.length,
+		flags: {
+			model: rawConfig.model,
+			extractionMethod: rawConfig.extractionMethod,
+			enableDedup: rawConfig.enableDedup,
+		},
+	});
+
+	log('INFO', mainContext, 'Starting Pipeline Report Test', { config });
 
 	try {
 		const result = await runPipelineReport(config);
-		console.log(`✅ Report generated: ${result.reportPath}`);
+		log('INFO', mainContext, 'Pipeline test completed successfully', {
+			reportPath: result.reportPath,
+		});
 		process.exit(0);
 	} catch (error) {
-		console.error('❌ Pipeline test failed:', error);
+		logError(mainContext, error instanceof Error ? error : new Error(String(error)));
 		process.exit(1);
 	}
 }
@@ -595,4 +774,4 @@ if (import.meta.url === `file://${process.argv[1]}`) {
 	main().catch(console.error);
 }
 
-export { runPipelineReport, PipelineConfig };
+export { runPipelineReport, type PipelineConfig };

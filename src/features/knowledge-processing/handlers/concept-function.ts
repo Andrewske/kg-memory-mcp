@@ -2,7 +2,7 @@
  * Functional concept handler - Pure function extracted from ConceptJobHandler
  */
 
-import { type ProcessingJob } from '@prisma/client';
+import type { ProcessingJob } from '@prisma/client';
 import {
 	extractElementsFromTriples,
 	generateConcepts,
@@ -69,13 +69,15 @@ export async function executeConcepts(
 		console.debug('[ConceptGeneration] Loading triples from database...');
 		const allTriples = await db.knowledgeTriple.findMany({
 			where: {
-				source: { 
-					startsWith: metadata.source 
+				source: {
+					startsWith: metadata.source,
 				},
 				source_type: metadata.source_type,
 			},
 		});
-		console.debug(`[ConceptGeneration] Found ${allTriples.length} triples matching source pattern: ${metadata.source}*`);
+		console.debug(
+			`[ConceptGeneration] Found ${allTriples.length} triples matching source pattern: ${metadata.source}*`
+		);
 
 		if (allTriples.length === 0) {
 			console.warn('[ConceptGeneration] No triples found for conceptualization');

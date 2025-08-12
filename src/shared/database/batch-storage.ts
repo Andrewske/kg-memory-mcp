@@ -5,47 +5,16 @@ import { db } from '~/shared/database/client.js';
 import { generateTripleId } from '~/shared/database/database-utils.js';
 import type { Concept, Triple } from '~/shared/types/core.js';
 import type { Result } from '~/shared/types/services.js';
+import {
+	createContext,
+	log,
+	logDataFlow,
+	logError,
+	logStateChange,
+	withTiming,
+} from '~/shared/utils/debug-logger.js';
 
-/**
- * Sanitize data for secure logging - prevent information leakage
- */
-function sanitizeForLogging(data: any): any {
-	if (typeof data === 'string') {
-		// Truncate long strings and mask potential sensitive content
-		const truncated = data.length > 100 ? `${data.substring(0, 100)}...` : data;
-		// Remove potential sensitive patterns (emails, tokens, etc.)
-		return truncated
-			.replace(/[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}/g, '[EMAIL]')
-			.replace(/sk-[a-zA-Z0-9]{48}/g, '[API_KEY]')
-			.replace(/eyJ[a-zA-Z0-9_-]*\.[a-zA-Z0-9_-]*\.[a-zA-Z0-9_-]*/g, '[JWT_TOKEN]')
-			.replace(/[a-f0-9]{64}/g, '[HASH_64]')
-			.replace(/[a-f0-9]{32}/g, '[HASH_32]');
-	}
-	if (Array.isArray(data)) {
-		// Only log first few items and count
-		return {
-			count: data.length,
-			sample: data.slice(0, 3).map(sanitizeForLogging),
-		};
-	}
-	if (typeof data === 'object' && data !== null) {
-		const sanitized: any = {};
-		for (const [key, value] of Object.entries(data)) {
-			// Skip sensitive keys entirely
-			if (
-				['embedding', 'password', 'secret', 'key', 'token'].some(sensitive =>
-					key.toLowerCase().includes(sensitive)
-				)
-			) {
-				sanitized[key] = '[REDACTED]';
-			} else {
-				sanitized[key] = sanitizeForLogging(value);
-			}
-		}
-		return sanitized;
-	}
-	return data;
-}
+// Note: sanitizeForLogging is now provided by the debug logger
 
 export interface BatchStorageInput {
 	/** Knowledge triples to store */
@@ -181,16 +150,24 @@ export async function batchStoreKnowledge(
 ): Promise<Result<BatchStorageResult>> {
 	const startTime = Date.now();
 
+	// Create context for structured logging
+	const batchContext = createContext('BATCH_STORAGE', 'batch_store_knowledge', {
+		tripleCount: input.triples.length,
+		conceptCount: input.concepts.length,
+		conceptualizationCount: input.conceptualizations.length,
+		source: input.triples[0]?.source || input.concepts[0]?.source || 'unknown',
+	});
+
 	// Validate and sanitize input data first
 	const validationResult = validateAndSanitizeInput(input);
 	if (!validationResult.success) {
-		console.error(`[BATCH STORAGE] ❌ Input validation failed:`, validationResult.error);
+		logError(batchContext, 'Input validation failed', validationResult.error);
 		return validationResult as Result<BatchStorageResult>;
 	}
 
 	const { triples, concepts, conceptualizations, embeddingMap } = validationResult.data;
 
-	console.log(`[BATCH STORAGE] Starting atomic transaction for:`, {
+	log('INFO', batchContext, 'Starting atomic transaction', {
 		triples: triples.length,
 		concepts: concepts.length,
 		conceptualizations: conceptualizations.length,
@@ -209,7 +186,12 @@ export async function batchStoreKnowledge(
 
 				// Step 1: Store triples if any
 				if (triples.length > 0) {
-					console.log(`[BATCH STORAGE] Transaction: Storing ${triples.length} triples...`);
+					const tripleContext = createContext('BATCH_STORAGE', 'store_triples_transaction', {
+						tripleCount: triples.length,
+						source: triples[0]?.source,
+					});
+
+					log('DEBUG', tripleContext, 'Storing triples in transaction', { count: triples.length });
 
 					// Generate IDs and prepare triples for storage
 					const triplesWithIds = triples.map(triple => ({
@@ -250,21 +232,40 @@ export async function batchStoreKnowledge(
 						});
 
 						triplesStored = newTriples.length;
-						console.log(
-							`[BATCH STORAGE] Transaction: ✅ Stored ${triplesStored} triples (${duplicatesSkipped} duplicates skipped)`
+
+						logDataFlow(
+							tripleContext,
+							{
+								input: triples,
+								output: newTriples,
+								transformations: ['id_generation', 'duplicate_filtering'],
+								counts: {
+									inputCount: triples.length,
+									outputCount: newTriples.length,
+								},
+							},
+							'Triple storage data flow'
 						);
 
-						// Skip vector generation in transaction due to pgvector compatibility issues
-						// Vectors will be generated separately after transaction commits
-						console.log(
-							`[BATCH STORAGE] Transaction: Skipping vector generation (will be done separately)`
-						);
+						log('DEBUG', tripleContext, 'Stored triples successfully', {
+							stored: triplesStored,
+							duplicatesSkipped,
+							vectorGenerationDeferred: true,
+							reason: 'pgvector_compatibility_issues',
+						});
 					}
 				}
 
 				// Step 2: Store concepts if any
 				if (concepts.length > 0) {
-					console.log(`[BATCH STORAGE] Transaction: Storing ${concepts.length} concepts...`);
+					const conceptContext = createContext('BATCH_STORAGE', 'store_concepts_transaction', {
+						conceptCount: concepts.length,
+						source: concepts[0]?.source,
+					});
+
+					log('DEBUG', conceptContext, 'Storing concepts in transaction', {
+						count: concepts.length,
+					});
 
 					const prismalConcepts = concepts.map(concept => ({
 						id: uuidv4(),
@@ -284,7 +285,22 @@ export async function batchStoreKnowledge(
 					});
 
 					conceptsStored = concepts.length;
-					console.log(`[BATCH STORAGE] Transaction: ✅ Stored ${conceptsStored} concepts`);
+
+					logDataFlow(
+						conceptContext,
+						{
+							input: concepts,
+							output: concepts,
+							transformations: ['uuid_generation'],
+							counts: {
+								inputCount: concepts.length,
+								outputCount: conceptsStored,
+							},
+						},
+						'Concept storage data flow'
+					);
+
+					log('DEBUG', conceptContext, 'Stored concepts successfully', { stored: conceptsStored });
 
 					// Skip concept vectors for now - they require concept_node_id from the created concepts
 					// This is a design decision to keep the transaction atomic and focused on core data
@@ -292,9 +308,18 @@ export async function batchStoreKnowledge(
 
 				// Step 3: Store conceptualizations if any
 				if (conceptualizations.length > 0) {
-					console.log(
-						`[BATCH STORAGE] Transaction: Storing ${conceptualizations.length} conceptualizations...`
+					const conceptualizationContext = createContext(
+						'BATCH_STORAGE',
+						'store_conceptualizations_transaction',
+						{
+							conceptualizationCount: conceptualizations.length,
+							source: triples[0]?.source || concepts[0]?.source,
+						}
 					);
+
+					log('DEBUG', conceptualizationContext, 'Storing conceptualizations in transaction', {
+						count: conceptualizations.length,
+					});
 
 					const prismaConceptualizations = conceptualizations.map(c => ({
 						id: uuidv4(),
@@ -316,9 +341,24 @@ export async function batchStoreKnowledge(
 					});
 
 					conceptualizationsStored = conceptualizations.length;
-					console.log(
-						`[BATCH STORAGE] Transaction: ✅ Stored ${conceptualizationsStored} conceptualizations`
+
+					logDataFlow(
+						conceptualizationContext,
+						{
+							input: conceptualizations,
+							output: conceptualizations,
+							transformations: ['uuid_generation', 'concept_node_id_mapping'],
+							counts: {
+								inputCount: conceptualizations.length,
+								outputCount: conceptualizationsStored,
+							},
+						},
+						'Conceptualization storage data flow'
 					);
+
+					log('DEBUG', conceptualizationContext, 'Stored conceptualizations successfully', {
+						stored: conceptualizationsStored,
+					});
 				}
 
 				return {
@@ -338,7 +378,16 @@ export async function batchStoreKnowledge(
 		);
 
 		const duration = Date.now() - startTime;
-		console.log(`[BATCH STORAGE] ✅ Transaction completed successfully in ${duration}ms:`, result);
+
+		log('INFO', batchContext, 'Transaction completed successfully', {
+			duration,
+			result: {
+				triplesStored: result.triplesStored,
+				conceptsStored: result.conceptsStored,
+				conceptualizationsStored: result.conceptualizationsStored,
+				vectorsGenerated: result.vectorsGenerated,
+			},
+		});
 
 		// Generate vectors separately (outside transaction) due to pgvector compatibility
 		let vectorsGenerated = 0;
@@ -348,9 +397,16 @@ export async function batchStoreKnowledge(
 
 		if (triples.length > 0 && result.triplesStored > 0) {
 			try {
-				console.log(
-					`[BATCH STORAGE] Post-transaction: Generating vectors for ${result.triplesStored} stored triples...`
-				);
+				const vectorContext = createContext('BATCH_STORAGE', 'post_transaction_vector_generation', {
+					triplesStored: result.triplesStored,
+					source: triples[0]?.source,
+					embeddingMapSize: embeddingMap.size,
+				});
+
+				log('INFO', vectorContext, 'Starting post-transaction vector generation', {
+					triplesStored: result.triplesStored,
+					hasEmbeddingMap: embeddingMap.size > 0,
+				});
 
 				// Find the stored triples (those that weren't duplicates)
 				const triplesWithIds = triples.map(triple => ({
@@ -373,10 +429,15 @@ export async function batchStoreKnowledge(
 
 				if (vectorResult.success) {
 					vectorsGenerated = vectorResult.data.vectorsStored;
-					console.log(`[BATCH STORAGE] Post-transaction: ✅ Generated ${vectorsGenerated} vectors`);
+
+					log('INFO', vectorContext, 'Vector generation completed successfully', {
+						vectorsGenerated,
+						lookupMisses: vectorResult.data.lookupMisses || 0,
+					});
 				} else {
-					console.error(
-						`[BATCH STORAGE] Post-transaction: ❌ Vector generation failed, initiating rollback:`,
+					logError(
+						vectorContext,
+						'Vector generation failed, initiating rollback',
 						vectorResult.error
 					);
 
@@ -397,8 +458,9 @@ export async function batchStoreKnowledge(
 					};
 				}
 			} catch (error) {
-				console.error(
-					`[BATCH STORAGE] Post-transaction: ❌ Vector generation error, initiating rollback:`,
+				logError(
+					batchContext,
+					'Post-transaction vector generation error, initiating rollback',
 					error
 				);
 
@@ -430,7 +492,7 @@ export async function batchStoreKnowledge(
 		};
 	} catch (error) {
 		const duration = Date.now() - startTime;
-		console.error(`[BATCH STORAGE] ❌ Transaction failed after ${duration}ms:`, error);
+		logError(batchContext, `Transaction failed after ${duration}ms`, error);
 
 		return {
 			success: false,
@@ -452,11 +514,17 @@ export async function batchStoreKnowledge(
 async function generateAndStoreVectorsPostTransaction(
 	triples: (Triple & { id: string })[],
 	embeddingMap: Map<string, number[]>
-): Promise<{ success: true; data: { vectorsStored: number } } | { success: false; error: any }> {
+): Promise<{ success: true; data: { vectorsStored: number; lookupMisses: number } } | { success: false; error: any }> {
 	try {
-		console.log(
-			`[BATCH STORAGE] Post-transaction: Starting vector generation for ${triples.length} triples using embedding map...`
-		);
+		const storageContext = createContext('BATCH_STORAGE', 'generate_and_store_vectors_post_transaction', {
+			tripleCount: triples.length,
+			embeddingMapSize: embeddingMap.size
+		});
+		
+		log('INFO', storageContext, 'Starting vector generation for triples using embedding map', {
+			tripleCount: triples.length,
+			embeddingMapSize: embeddingMap.size
+		});
 
 		const allVectors: any[] = [];
 
@@ -479,9 +547,7 @@ async function generateAndStoreVectorsPostTransaction(
 		for (const entity of uniqueEntities) {
 			const embedding = embeddingMap.get(entity);
 			if (!embedding) {
-				console.warn(
-					`[BATCH STORAGE] Post-transaction: ⚠️ Missing embedding for entity: "${sanitizeForLogging(entity)}"`
-				);
+				log('WARN', storageContext, 'Missing embedding for entity', { entity });
 				lookupMisses++;
 				continue;
 			}
@@ -506,9 +572,7 @@ async function generateAndStoreVectorsPostTransaction(
 		for (const relationship of uniqueRelationships) {
 			const embedding = embeddingMap.get(relationship);
 			if (!embedding) {
-				console.warn(
-					`[BATCH STORAGE] Post-transaction: ⚠️ Missing embedding for relationship: "${sanitizeForLogging(relationship)}"`
-				);
+				log('WARN', storageContext, 'Missing embedding for relationship', { relationship });
 				lookupMisses++;
 				continue;
 			}
@@ -533,9 +597,7 @@ async function generateAndStoreVectorsPostTransaction(
 			const semanticText = `${triple.subject} ${triple.predicate} ${triple.object}`;
 			const embedding = embeddingMap.get(semanticText);
 			if (!embedding) {
-				console.warn(
-					`[BATCH STORAGE] Post-transaction: ⚠️ Missing embedding for semantic text: "${sanitizeForLogging(semanticText)}"`
-				);
+				log('WARN', storageContext, 'Missing embedding for semantic text', { semanticText });
 				lookupMisses++;
 				continue;
 			}
@@ -558,6 +620,7 @@ async function generateAndStoreVectorsPostTransaction(
 				success: true,
 				data: {
 					vectorsStored: 0,
+					lookupMisses
 				},
 			};
 		}
@@ -575,7 +638,7 @@ async function generateAndStoreVectorsPostTransaction(
 			console.log(`[BATCH STORAGE] Post-transaction: No vectors to store`);
 			return {
 				success: true,
-				data: { vectorsStored: 0 },
+				data: { vectorsStored: 0, lookupMisses },
 			};
 		}
 
@@ -603,22 +666,25 @@ async function generateAndStoreVectorsPostTransaction(
 				`;
 				successCount++;
 			} catch (error) {
-				console.warn(
-					`[BATCH STORAGE] Post-transaction: Failed to create vector for "${sanitizeForLogging(vector.text)}":`,
-					sanitizeForLogging(error)
-				);
+				log('WARN', storageContext, 'Failed to create vector', { 
+					vectorText: vector.text, 
+					error: error instanceof Error ? error.message : String(error)
+				});
 				// Continue with other vectors instead of failing entirely
 			}
 		}
 
-		console.log(
-			`[BATCH STORAGE] Post-transaction: ✅ Successfully stored ${successCount}/${allVectors.length} vectors with ${lookupMisses} lookup misses`
-		);
+		log('INFO', storageContext, 'Successfully stored vectors', {
+			successCount,
+			totalVectors: allVectors.length,
+			lookupMisses
+		});
 
 		return {
 			success: true,
 			data: {
 				vectorsStored: successCount,
+				lookupMisses
 			},
 		};
 	} catch (error) {

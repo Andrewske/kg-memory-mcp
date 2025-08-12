@@ -4,9 +4,9 @@
 
 import { JobStatus, JobType, type ProcessingJob } from '@prisma/client';
 import { db } from '~/shared/database/client.js';
-import { executeExtraction } from './handlers/extraction-function.js';
 import { executeConcepts } from './handlers/concept-function.js';
 import { executeDeduplication } from './handlers/deduplication-function.js';
+import { executeExtraction } from './handlers/extraction-function.js';
 import type { JobResult } from './job-types.js';
 
 /**

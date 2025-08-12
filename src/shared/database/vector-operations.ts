@@ -7,6 +7,13 @@ import {
 import type { Triple } from '~/shared/types/core.js';
 import type { SearchOptions } from '~/shared/types/search.js';
 import type { Result } from '~/shared/types/services.js';
+import {
+	createContext,
+	log,
+	logDataFlow,
+	logError,
+	logQueryResult,
+} from '~/shared/utils/debug-logger.js';
 
 /**
  * Search triples by entity vector similarity
@@ -18,9 +25,17 @@ export async function searchByEntityVector(
 	options?: SearchOptions
 ): Promise<Result<Triple[]>> {
 	try {
-		console.log(
-			`[DB DEBUG] searchByEntityVector: topK=${topK}, minScore=${minScore}, embedding length=${embedding.length}`
-		);
+		const searchContext = createContext('DATABASE_VECTOR', 'search_by_entity_vector', {
+			topK,
+			minScore,
+			embeddingLength: embedding.length,
+		});
+
+		log('DEBUG', searchContext, 'Starting entity vector search', {
+			topK,
+			minScore,
+			embeddingLength: embedding.length,
+		});
 
 		// Build filter conditions for joins using utility
 		const { whereClause, params } = buildVectorSearchParams(embedding, topK, minScore, {
@@ -264,7 +279,13 @@ export async function createVectors(vectors: {
 			});
 		}
 
-		console.log(`[VECTOR STORAGE] Storing ${allVectors.length} vectors in unified table`);
+		const storageContext = createContext('DATABASE_VECTOR', 'store_vectors', {
+			vectorCount: allVectors.length,
+		});
+
+		log('INFO', storageContext, 'Storing vectors in unified table', {
+			count: allVectors.length,
+		});
 
 		if (allVectors.length > 0) {
 			// Build the VALUES clause for bulk insert

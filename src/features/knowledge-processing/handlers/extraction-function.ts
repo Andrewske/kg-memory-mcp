@@ -2,7 +2,7 @@
  * Functional extraction handler - Pure function extracted from BatchExtractionJobHandler
  */
 
-import { type ProcessingJob } from '@prisma/client';
+import type { ProcessingJob } from '@prisma/client';
 import { deduplicateTriples } from '~/features/deduplication/deduplicate.js';
 import { extractKnowledgeTriples } from '~/features/knowledge-extraction/extract.js';
 import type { ProcessKnowledgeArgs } from '~/server/transport-manager.js';

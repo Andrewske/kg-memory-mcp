@@ -3,7 +3,7 @@
  */
 
 import { beforeEach, describe, expect, it, jest } from '@jest/globals';
-import { type ProcessingJob } from '@prisma/client';
+import type { ProcessingJob } from '@prisma/client';
 
 // Mock dependencies before imports
 jest.mock('~/features/deduplication/deduplicate.js');
