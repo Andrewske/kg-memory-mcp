@@ -66,6 +66,39 @@ import type { ConceptNode, KnowledgeTriple } from '@prisma/client';
 export type Triple = Omit<KnowledgeTriple, 'id' | 'created_at' | 'updated_at'>;
 export type Concept = Omit<ConceptNode, 'id' | 'created_at' | 'updated_at'>;
 
+// Reasoning step structure for AI models that support reasoning
+export interface ReasoningStep {
+	step: number;
+	type: 'analysis' | 'inference' | 'conclusion' | 'validation';
+	content: string;
+	confidence?: number;
+	metadata?: Record<string, string | number | boolean>;
+}
+
+// AI provider metadata types
+export type ProviderMetadata = OpenAIMetadata | AnthropicMetadata | GenericProviderMetadata;
+
+export interface OpenAIMetadata {
+	provider: 'openai';
+	model: string;
+	finish_reason?: 'stop' | 'length' | 'content_filter' | 'tool_calls';
+	logprobs?: unknown; // Complex OpenAI structure, use unknown for now
+	system_fingerprint?: string;
+}
+
+export interface AnthropicMetadata {
+	provider: 'anthropic';
+	model: string;
+	stop_reason?: 'end_turn' | 'max_tokens' | 'stop_sequence' | 'tool_use';
+	stop_sequence?: string;
+}
+
+export interface GenericProviderMetadata {
+	provider: string;
+	model: string;
+	[key: string]: string | number | boolean | undefined;
+}
+
 // Token tracking types - aligned with enhanced Prisma schema
 export interface TokenUsage {
 	// Usage identification
@@ -87,8 +120,8 @@ export interface TokenUsage {
 	cached_write_tokens?: number; // Cache write tokens (creating cache)
 
 	// Reasoning and context metadata
-	reasoning_steps?: any[]; // Reasoning steps for supported models
-	operation_context?: Record<string, any>; // Additional operation-specific context
+	reasoning_steps?: ReasoningStep[]; // Reasoning steps for supported models
+	operation_context?: Record<string, string | number | boolean>; // Additional operation-specific context
 
 	// Performance and cost tracking
 	duration_ms: number; // Request duration in milliseconds
@@ -114,7 +147,7 @@ export interface AIResponseWithUsage<T> {
 		cachedReadTokens?: number;
 		cachedWriteTokens?: number;
 	};
-	reasoning?: any[]; // Reasoning steps for supported models
-	providerMetadata?: Record<string, any>; // Provider-specific metadata
+	reasoning?: ReasoningStep[]; // Reasoning steps for supported models
+	providerMetadata?: ProviderMetadata; // Provider-specific metadata
 	duration_ms?: number; // Request duration
 }

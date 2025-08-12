@@ -4,17 +4,21 @@
 
 import type { JobStage, JobType, ProcessingJob } from '@prisma/client';
 import type { ProcessKnowledgeArgs } from '~/server/transport-manager.js';
+import type { Concept, Triple } from '~/shared/types/core.js';
+
+// Resource limits type
+export interface ResourceLimits {
+	maxConnections: number;
+	maxAICalls: number;
+	maxMemoryMB: number;
+}
 
 // Job metadata interface - extends for database JSON storage
 export interface JobMetadata extends ProcessKnowledgeArgs {
 	parent_job_id?: string;
 	stage?: JobStage;
-	resourceLimits?: {
-		maxConnections: number;
-		maxAICalls: number;
-		maxMemoryMB: number;
-	};
-	[key: string]: any; // Allow additional properties for JSON storage
+	resourceLimits?: ResourceLimits;
+	[key: string]: any; // Required for Prisma JSON compatibility
 }
 
 // Extraction progress tracking
@@ -32,17 +36,34 @@ export interface ExtractionMetrics {
 	conceptsFound: number;
 	processingTime: number;
 	chunksProcessed?: number;
-	[key: string]: any; // Allow additional properties for JSON storage
+	[key: string]: any; // Required for Prisma JSON compatibility
 }
+
+// Specific job result data types
+export type JobResultData = {
+	triples?: Triple[];
+	concepts?: Concept[];
+	duplicateRemovalCount?: number;
+	embeddingCount?: number;
+	vectorCount?: number;
+	triplesStored?: number;
+	conceptsStored?: number;
+	chunksProcessed?: number;
+	relationshipsStored?: number;
+	originalCount?: number;
+	vectorsGenerated?: number;
+	message?: string;
+	[key: string]: any; // For additional properties
+};
 
 // Job result interface
 export interface JobResult {
 	success: boolean;
-	data?: any;
+	data?: JobResultData;
 	error?: {
 		message: string;
 		operation: string;
-		cause?: any;
+		cause?: unknown;
 	};
 }
 

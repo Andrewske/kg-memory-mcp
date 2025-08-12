@@ -154,7 +154,10 @@ export async function batchStoreKnowledge(
 	// Validate and sanitize input data first
 	const validationResult = validateAndSanitizeInput(input);
 	if (!validationResult.success) {
-		logError(batchContext, 'Input validation failed', validationResult.error);
+		logError(batchContext, 'Input validation failed', {
+			errorType: validationResult.error.type,
+			errorMessage: validationResult.error.message,
+		});
 		return validationResult as Result<BatchStorageResult>;
 	}
 
@@ -451,11 +454,9 @@ export async function batchStoreKnowledge(
 					};
 				}
 			} catch (error) {
-				logError(
-					batchContext,
-					'Post-transaction vector generation error, initiating rollback',
-					error
-				);
+				logError(batchContext, 'Post-transaction vector generation error, initiating rollback', {
+					error: error instanceof Error ? error.message : String(error),
+				});
 
 				// CRITICAL: Rollback the main transaction data if vector generation fails
 				await rollbackMainTransaction(
@@ -485,7 +486,9 @@ export async function batchStoreKnowledge(
 		};
 	} catch (error) {
 		const duration = Date.now() - startTime;
-		logError(batchContext, `Transaction failed after ${duration}ms`, error);
+		logError(batchContext, `Transaction failed after ${duration}ms`, {
+			error: error instanceof Error ? error.message : String(error),
+		});
 
 		return {
 			success: false,

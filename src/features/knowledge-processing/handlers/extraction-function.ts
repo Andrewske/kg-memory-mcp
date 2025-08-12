@@ -189,7 +189,12 @@ export async function executeExtraction(
 			};
 		}
 
-		log('INFO', context, 'Storage completed successfully', storageResult.data);
+		log('INFO', context, 'Storage completed successfully', {
+			triplesStored: storageResult.data.triplesStored,
+			conceptsStored: storageResult.data.conceptsStored,
+			vectorsGenerated: storageResult.data.vectorsGenerated,
+			duplicatesSkipped: storageResult.data.duplicatesSkipped,
+		});
 
 		// Schedule post-processing jobs (concepts and deduplication) - only if not skipping QStash
 		if (job.parent_job_id && !skipQStashUpdates) {

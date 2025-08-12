@@ -52,8 +52,13 @@ export async function createTestJob(
 	// Merge overrides
 	const finalData = { ...defaultData, ...overrides };
 
-	// Remove fields that shouldn't be in create data  
-	const { id: _id, created_at: _created_at, updated_at: _updated_at, ...dataToCreate } = finalData as any;
+	// Remove fields that shouldn't be in create data
+	const {
+		id: _id,
+		created_at: _created_at,
+		updated_at: _updated_at,
+		...dataToCreate
+	} = finalData as any;
 
 	return await db.processingJob.create({
 		data: dataToCreate,
@@ -148,7 +153,7 @@ export const testEnv = {
 } as const;
 
 // Setup hooks for test suites
-export function setupTestSuite() {
+export function setupTestSuite(): void {
 	let dbConnected = false;
 
 	beforeAll(async () => {
@@ -194,7 +199,7 @@ export function setupTestSuite() {
 }
 
 // Mock timers for consistent testing
-export function mockTimers() {
+export function mockTimers(): void {
 	beforeEach(() => {
 		jest.useFakeTimers();
 		jest.setSystemTime(new Date('2025-01-01T00:00:00.000Z'));

@@ -16,17 +16,53 @@ import { env } from '~/shared/env.js';
 
 export type LogLevel = 'ERROR' | 'WARN' | 'INFO' | 'DEBUG' | 'TRACE';
 
+// Type-safe metadata for different logging contexts
+export type LoggableValue = string | number | boolean | null | undefined;
+export type LogMetadata = Record<string, LoggableValue | LoggableValue[]>;
+
+// Specific data types for different operations
+export type DatabaseQueryData = {
+	query?: string;
+	table?: string;
+	operation?: string;
+	params?: LoggableValue[];
+	resultCount?: number;
+	duration?: number;
+};
+
+export type ExtractionData = {
+	textLength?: number;
+	source?: string;
+	chunkCount?: number;
+	tripleCount?: number;
+	conceptCount?: number;
+};
+
+export type PipelineData = {
+	jobId?: string;
+	stage?: string;
+	progress?: number;
+	status?: string;
+};
+
+export type LogData =
+	| LogMetadata
+	| DatabaseQueryData
+	| ExtractionData
+	| PipelineData
+	| Record<string, unknown>;
+
 export interface LogContext {
 	readonly component: string;
 	readonly operation: string;
 	readonly startTime: number;
-	readonly metadata: Record<string, any>;
+	readonly metadata: LogMetadata;
 	readonly requestId?: string;
 }
 
-export interface DataFlowLog {
-	readonly input: any;
-	readonly output: any;
+export interface DataFlowLog<TInput = unknown, TOutput = unknown> {
+	readonly input: TInput;
+	readonly output: TOutput;
 	readonly transformations?: string[];
 	readonly counts?: {
 		readonly inputCount: number;
@@ -72,7 +108,7 @@ const debugTiming = env.DEBUG_TIMING;
  * Primary logging function - all logging flows through here
  * Optimized for performance with fast-path disabled logging
  */
-export function log(level: LogLevel, context: LogContext, message: string, data?: any): void {
+export function log(level: LogLevel, context: LogContext, message: string, data?: LogData): void {
 	// Fast-path check for disabled logging levels
 	const levelNum = LOG_LEVELS[level];
 	if (levelNum > currentLevel) return;
@@ -129,7 +165,7 @@ export function log(level: LogLevel, context: LogContext, message: string, data?
 export function createContext(
 	component: string,
 	operation: string,
-	metadata: Record<string, any> = {},
+	metadata: LogMetadata = {},
 	requestId?: string
 ): LogContext {
 	return {
@@ -148,7 +184,7 @@ export function createContext(
 export function createChildContext(
 	parent: LogContext,
 	operation: string,
-	metadata: Record<string, any> = {}
+	metadata: LogMetadata = {}
 ): LogContext {
 	return {
 		component: parent.component,
@@ -199,9 +235,19 @@ export function logDataFlow(
  * Log query parameters and results to debug source pattern matching issues
  * Tracks what was queried vs what was found
  */
-export function logQueryResult<T>(
+// Type for database query objects
+type DatabaseQuery = Record<string, LoggableValue | LoggableValue[]>;
+
+// Type for results with common ID fields
+type QueryResultItem = {
+	id?: string;
+	source?: string;
+	[key: string]: unknown;
+};
+
+export function logQueryResult<T extends QueryResultItem>(
 	context: LogContext,
-	query: Record<string, any>,
+	query: DatabaseQuery,
 	results: T[],
 	message: string = 'Query executed'
 ): void {
@@ -215,7 +261,7 @@ export function logQueryResult<T>(
 				sampleResults: results.slice(0, 3).map(sanitizeForLogging),
 			}),
 		...(results.length > 5 && {
-			sampleResultIds: results.slice(0, 3).map((r: any) => r.id || r.source || 'no-id'),
+			sampleResultIds: results.slice(0, 3).map(r => r.id || r.source || 'no-id'),
 		}),
 	};
 
@@ -324,7 +370,7 @@ export function withTimingSync<T>(
 /**
  * Log errors with full context and optional stack traces
  */
-export function logError(context: LogContext, error: Error | string, data?: any): void {
+export function logError(context: LogContext, error: Error | string, data?: LogData): void {
 	const errorData = {
 		...(typeof error === 'string'
 			? { message: error }
@@ -354,10 +400,10 @@ export function logPerformance(
 /**
  * Log state changes for debugging data consistency issues
  */
-export function logStateChange(
+export function logStateChange<T>(
 	context: LogContext,
-	before: any,
-	after: any,
+	before: T,
+	after: T,
 	operation: string
 ): void {
 	if (!isDebugEnabled) return;
@@ -377,7 +423,7 @@ export function logStateChange(
  * Sanitize data for secure logging - prevent information leakage
  * Enhanced version that handles knowledge graph specific data types
  */
-function sanitizeForLogging(data: any): any {
+function sanitizeForLogging(data: unknown): unknown {
 	if (typeof data === 'string') {
 		// Truncate long strings and mask sensitive content
 		const truncated = data.length > 200 ? `${data.substring(0, 200)}...` : data;
@@ -399,7 +445,7 @@ function sanitizeForLogging(data: any): any {
 	}
 
 	if (typeof data === 'object' && data !== null) {
-		const sanitized: any = {};
+		const sanitized: Record<string, unknown> = {};
 		for (const [key, value] of Object.entries(data)) {
 			// Skip sensitive keys entirely
 			if (

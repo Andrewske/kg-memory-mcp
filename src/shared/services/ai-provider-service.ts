@@ -4,7 +4,7 @@ import { generateObject, generateText } from 'ai';
 import type { z } from 'zod';
 import { env } from '~/shared/env.js';
 import type { AIConfig } from '~/shared/types/config.js';
-import type { AIResponseWithUsage } from '~/shared/types/core.js';
+import type { AIResponseWithUsage, ProviderMetadata, ReasoningStep } from '~/shared/types/core.js';
 import type { AIProvider, Result } from '~/shared/types/services.js';
 
 /**
@@ -32,7 +32,7 @@ export function createAIProvider(): AIProvider {
 				const response = await generateObject({
 					model,
 					prompt,
-					schema: schema as any, // Type assertion needed for V5 compatibility
+					schema: schema as z.ZodSchema, // Type assertion needed for V5 compatibility
 					temperature: modelConfig.temperature,
 					maxOutputTokens: modelConfig.maxTokens,
 				});
@@ -105,11 +105,40 @@ export function createAIProvider(): AIProvider {
  * Extract comprehensive token usage from AI SDK response
  * Supports advanced token types like thinking tokens and cached tokens
  */
+// AI SDK response type interface
+interface AISDKResponse {
+	usage?: {
+		promptTokens?: number;
+		completionTokens?: number;
+		totalTokens?: number;
+		prompt_tokens?: number;
+		completion_tokens?: number;
+		total_tokens?: number;
+	};
+	reasoning?: unknown[]; // Can be ReasoningStep[] or AI SDK's ReasoningPart[]
+	providerMetadata?: {
+		anthropic?: {
+			cache_read_input_tokens?: number;
+			cache_creation_input_tokens?: number;
+			thinking_tokens?: number;
+			reasoning_tokens?: number;
+			stop_reason?: string;
+			stop_sequence?: string;
+		};
+		openai?: {
+			cached_tokens?: number;
+			reasoning_tokens?: number;
+			finish_reason?: string;
+			system_fingerprint?: string;
+		};
+	};
+}
+
 function extractTokenUsage(
-	response: any,
+	response: AISDKResponse,
 	config: AIConfig,
 	duration_ms: number
-): Omit<AIResponseWithUsage<any>, 'data'> {
+): Omit<AIResponseWithUsage<unknown>, 'data'> {
 	// Extract basic usage (available in all responses)
 	const basicUsage = response.usage || {};
 
@@ -118,8 +147,8 @@ function extractTokenUsage(
 	let reasoningTokens: number | undefined;
 	let cachedReadTokens: number | undefined;
 	let cachedWriteTokens: number | undefined;
-	let reasoning: any[] | undefined;
-	let providerMetadata: Record<string, any> | undefined;
+	let reasoning: ReasoningStep[] | undefined;
+	let providerMetadata: ProviderMetadata | undefined;
 
 	// Provider-specific token extraction
 	if (config.provider === 'anthropic') {
@@ -136,8 +165,18 @@ function extractTokenUsage(
 		}
 
 		// Extract reasoning steps if available
-		reasoning = response.reasoning;
-		providerMetadata = anthropicMeta;
+		reasoning =
+			response.reasoning && Array.isArray(response.reasoning)
+				? (response.reasoning as ReasoningStep[])
+				: undefined;
+		if (anthropicMeta) {
+			providerMetadata = {
+				provider: 'anthropic',
+				model: config.model,
+				stop_reason: anthropicMeta.stop_reason,
+				stop_sequence: anthropicMeta.stop_sequence,
+			};
+		}
 	} else if (config.provider === 'openai') {
 		// OpenAI-specific advanced tokens
 		const openaiMeta = response.providerMetadata?.openai;
@@ -151,7 +190,14 @@ function extractTokenUsage(
 			}
 		}
 
-		providerMetadata = openaiMeta;
+		if (openaiMeta) {
+			providerMetadata = {
+				provider: 'openai',
+				model: config.model,
+				finish_reason: openaiMeta.finish_reason,
+				system_fingerprint: openaiMeta.system_fingerprint,
+			};
+		}
 	}
 
 	return {
@@ -171,7 +217,7 @@ function extractTokenUsage(
 	};
 }
 
-function getModel(config: AIConfig) {
+function getModel(config: AIConfig): ReturnType<typeof openai> | ReturnType<typeof anthropic> {
 	// Remove provider prefix if present (e.g. "openai/gpt-4" -> "gpt-4")
 	const modelName = config.model.includes('/') ? config.model.split('/')[1] : config.model;
 

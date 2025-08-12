@@ -3,7 +3,7 @@
  */
 
 import { afterAll, beforeEach, describe, expect, it, jest } from '@jest/globals';
-import { JobStage, JobStatus, JobType } from '@prisma/client';
+import { JobStage, JobStatus, JobType, type ProcessingJob } from '@prisma/client';
 
 // Mock external dependencies
 jest.mock('~/shared/services/ai-provider-service.js');
@@ -39,6 +39,12 @@ import { cleanupTestDatabase, setupTestSuite } from '../helpers/test-setup.js';
 
 // Setup test environment
 setupTestSuite();
+
+// Helper function to safely handle job execution with proper null checks
+function assertJobExists(job: ProcessingJob | null, errorMessage: string): ProcessingJob {
+	if (!job) throw new Error(errorMessage);
+	return job;
+}
 
 describe('Full Pipeline Integration', () => {
 	let mockAIProvider: ReturnType<typeof createMockAIProvider>;
@@ -124,7 +130,8 @@ describe('Full Pipeline Integration', () => {
 			expect(extractionJob?.stage).toBe(JobStage.EXTRACTION);
 
 			// Step 3: Execute extraction job
-			const extractionResult = await routeJob(extractionJob!);
+			if (!extractionJob) throw new Error('Extraction job not created');
+			const extractionResult = await routeJob(extractionJob);
 			expect(extractionResult.success).toBe(true);
 			expect(extractionResult.data?.triplesStored).toBeGreaterThan(0);
 
@@ -201,7 +208,7 @@ describe('Full Pipeline Integration', () => {
 				where: { parent_job_id: parentJobId, job_type: JobType.EXTRACT_KNOWLEDGE_BATCH },
 			});
 
-			const result = await routeJob(extractionJob!);
+			const result = await routeJob(assertJobExists(extractionJob, 'Extraction job not created'));
 
 			expect(result.success).toBe(true);
 			expect(result.data?.chunksProcessed).toBeGreaterThan(1);
@@ -226,7 +233,7 @@ describe('Full Pipeline Integration', () => {
 				where: { parent_job_id: parentJobId, job_type: JobType.EXTRACT_KNOWLEDGE_BATCH },
 			});
 
-			await routeJob(extractionJob!);
+			await routeJob(assertJobExists(extractionJob, 'Extraction job not created'));
 
 			// Verify concept job was scheduled
 			const conceptJob = await db.processingJob.findFirst({
@@ -359,7 +366,7 @@ describe('Full Pipeline Integration', () => {
 			const extractionJob = await db.processingJob.findFirst({
 				where: { parent_job_id: parentJobId, job_type: JobType.EXTRACT_KNOWLEDGE_BATCH },
 			});
-			await routeJob(extractionJob!);
+			await routeJob(assertJobExists(extractionJob, 'Extraction job not created'));
 
 			// Check status after extraction
 			status = await getPipelineStatus(parentJobId);
@@ -433,7 +440,7 @@ describe('Full Pipeline Integration', () => {
 				where: { parent_job_id: parentJobId, job_type: JobType.EXTRACT_KNOWLEDGE_BATCH },
 			});
 
-			const result = await routeJob(extractionJob!);
+			const result = await routeJob(assertJobExists(extractionJob, 'Extraction job not created'));
 
 			// Should succeed with partial results
 			expect(result.success).toBe(true);
@@ -473,7 +480,7 @@ describe('Full Pipeline Integration', () => {
 			});
 
 			// This should handle the duplicate gracefully or fail cleanly
-			const result = await routeJob(extractionJob!);
+			const result = await routeJob(assertJobExists(extractionJob, 'Extraction job not created'));
 
 			// Depending on implementation, this could succeed (with dedup) or fail cleanly
 			if (!result.success) {
@@ -501,7 +508,9 @@ describe('Full Pipeline Integration', () => {
 			const extractionJob = await db.processingJob.findFirst({
 				where: { parent_job_id: parentJobId, job_type: JobType.EXTRACT_KNOWLEDGE_BATCH },
 			});
-			const extractionResult = await routeJob(extractionJob!);
+			const extractionResult = await routeJob(
+				assertJobExists(extractionJob, 'Extraction job not created')
+			);
 			expect(extractionResult.success).toBe(true);
 
 			// Execute concept generation (should fail)

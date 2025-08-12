@@ -81,7 +81,9 @@ export async function trackTokenUsage<T>(
 					reasoning_tokens: tokenUsage.reasoning_tokens,
 					cached_read_tokens: tokenUsage.cached_read_tokens,
 					cached_write_tokens: tokenUsage.cached_write_tokens,
-					reasoning_steps: tokenUsage.reasoning_steps ?? undefined,
+					reasoning_steps: tokenUsage.reasoning_steps
+						? JSON.parse(JSON.stringify(tokenUsage.reasoning_steps))
+						: null,
 					operation_context: tokenUsage.operation_context,
 					duration_ms: tokenUsage.duration_ms,
 					estimated_cost: tokenUsage.estimated_cost ?? null,

@@ -7,10 +7,10 @@ import { Decimal } from '@prisma/client/runtime/library';
 import type { ExtractionMetrics, JobMetadata } from '~/features/knowledge-processing/job-types.js';
 import type { ProcessKnowledgeArgs } from '~/server/transport-manager.js';
 import type { Concept, Triple } from '~/shared/types/core.js';
-import type { Result } from '~/shared/types/services.js';
+import type { AIProvider, EmbeddingService, Result } from '~/shared/types/services.js';
 
 // Mock AI Provider Service
-export function createMockAIProvider() {
+export function createMockAIProvider(): jest.Mocked<AIProvider> {
 	return {
 		generateText: jest.fn().mockResolvedValue({
 			success: true,
@@ -43,7 +43,7 @@ export function createMockAIProvider() {
 }
 
 // Mock Embedding Service
-export function createMockEmbeddingService() {
+export function createMockEmbeddingService(): jest.Mocked<EmbeddingService> {
 	return {
 		embed: jest.fn().mockResolvedValue({
 			success: true,

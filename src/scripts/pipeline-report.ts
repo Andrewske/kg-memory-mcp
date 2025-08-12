@@ -5,13 +5,21 @@
 
 import fs from 'node:fs/promises';
 import path from 'node:path';
-import { JobStatus, JobType, type ProcessingJob, VectorType } from '@prisma/client';
+import {
+	type ConceptNode,
+	JobStatus,
+	JobType,
+	type KnowledgeTriple,
+	type ProcessingJob,
+	VectorType,
+} from '@prisma/client';
 import { z } from 'zod';
 import { executeConcepts } from '~/features/knowledge-processing/handlers/concept-function.js';
 import { executeDeduplication } from '~/features/knowledge-processing/handlers/deduplication-function.js';
 import { executeExtraction } from '~/features/knowledge-processing/handlers/extraction-function.js';
 import { db } from '~/shared/database/client.js';
 import { env } from '~/shared/env.js';
+import type { Concept, TokenUsage, Triple } from '~/shared/types/core.js';
 import { redirectConsoleToFiles } from '~/shared/utils/console-redirect.js';
 import {
 	createContext,
@@ -55,17 +63,33 @@ function createCleanupTracker(): CleanupTracker {
 	};
 }
 
+// Define types for job execution results
+interface JobExecutionResult {
+	success: boolean;
+	data?: {
+		triples?: Triple[];
+		concepts?: Concept[];
+		duplicateRemovalCount?: number;
+		[key: string]: unknown;
+	};
+	error?: {
+		message: string;
+		operation: string;
+		cause?: unknown;
+	};
+}
+
 interface StageResult {
 	duration: number;
-	result: any;
+	result: JobExecutionResult;
 }
 
 interface ExtractionData extends StageResult {
-	triples: any[];
+	triples: Triple[];
 }
 
 interface ConceptData extends StageResult {
-	concepts: any[];
+	concepts: Concept[];
 }
 
 interface DeduplicationData extends StageResult {}
@@ -154,14 +178,22 @@ async function runPipelineReport(config: PipelineConfig) {
 
 		const createdTriples = await db.knowledgeTriple.findMany(tripleQuery);
 
-		logQueryResult(extractionContext, tripleQuery, createdTriples, 'Triple query completed');
+		logQueryResult(
+			extractionContext,
+			{
+				source_pattern: `${config.source}*`,
+				operation: 'findMany_triples',
+			},
+			createdTriples,
+			'Triple query completed'
+		);
 
 		// Log source transformations to detect mismatches
 		if (createdTriples.length > 0) {
 			const uniqueSources = [...new Set(createdTriples.map(t => t.source))];
 			uniqueSources.forEach(source => {
-				if (source !== config.source) {
-					logSourceTransformation(extractionContext, config.source!, source, 'chunk_suffix_added');
+				if (source !== config.source && config.source) {
+					logSourceTransformation(extractionContext, config.source, source, 'chunk_suffix_added');
 				}
 			});
 		}
@@ -208,13 +240,21 @@ async function runPipelineReport(config: PipelineConfig) {
 
 		const createdConcepts = await db.conceptNode.findMany(conceptQuery);
 
-		logQueryResult(conceptContext, conceptQuery, createdConcepts, 'Concept query completed');
+		logQueryResult(
+			conceptContext,
+			{
+				source_pattern: `${config.source}*`,
+				operation: 'findMany_concepts',
+			},
+			createdConcepts,
+			'Concept query completed'
+		);
 
 		createdConcepts.forEach(c => tracker.conceptIds.add(c.id));
 
 		// Stage 3: Optional deduplication
 		let dedupDuration = 0;
-		let dedupResult: any = { success: true };
+		let dedupResult: JobExecutionResult = { success: true };
 
 		if (config.enableDedup) {
 			const dedupContext = createContext('PIPELINE_REPORT', 'deduplication_stage', {
@@ -294,7 +334,16 @@ async function runPipelineReport(config: PipelineConfig) {
 
 		const tokenUsage = await db.tokenUsage.findMany(tokenUsageQuery);
 
-		logQueryResult(analysisContext, tokenUsageQuery, tokenUsage, 'Token usage query completed');
+		logQueryResult(
+			analysisContext,
+			{
+				source_pattern: `${config.source}*`,
+				operation: 'findMany_tokenUsage',
+				afterTime: new Date(startTime).toISOString(),
+			},
+			tokenUsage,
+			'Token usage query completed'
+		);
 
 		tokenUsage.forEach(t => tracker.tokenUsageIds.add(t.id));
 
@@ -328,7 +377,17 @@ async function runPipelineReport(config: PipelineConfig) {
 
 		const vectors = await db.vectorEmbedding.findMany(vectorQuery);
 
-		logQueryResult(analysisContext, vectorQuery, vectors, 'Vector query completed');
+		logQueryResult(
+			analysisContext,
+			{
+				vector_types: 'ENTITY,RELATIONSHIP,SEMANTIC,CONCEPT',
+				operation: 'findMany_vectorEmbeddings',
+				tripleCount: createdTriples.length,
+				conceptCount: createdConcepts.length,
+			},
+			vectors,
+			'Vector query completed'
+		);
 
 		// Log data flow to track relationship between triples/concepts and vectors
 		logDataFlow(
@@ -349,7 +408,23 @@ async function runPipelineReport(config: PipelineConfig) {
 			extraction: result.extraction,
 			concepts: result.concepts,
 			deduplication: result.deduplication,
-			tokenUsage,
+			tokenUsage: tokenUsage.map(usage => ({
+				...usage,
+				thinking_tokens: usage.thinking_tokens ?? undefined,
+				reasoning_tokens: usage.reasoning_tokens ?? undefined,
+				cached_read_tokens: usage.cached_read_tokens ?? undefined,
+				cached_write_tokens: usage.cached_write_tokens ?? undefined,
+				reasoning_steps:
+					usage.reasoning_steps && Array.isArray(usage.reasoning_steps)
+						? (usage.reasoning_steps as any[])
+						: undefined,
+				operation_context:
+					usage.operation_context && typeof usage.operation_context === 'object'
+						? (usage.operation_context as Record<string, string | number | boolean>)
+						: undefined,
+				estimated_cost: usage.estimated_cost ? Number(usage.estimated_cost) : undefined,
+				timestamp: usage.timestamp.toISOString(),
+			})),
 			vectors,
 			totalDuration: Date.now() - startTime,
 			logDir,
@@ -363,13 +438,11 @@ async function runPipelineReport(config: PipelineConfig) {
 		// Cleanup created records
 		const cleanupContext = createContext('PIPELINE_REPORT', 'cleanup', {
 			source: config.source,
-			recordCounts: {
-				processingJobs: tracker.processingJobIds.size,
-				triples: tracker.tripleIds.size,
-				concepts: tracker.conceptIds.size,
-				vectors: tracker.vectorIds.size,
-				tokenUsage: tracker.tokenUsageIds.size,
-			},
+			processingJobsCount: tracker.processingJobIds.size,
+			triplesCount: tracker.tripleIds.size,
+			conceptsCount: tracker.conceptIds.size,
+			vectorsCount: tracker.vectorIds.size,
+			tokenUsageCount: tracker.tokenUsageIds.size,
 		});
 
 		await withTiming(
@@ -438,13 +511,11 @@ async function createMockJob(
  */
 async function cleanup(tracker: CleanupTracker): Promise<void> {
 	const cleanupContext = createContext('PIPELINE_REPORT', 'cleanup_database', {
-		recordCounts: {
-			processingJobs: tracker.processingJobIds.size,
-			triples: tracker.tripleIds.size,
-			concepts: tracker.conceptIds.size,
-			vectors: tracker.vectorIds.size,
-			tokenUsage: tracker.tokenUsageIds.size,
-		},
+		processingJobsCount: tracker.processingJobIds.size,
+		triplesCount: tracker.tripleIds.size,
+		conceptsCount: tracker.conceptIds.size,
+		vectorsCount: tracker.vectorIds.size,
+		tokenUsageCount: tracker.tokenUsageIds.size,
 	});
 
 	log('INFO', cleanupContext, 'Starting cleanup', {
@@ -535,8 +606,8 @@ async function generateReport(data: {
 	extraction: ExtractionData;
 	concepts: ConceptData;
 	deduplication?: DeduplicationData;
-	tokenUsage: any[];
-	vectors: any[];
+	tokenUsage: TokenUsage[];
+	vectors: Array<{ id: string; text: string; vector_type: VectorType; vector_id: string }>;
 	totalDuration: number;
 	logDir: string;
 }): Promise<string> {
@@ -662,8 +733,16 @@ ${logContent.slice(-5000)} // Last 5000 characters to avoid huge reports
 }
 
 // Helper functions for report generation
-function calculateTokenStats(tokenUsage: any[]) {
-	return tokenUsage.reduce(
+function calculateTokenStats(tokenUsage: TokenUsage[]): {
+	byType: Record<string, { total: number; cost: number }>;
+	byLevel: Record<string, { total: number; cost: number }>;
+	overall: { total: number; cost: number };
+	totalInput: number;
+	totalOutput: number;
+	total: number;
+	totalCost: number;
+} {
+	const stats = tokenUsage.reduce(
 		(acc, usage) => ({
 			totalInput: acc.totalInput + usage.input_tokens,
 			totalOutput: acc.totalOutput + usage.output_tokens,
@@ -672,6 +751,36 @@ function calculateTokenStats(tokenUsage: any[]) {
 		}),
 		{ totalInput: 0, totalOutput: 0, total: 0, totalCost: 0 }
 	);
+
+	// Group by type and operation
+	const byType: Record<string, { total: number; cost: number }> = {};
+	const byLevel: Record<string, { total: number; cost: number }> = {};
+
+	for (const usage of tokenUsage) {
+		// By operation type
+		if (!byType[usage.operation_type]) {
+			byType[usage.operation_type] = { total: 0, cost: 0 };
+		}
+		byType[usage.operation_type].total += usage.total_tokens;
+		byType[usage.operation_type].cost += Number(usage.estimated_cost) || 0;
+
+		// By provider
+		if (!byLevel[usage.provider]) {
+			byLevel[usage.provider] = { total: 0, cost: 0 };
+		}
+		byLevel[usage.provider].total += usage.total_tokens;
+		byLevel[usage.provider].cost += Number(usage.estimated_cost) || 0;
+	}
+
+	return {
+		byType,
+		byLevel,
+		overall: { total: stats.total, cost: stats.totalCost },
+		totalInput: stats.totalInput,
+		totalOutput: stats.totalOutput,
+		total: stats.total,
+		totalCost: stats.totalCost,
+	};
 }
 
 function groupTriplesByType(triples: Array<{ type?: string; triple_type?: string }>) {
@@ -750,11 +859,9 @@ async function main() {
 	const mainContext = createContext('PIPELINE_REPORT', 'main', {
 		source: config.source,
 		args: args.length,
-		flags: {
-			model: rawConfig.model,
-			extractionMethod: rawConfig.extractionMethod,
-			enableDedup: rawConfig.enableDedup,
-		},
+		modelFlag: rawConfig.model || 'default',
+		extractionMethodFlag: rawConfig.extractionMethod || 'default',
+		enableDedupFlag: rawConfig.enableDedup || false,
 	});
 
 	log('INFO', mainContext, 'Starting Pipeline Report Test', { config });

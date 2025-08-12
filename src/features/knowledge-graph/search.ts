@@ -27,16 +27,18 @@ function generateTemporalMetadata(triples: Triple[]): SearchResult['temporal'] {
 		return undefined;
 	}
 
-	const dates = triplesWithDates.map(t => new Date(t.source_date as string));
+	const dates = triplesWithDates.map(t => new Date(t.source_date ?? new Date().toISOString()));
 	const earliest = new Date(Math.min(...dates.map(d => d.getTime())));
 	const latest = new Date(Math.max(...dates.map(d => d.getTime())));
 
 	// Simple temporal clustering by month
 	const clusters = new Map<string, number>();
 	triplesWithDates.forEach(triple => {
-		const date = new Date(triple.source_date!);
-		const monthKey = `${date.getFullYear()}-${(date.getMonth() + 1).toString().padStart(2, '0')}`;
-		clusters.set(monthKey, (clusters.get(monthKey) || 0) + 1);
+		if (triple.source_date) {
+			const date = new Date(triple.source_date);
+			const monthKey = `${date.getFullYear()}-${(date.getMonth() + 1).toString().padStart(2, '0')}`;
+			clusters.set(monthKey, (clusters.get(monthKey) || 0) + 1);
+		}
 	});
 
 	return {

@@ -91,11 +91,10 @@ export async function generateEmbeddingMap(
 			});
 
 			if (!embeddingResult.success) {
-				logError(
-					context,
-					`Failed to generate embeddings for batch ${batchCalls}`,
-					embeddingResult.error
-				);
+				logError(context, `Failed to generate embeddings for batch ${batchCalls}`, {
+					errorType: embeddingResult.error.type,
+					errorMessage: embeddingResult.error.message,
+				});
 				return {
 					success: false,
 					error: {

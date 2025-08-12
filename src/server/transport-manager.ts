@@ -22,10 +22,39 @@ export type ProcessKnowledgeArgs = {
 	source_date: string;
 };
 
+export type GetPipelineStatusArgs = {
+	parentJobId: string;
+};
+
+export type SearchKnowledgeGraphArgs = {
+	query: string;
+	limit?: number;
+	threshold?: number;
+	searchTypes?: ('entity' | 'relationship' | 'semantic' | 'concept')[];
+	weights?: {
+		entity?: number;
+		relationship?: number;
+		semantic?: number;
+		concept?: number;
+	};
+};
+
+export type SearchConceptsArgs = {
+	query: string;
+	abstraction?: string;
+};
+
+export type ToolArgs =
+	| ProcessKnowledgeArgs
+	| GetPipelineStatusArgs
+	| SearchKnowledgeGraphArgs
+	| SearchConceptsArgs
+	| Record<string, never>; // For tools with no arguments
+
 /**
  * Get pipeline status and progress
  */
-export async function getPipelineStatusTool(args: { parentJobId: string }): Promise<ToolResult> {
+export async function getPipelineStatusTool(args: GetPipelineStatusArgs): Promise<ToolResult> {
 	try {
 		const status = await getPipelineStatus(args.parentJobId);
 
@@ -108,18 +137,9 @@ export async function processKnowledge(args: ProcessKnowledgeArgs): Promise<Tool
 /**
  * Search the knowledge graph using fusion search
  */
-export async function searchKnowledgeGraph(args: {
-	query: string;
-	limit?: number;
-	threshold?: number;
-	searchTypes?: ('entity' | 'relationship' | 'semantic' | 'concept')[];
-	weights?: {
-		entity?: number;
-		relationship?: number;
-		semantic?: number;
-		concept?: number;
-	};
-}): Promise<ToolResult<FusionSearchResult[]>> {
+export async function searchKnowledgeGraph(
+	args: SearchKnowledgeGraphArgs
+): Promise<ToolResult<FusionSearchResult[]>> {
 	try {
 		const { query, limit = 10, threshold = 0.0, searchTypes, weights } = args;
 
@@ -161,10 +181,7 @@ export async function searchKnowledgeGraph(args: {
 /**
  * Search for concepts in the knowledge graph
  */
-export async function searchConceptsTool(args: {
-	query: string;
-	abstraction?: string;
-}): Promise<ToolResult<Concept[]>> {
+export async function searchConceptsTool(args: SearchConceptsArgs): Promise<ToolResult<Concept[]>> {
 	try {
 		const { query, abstraction } = args;
 
@@ -230,7 +247,10 @@ export async function getKnowledgeGraphStats(): Promise<ToolResult<GraphStats>> 
 /**
  * Tool dispatcher that maps tool names to functions
  */
-export async function executeToolFunction(toolName: string, args: any): Promise<ToolResult<any>> {
+export async function executeToolFunction(
+	toolName: string,
+	args: ToolArgs
+): Promise<ToolResult<unknown>> {
 	const context = createContext('TOOL_DISPATCHER', 'execute_tool', { toolName });
 	const startTime = Date.now();
 	log('DEBUG', context, 'Executing tool', { toolName });
@@ -238,16 +258,16 @@ export async function executeToolFunction(toolName: string, args: any): Promise<
 	let result: ToolResult;
 	switch (toolName) {
 		case 'process_knowledge':
-			result = await processKnowledge(args);
+			result = await processKnowledge(args as ProcessKnowledgeArgs);
 			break;
 		case 'get_pipeline_status':
-			result = await getPipelineStatusTool(args);
+			result = await getPipelineStatusTool(args as GetPipelineStatusArgs);
 			break;
 		case 'search_knowledge_graph':
-			result = await searchKnowledgeGraph(args);
+			result = await searchKnowledgeGraph(args as SearchKnowledgeGraphArgs);
 			break;
 		case 'search_concepts':
-			result = await searchConceptsTool(args);
+			result = await searchConceptsTool(args as SearchConceptsArgs);
 			break;
 		case 'get_knowledge_graph_stats':
 			result = await getKnowledgeGraphStats();

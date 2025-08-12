@@ -14,16 +14,8 @@ import {
 import { createVectors } from '~/shared/database/vector-operations.js';
 import type { GraphStats } from '~/shared/types/api.js';
 import type { Concept, Triple } from '~/shared/types/core.js';
+import type { EntityEnumerationOptions } from '~/shared/types/search.js';
 import type { Result } from '~/shared/types/services.js';
-
-export interface EntityEnumerationOptions {
-	role?: 'subject' | 'object' | 'both';
-	min_occurrence?: number;
-	sources?: string[];
-	types?: Array<TripleType>;
-	limit?: number;
-	sort_by?: 'frequency' | 'alphabetical' | 'recent';
-}
 
 export interface EntityEnumerationResult {
 	entity: string;

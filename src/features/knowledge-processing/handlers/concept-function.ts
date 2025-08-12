@@ -95,7 +95,8 @@ export async function executeConcepts(
 		logQueryResult(
 			context,
 			{
-				query: { source: { startsWith: metadata.source }, source_type: metadata.source_type },
+				source_pattern: `${metadata.source}*`,
+				source_type: metadata.source_type,
 			},
 			allTriples,
 			`Found triples matching source pattern: ${metadata.source}*`
@@ -191,8 +192,8 @@ export async function executeConcepts(
 		return {
 			success: true,
 			data: {
-				conceptsStored: storageResult.data.conceptsStored,
-				relationshipsStored: storageResult.data.relationshipsStored,
+				conceptsStored: storageResult.data?.conceptsStored || 0,
+				relationshipsStored: storageResult.data?.relationshipsStored || 0,
 				processingTime: Date.now() - job.createdAt.getTime(),
 			},
 		};

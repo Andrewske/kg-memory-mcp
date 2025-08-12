@@ -275,7 +275,10 @@ async function extractSinglePass(data: ProcessKnowledgeArgs) {
 			source_type: data.source_type,
 			source_date: new Date(data.source_date),
 			extracted_at: new Date(),
-			confidence: rel.confidence ? new Decimal(rel.confidence) : null,
+			confidence:
+				rel.confidence !== undefined && rel.confidence !== null
+					? new Decimal(rel.confidence)
+					: null,
 		})) as Triple[];
 
 		return {
@@ -355,7 +358,12 @@ async function extractFourStage(data: ProcessKnowledgeArgs) {
 									source_type: data.source_type,
 									source_date: new Date(data.source_date),
 									extracted_at: new Date(),
-									confidence: triple.confidence ? new Decimal(triple.confidence) : null,
+									confidence:
+										triple.confidence !== undefined &&
+										triple.confidence !== null &&
+										typeof triple.confidence === 'number'
+											? new Decimal(triple.confidence)
+											: null,
 								}));
 								allTriples.push(...mappedTriples);
 							}
@@ -458,7 +466,10 @@ export async function extractByType(data: ProcessKnowledgeArgs, type: TripleType
 			source_date: new Date(data.source_date),
 			extracted_at: new Date(),
 
-			confidence: triple.confidence ? new Decimal(triple.confidence) : null,
+			confidence:
+				triple.confidence !== undefined && triple.confidence !== null
+					? new Decimal(triple.confidence)
+					: null,
 		}));
 
 		return {

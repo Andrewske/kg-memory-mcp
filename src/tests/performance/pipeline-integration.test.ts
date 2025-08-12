@@ -92,7 +92,7 @@ describe('Knowledge Processing Pipeline Integration', () => {
 
 		expect(result.success).toBe(true);
 		expect(result.data).toBeTruthy();
-		expect(result.data.triplesStored).toBeGreaterThan(0);
+		expect(result.data?.triplesStored).toBeGreaterThan(0);
 
 		// Check job was marked as completed
 		const updatedJob = await db.processingJob.findUnique({

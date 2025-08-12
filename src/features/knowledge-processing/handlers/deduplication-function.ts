@@ -109,7 +109,8 @@ export async function executeDeduplication(
 		logQueryResult(
 			context,
 			{
-				query: { source: { startsWith: metadata.source }, source_type: metadata.source_type },
+				source_pattern: `${metadata.source}*`,
+				source_type: metadata.source_type,
 			},
 			triples,
 			'Found triples to deduplicate'
@@ -184,8 +185,8 @@ export async function executeDeduplication(
 		// Remove duplicates from database if any found
 		if (duplicateCount > 0) {
 			log('DEBUG', context, 'Removing duplicates from database', { duplicateCount });
-			const uniqueIds = new Set(uniqueTriples.map((t: { id: string }) => t.id));
-			const duplicateIds = triples.filter((t: { id: string }) => !uniqueIds.has(t.id)).map((t: { id: string }) => t.id);
+			const uniqueIds = new Set(uniqueTriples.map((t: any) => t.id).filter(Boolean));
+			const duplicateIds = triples.filter(t => !uniqueIds.has(t.id)).map(t => t.id);
 
 			// Use transaction to remove duplicates and their associated vectors
 			await db.$transaction([

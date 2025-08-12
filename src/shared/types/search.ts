@@ -65,7 +65,7 @@ export interface EntityEnumerationOptions {
 	role?: 'subject' | 'object' | 'both';
 	min_occurrence?: number;
 	sources?: string[];
-	types?: Array<'entity-entity' | 'entity-event' | 'event-event' | 'emotional-context'>;
+	types?: Array<TripleType>;
 	limit?: number;
 	sort_by?: 'frequency' | 'alphabetical' | 'recent';
 	threshold?: number;
