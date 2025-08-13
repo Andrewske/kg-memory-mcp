@@ -188,7 +188,7 @@ export function createTestArgs(
 	};
 }
 
-export function createTestJob(overrides: Partial<ProcessingJob> = {}): Partial<ProcessingJob> {
+export function createTestJob(overrides: Partial<ProcessingJob> = {}): ProcessingJob {
 	return {
 		id: 'test-job-id',
 		job_type: 'EXTRACT_KNOWLEDGE_BATCH' as JobType,
@@ -200,9 +200,16 @@ export function createTestJob(overrides: Partial<ProcessingJob> = {}): Partial<P
 		},
 		status: 'QUEUED' as JobStatus,
 		progress: 0,
+		result: null,
+		errorMessage: null,
 		createdAt: new Date('2025-01-01T00:00:00.000Z'),
+		startedAt: null,
+		completedAt: null,
 		parent_job_id: null,
 		stage: null,
+		retryCount: 0,
+		maxRetries: 3,
+		metrics: {},
 		...overrides,
 	};
 }
