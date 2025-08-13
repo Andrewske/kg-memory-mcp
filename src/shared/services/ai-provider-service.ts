@@ -1,5 +1,6 @@
 import { anthropic } from '@ai-sdk/anthropic';
 import { openai } from '@ai-sdk/openai';
+import type { TripleType } from '@prisma/client';
 import { generateObject, generateText } from 'ai';
 import type { z } from 'zod';
 import { env } from '~/shared/env.js';
@@ -22,7 +23,14 @@ export function createAIProvider(): AIProvider {
 		async generateObject<T>(
 			prompt: string,
 			schema: z.ZodType<T>,
-			overrideConfig?: Partial<AIConfig>
+			overrideConfig?: Partial<AIConfig>,
+			context?: {
+				operation_type?: string;
+				source?: string;
+				source_type?: string;
+				triple_type?: TripleType;
+				source_date?: string;
+			}
 		): Promise<Result<AIResponseWithUsage<T>>> {
 			try {
 				const modelConfig = { ...defaultConfig, ...overrideConfig };
@@ -62,7 +70,11 @@ export function createAIProvider(): AIProvider {
 
 		async generateText(
 			prompt: string,
-			overrideConfig?: Partial<AIConfig>
+			overrideConfig?: Partial<AIConfig>,
+			context?: {
+				operation_type?: string;
+				thread_id?: string;
+			}
 		): Promise<Result<AIResponseWithUsage<string>>> {
 			try {
 				const modelConfig = { ...defaultConfig, ...overrideConfig };
@@ -108,9 +120,14 @@ export function createAIProvider(): AIProvider {
 // AI SDK response type interface
 interface AISDKResponse {
 	usage?: {
+		// AI SDK v5 property names
+		inputTokens?: number;
+		outputTokens?: number;
+		totalTokens?: number;
+		// AI SDK v4 fallback property names
 		promptTokens?: number;
 		completionTokens?: number;
-		totalTokens?: number;
+		// Provider-specific fallback property names
 		prompt_tokens?: number;
 		completion_tokens?: number;
 		total_tokens?: number;
@@ -202,8 +219,11 @@ function extractTokenUsage(
 
 	return {
 		usage: {
-			promptTokens: basicUsage.promptTokens || basicUsage.prompt_tokens || 0,
-			completionTokens: basicUsage.completionTokens || basicUsage.completion_tokens || 0,
+			// AI SDK v5 uses inputTokens/outputTokens, fallback to v4 names, then provider-specific
+			promptTokens:
+				basicUsage.inputTokens || basicUsage.promptTokens || basicUsage.prompt_tokens || 0,
+			completionTokens:
+				basicUsage.outputTokens || basicUsage.completionTokens || basicUsage.completion_tokens || 0,
 			totalTokens: basicUsage.totalTokens || basicUsage.total_tokens || 0,
 			// Advanced token types
 			thinkingTokens,

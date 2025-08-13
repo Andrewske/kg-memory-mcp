@@ -101,14 +101,18 @@ Advanced fusion search combining multiple strategies:
 
 - **Runtime**: Node.js with ES modules
 - **Language**: TypeScript (ES2022) with strict typing
-- **Database**: PostgreSQL with Prisma ORM
+- **Database**: PostgreSQL with Prisma ORM and pgvector
 - **Vector Search**: pgvector extension
 - **AI Providers**: OpenAI & Anthropic via AI SDK
 - **HTTP Server**: Express.js with security middleware
+- **Job Queue**: QStash for asynchronous processing
 - **Testing**: Jest with TypeScript support
+- **Code Quality**: Biome for linting and formatting
 - **Package Manager**: pnpm
 
-### Functional Architecture
+### Architecture Overview
+
+#### Pure Functional Architecture
 
 The codebase follows strict functional programming principles:
 
@@ -116,6 +120,33 @@ The codebase follows strict functional programming principles:
 - **No Hidden State**: No factories, closures, or implicit mutations
 - **Result Types**: Consistent error handling without exceptions
 - **Explicit Dependencies**: All functions receive required services as parameters
+
+#### 3-Stage Processing Pipeline
+
+Knowledge processing uses a coordinated pipeline architecture:
+
+1. **EXTRACTION Stage**: AI-powered triple extraction from text
+2. **CONCEPTS Stage**: Abstract concept generation and hierarchy building  
+3. **DEDUPLICATION Stage**: Semantic duplicate detection and removal
+
+Each stage runs as independent QStash jobs with progress tracking and error recovery.
+
+#### Unified Vector Storage
+
+All embeddings are stored in a single `vector_embeddings` table with type discrimination:
+
+- **ENTITY**: Entity name embeddings for entity search
+- **RELATIONSHIP**: Predicate/relationship embeddings
+- **SEMANTIC**: Full triple content embeddings for semantic search
+- **CONCEPT**: Abstract concept embeddings
+
+#### Dual Transport Design
+
+The server supports two independent transport modes:
+
+- **STDIO Transport**: Traditional MCP over stdin/stdout for Claude Desktop
+- **HTTP Transport**: RESTful API with Server-Sent Events for web applications
+- **Dual Mode**: Both transports running simultaneously
 
 ## Getting Started
 
@@ -155,28 +186,62 @@ The codebase follows strict functional programming principles:
 Create a `.env` file with the following variables:
 
 ```env
-# Database
+# Database (Required)
 DATABASE_URL="postgresql://user:password@localhost:5432/knowledge_graph"
 
-# AI Provider (choose one)
+# AI Provider Keys (Required - choose one or both)
 OPENAI_API_KEY="sk-..."
-# OR
 ANTHROPIC_API_KEY="sk-ant-..."
 
 # Transport Configuration
-ENABLE_STDIO_TRANSPORT=true
-ENABLE_HTTP_TRANSPORT=false
+ENABLE_STDIO_TRANSPORT=true     # Enable MCP over STDIO
+ENABLE_HTTP_TRANSPORT=false     # Enable HTTP REST API
+NODE_ENV=development            # development | production
 
-# Optional: HTTP Configuration
-HTTP_PORT=3000
-HTTP_BASE_PATH=/api
-HTTP_CORS_ORIGINS=*
+# HTTP Transport Configuration
+HTTP_PORT=3000                  # HTTP server port
+HTTP_BASE_PATH=/api             # API base path
+HTTP_CORS_ORIGINS=*             # CORS origins
+HTTP_RATE_LIMIT_WINDOW=15       # Rate limit window (minutes)
+HTTP_RATE_LIMIT_MAX=100         # Max requests per window
+HTTP_ENABLE_SSE=true            # Enable Server-Sent Events
 
-# Optional: Advanced Settings
-AI_PROVIDER=openai              # or 'anthropic'
-AI_MODEL=gpt-4o-mini           # or 'claude-3-haiku'
-EMBEDDING_MODEL=text-embedding-3-small
-EXTRACTION_METHOD=four-stage    # or 'single-pass'
+# Job Queue (Optional - for async processing)
+QSTASH_TOKEN="qstash_..."       # QStash token for job processing
+QSTASH_URL="https://..."        # QStash callback URL
+
+# AI Configuration
+AI_PROVIDER=openai              # openai | anthropic
+AI_MODEL=gpt-4o-mini           # AI model for extraction
+EMBEDDING_MODEL=text-embedding-3-small  # Embedding model
+EXTRACTION_METHOD=four-stage    # four-stage | single-pass
+
+# Knowledge Graph Configuration
+KG_EMBEDDING_MODEL=text-embedding-3-small
+KG_EMBEDDING_DIMENSIONS=1536
+KG_EXTRACTION_MODEL=gpt-4o-mini
+KG_AI_PROVIDER=openai
+
+# Logging & Debugging
+LOG_LEVEL=INFO                  # ERROR | WARN | INFO | DEBUG | TRACE
+LOG_TO_STDERR=false             # Write logs to stderr
+LOG_STACK_TRACE=false           # Include stack traces
+DIAGNOSTIC_MODE=false           # Log full request/response payloads
+
+# Granular Debug Configuration (Development)
+DEBUG_EXTRACTION=false          # Debug extraction operations
+DEBUG_DATABASE=false            # Debug database operations
+DEBUG_EMBEDDINGS=false          # Debug embedding generation
+DEBUG_CONCEPTS=false            # Debug concept operations
+DEBUG_DEDUPLICATION=false       # Debug deduplication
+DEBUG_PIPELINE=false            # Debug pipeline coordination
+
+# Performance Tuning
+BATCH_SIZE=100                  # Embedding batch size
+SEARCH_TOP_K=10                 # Initial search candidates
+MIN_SCORE=0.7                   # Similarity threshold
+SEMANTIC_THRESHOLD=0.85         # Deduplication threshold
+DB_MAX_CONNECTIONS=20           # Database connection pool
 ```
 
 ### Database Setup
@@ -205,21 +270,16 @@ EXTRACTION_METHOD=four-stage    # or 'single-pass'
 
 4. **Create vector indexes** (optional but recommended):
    ```sql
-   -- Entity vectors
-   CREATE INDEX idx_entity_vectors_embedding 
-   ON entity_vectors USING ivfflat (embedding vector_cosine_ops);
+   -- Unified vector embeddings index
+   CREATE INDEX idx_vector_embeddings_embedding 
+   ON vector_embeddings USING ivfflat (embedding vector_cosine_ops);
    
-   -- Relationship vectors
-   CREATE INDEX idx_relationship_vectors_embedding 
-   ON relationship_vectors USING ivfflat (embedding vector_cosine_ops);
+   -- Additional indexes for efficient filtering
+   CREATE INDEX idx_vector_embeddings_type_embedding 
+   ON vector_embeddings USING btree (vector_type);
    
-   -- Semantic vectors
-   CREATE INDEX idx_semantic_vectors_embedding 
-   ON semantic_vectors USING ivfflat (embedding vector_cosine_ops);
-   
-   -- Concept vectors
-   CREATE INDEX idx_concept_vectors_embedding 
-   ON concept_vectors USING ivfflat (embedding vector_cosine_ops);
+   CREATE INDEX idx_vector_embeddings_entity_name 
+   ON vector_embeddings USING btree (entity_name);
    ```
 
 ## Usage
@@ -287,21 +347,22 @@ pnpm run start:dual
 
 ### MCP Tools
 
-The server exposes two primary tools through the MCP protocol:
+The server exposes 5 primary tools through the MCP protocol:
 
 #### 1. `process_knowledge`
 
-Extract and store knowledge from text:
+Extract and store knowledge from text using the 3-stage pipeline:
 
 ```typescript
 {
   text: string;              // Text to process
   source: string;            // Source identifier
-  source_type?: string;      // Type: "thread", "file", "manual", "api"
-  source_date?: string;      // ISO date string
-  include_concepts?: boolean; // Generate concepts (async)
+  source_type: string;       // Type: "thread", "file", "manual", "api"
+  source_date: string;       // ISO date string
 }
 ```
+
+**Returns**: Job tracking information for the 3-stage pipeline (EXTRACTION → CONCEPTS → DEDUPLICATION)
 
 **Example**:
 ```json
@@ -309,25 +370,44 @@ Extract and store knowledge from text:
   "text": "Alice works at TechCorp as a senior engineer. She led the API redesign project in 2024.",
   "source": "meeting_notes_001",
   "source_type": "manual",
-  "include_concepts": true
+  "source_date": "2024-01-15T10:00:00Z"
 }
 ```
 
-#### 2. `search_knowledge_graph`
+#### 2. `get_pipeline_status`
 
-Search using fusion ranking:
+Get the status and progress of a knowledge processing pipeline:
+
+```typescript
+{
+  parentJobId: string;       // Parent job ID from process_knowledge
+}
+```
+
+**Returns**: Real-time progress tracking for all pipeline stages
+
+**Example**:
+```json
+{
+  "parentJobId": "abc123-def456-ghi789"
+}
+```
+
+#### 3. `search_knowledge_graph`
+
+Search using fusion ranking (combines entity, relationship, semantic, and concept search):
 
 ```typescript
 {
   query: string;             // Search query
   limit?: number;            // Max results (default: 10)
-  threshold?: number;        // Similarity threshold (0-1)
-  searchTypes?: string[];    // Enable specific search types
+  threshold?: number;        // Similarity threshold (default: 0.0)
+  searchTypes?: string[];    // Enable specific search types (default: all)
   weights?: {                // Custom ranking weights
-    entity?: number;
-    relationship?: number;
-    semantic?: number;
-    concept?: number;
+    entity?: number;         // Default: 0.3
+    relationship?: number;   // Default: 0.2
+    semantic?: number;       // Default: 0.3
+    concept?: number;        // Default: 0.2
   };
 }
 ```
@@ -345,7 +425,7 @@ Search using fusion ranking:
 }
 ```
 
-#### 3. `search_concepts`
+#### 4. `search_concepts`
 
 Search conceptual abstractions:
 
@@ -355,6 +435,16 @@ Search conceptual abstractions:
   abstraction?: "high" | "medium" | "low";  // Filter by level
 }
 ```
+
+#### 5. `get_knowledge_graph_stats`
+
+Get knowledge graph statistics and metrics:
+
+```typescript
+{} // No parameters required
+```
+
+**Returns**: Comprehensive statistics including triple counts, concept counts, vector embeddings, and database metrics
 
 
 
@@ -371,15 +461,22 @@ When running in HTTP mode, the following RESTful endpoints are available:
 
 #### Knowledge Operations
 
-- `POST /api/process-knowledge` - Extract and store knowledge
-- `POST /api/search-knowledge` - Fusion search
-- `POST /api/search-concepts` - Concept search
-- `GET /api/stats` - Knowledge graph statistics
+- `POST /api/process-knowledge` - Extract and store knowledge using 3-stage pipeline
+- `POST /api/search-knowledge` - Fusion search across all knowledge types
+- `POST /api/search-concepts` - Search conceptual abstractions
+- `GET /api/stats` - Knowledge graph statistics and metrics
 
-#### Job Queue (Async Processing)
+#### Pipeline Management
 
-- `POST /api/process-job` - Queue large extraction job
-- `GET /api/job-status?jobId={id}` - Check job status
+- `POST /api/get-pipeline-status` - Get status and progress of processing pipeline
+- `GET /api/job-status/{jobId}` - Get specific job status (QStash integration)
+
+#### Job Queue (QStash Integration)
+
+- `POST /api/process-job` - Queue knowledge processing jobs
+- `POST /api/jobs/extraction` - Queue extraction batch jobs
+- `POST /api/jobs/concepts` - Queue concept generation jobs  
+- `POST /api/jobs/deduplication` - Queue deduplication jobs
 
 #### SSE/MCP Endpoint
 
@@ -477,25 +574,50 @@ kg-memory-mcp/
 ### Development Commands
 
 ```bash
-# Development
-pnpm run dev          # STDIO mode with hot reload
-pnpm run dev:http     # HTTP mode
-pnpm run dev:dual     # Both transports
+# Development workflow
+pnpm run dev          # Development server with hot reload (STDIO only)
+pnpm run dev:stdio    # STDIO transport only (traditional MCP)
+pnpm run dev:http     # HTTP transport only (REST API + SSE)
+pnpm run dev:dual     # Both transports simultaneously
+
+# Production workflow
+pnpm run build        # TypeScript compilation
+pnpm run start        # Production server (STDIO only)
+pnpm run start:http   # Production HTTP transport  
+pnpm run start:dual   # Production dual transport
+
+# Database operations
+pnpm run db:push      # Push schema changes to database
+pnpm run db:migrate   # Create new migration
+pnpm run db:generate  # Generate Prisma client
+pnpm run db:studio    # Open Prisma Studio GUI
+pnpm run db:reset     # Reset database (caution: deletes all data)
+
+# Code quality
+pnpm run lint         # Biome linting
+pnpm run format       # Biome formatting
+pnpm run check        # Full check (lint + type check + tests)
 
 # Testing
-pnpm run test         # Run all tests
-pnpm run test:watch   # Watch mode
-pnpm run test:coverage # Coverage report
+pnpm run test         # Run all Jest tests
+pnpm run test:unit    # Unit tests only
+pnpm run test:integration # Integration tests only
+pnpm run test:pipeline # Pipeline-specific tests
+pnpm run test:watch   # Run tests in watch mode
+pnpm run test:coverage # Generate coverage report
 
-# Code Quality
-pnpm run lint         # Biome linting
-pnpm run format       # Code formatting
-pnpm run check        # Full quality check
+# Performance testing
+pnpm run benchmark    # Run performance benchmarks
+pnpm run ai-isolation # Test AI provider isolation
+pnpm run ai-extraction # Test extraction performance
+pnpm run ai-embedding # Test embedding generation
+pnpm run ai-conceptualization # Test concept generation
+pnpm run ai-latency   # Test API latency
 
-# Database
-pnpm run db:studio    # Prisma Studio GUI
-pnpm run db:push      # Push schema changes
-pnpm run db:migrate   # Create migration
+# Utilities
+pnpm run server:inspect # Launch MCP Inspector for debugging
+pnpm run mcp          # Direct MCP mode (alias for dev)
+pnpm run watch        # Watch mode with tsx
 ```
 
 

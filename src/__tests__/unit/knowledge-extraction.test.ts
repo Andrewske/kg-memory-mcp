@@ -253,16 +253,16 @@ describe('Knowledge Extraction', () => {
 			await extractKnowledgeTriples(args);
 
 			expect(trackTokenUsage).toHaveBeenCalledWith(
-			expect.objectContaining({
-				data: mockAIExtractions.singlePass.response,
-				usage: mockAIExtractions.singlePass.usage,
-			}),
-			expect.objectContaining({
-				source: 'test-source',
-				source_type: 'test',
-				operation_type: 'extraction',
-			})
-		);
+				expect.objectContaining({
+					data: mockAIExtractions.singlePass.response,
+					usage: mockAIExtractions.singlePass.usage,
+				}),
+				expect.objectContaining({
+					source: 'test-source',
+					source_type: 'test',
+					operation_type: 'extraction',
+				})
+			);
 		});
 
 		it('should handle AI provider failures gracefully', async () => {

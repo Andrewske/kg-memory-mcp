@@ -3,7 +3,7 @@
  */
 
 import { afterAll, afterEach, beforeAll, beforeEach } from '@jest/globals';
-import { JobStatus, JobType, type ProcessingJob } from '@prisma/client';
+import { JobStatus, JobType, type Prisma, type ProcessingJob } from '@prisma/client';
 import type { ProcessKnowledgeArgs } from '~/server/transport-manager.js';
 import { db } from '~/shared/database/client.js';
 
@@ -29,9 +29,9 @@ export async function cleanupTestDatabase(): Promise<void> {
 
 // Create test processing job
 export async function createTestJob(
-	overrides: Partial<ProcessingJob> = {}
+	overrides: Partial<Prisma.ProcessingJobUncheckedCreateInput> = {}
 ): Promise<ProcessingJob> {
-	const defaultData = {
+	const defaultData: Prisma.ProcessingJobUncheckedCreateInput = {
 		job_type: JobType.EXTRACT_KNOWLEDGE_BATCH,
 		text: 'Test text content',
 		metadata: {
@@ -41,27 +41,22 @@ export async function createTestJob(
 		},
 		status: JobStatus.QUEUED,
 		progress: 0,
-		result: null,
+		result: undefined,
 		startedAt: null,
 		completedAt: null,
 		parent_job_id: null,
 		stage: null,
-		metrics: null,
+		metrics: {},
 	};
 
-	// Merge overrides
-	const finalData = { ...defaultData, ...overrides };
-
-	// Remove fields that shouldn't be in create data
-	const {
-		id: _id,
-		created_at: _created_at,
-		updated_at: _updated_at,
-		...dataToCreate
-	} = finalData as any;
+	// Merge overrides with default data
+	const createData: Prisma.ProcessingJobUncheckedCreateInput = {
+		...defaultData,
+		...overrides,
+	};
 
 	return await db.processingJob.create({
-		data: dataToCreate,
+		data: createData,
 	});
 }
 
