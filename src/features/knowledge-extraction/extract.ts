@@ -1,10 +1,6 @@
-import type { ConceptualizationRelationship, TripleType } from '@prisma/client';
+import type { TripleType } from '@prisma/client';
 import { Decimal } from '@prisma/client/runtime/library';
 import { z } from 'zod';
-import {
-	extractElementsFromTriples,
-	generateConcepts,
-} from '~/features/conceptualization/conceptualize.js';
 import type { ProcessKnowledgeArgs } from '~/server/transport-manager.js';
 import { env } from '~/shared/env.js';
 import { createAIProvider } from '~/shared/services/ai-provider-service.js';
@@ -197,39 +193,18 @@ export async function extractKnowledgeTriples(data: ProcessKnowledgeArgs) {
 		}
 
 		const { triples } = extractionResult.data;
-		let concepts: Concept[] = [];
-		let conceptualizations: Pick<
-			ConceptualizationRelationship,
-			| 'source_element'
-			| 'triple_type'
-			| 'concept'
-			| 'confidence'
-			| 'context_triples'
-			| 'source'
-			| 'source_type'
-			| 'extracted_at'
-		>[] = [];
 
-		// Generate concepts if requested
-		if (triples.length > 0) {
-			const conceptInput = extractElementsFromTriples(triples);
-			const conceptResult = await generateConcepts(conceptInput, {
-				source: data.source,
-				source_type: data.source_type,
-			});
-
-			if (conceptResult.success && conceptResult.data) {
-				concepts = conceptResult.data.concepts;
-				conceptualizations = conceptResult.data.relationships;
-			}
-		}
+		// NOTE: Concept generation removed from extraction stage
+		// Concepts are now generated separately in the dedicated concept generation job
+		// This improves performance by allowing extraction to focus solely on triple extraction
+		// and enables better parallelization of the pipeline stages
 
 		return {
 			success: true,
 			data: {
 				triples,
-				concepts,
-				conceptualizations,
+				concepts: [], // Empty - concepts generated in separate stage
+				conceptualizations: [], // Empty - generated with concepts
 			},
 		};
 	} catch (error) {
