@@ -835,9 +835,19 @@ The future of AI promises even more transformative applications. Advances in qua
 async function main() {
 	const args = process.argv.slice(2);
 
+	let fileContent: string = '';
+	if (args[0]) {
+		try {
+			fileContent = await fs.readFile(args[0], 'utf-8');
+		} catch (err) {
+			console.error(`Failed to read file at ${args[0]}:`, err);
+			fileContent = getDefaultTestText();
+		}
+	}
+
 	// Parse command line arguments
 	const rawConfig = {
-		testText: args[0] || getDefaultTestText(),
+		testText: fileContent,
 		source: `pipeline-test-${Date.now()}`,
 		sourceType: 'benchmark',
 		model: process.env.AI_MODEL,
