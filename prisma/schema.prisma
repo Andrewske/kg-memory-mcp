@@ -46,9 +46,11 @@ model KnowledgeTriple {
   @@index([source_type])
   @@index([source_date])
   @@index([extracted_at])
+  @@index([extraction_stage])
   @@index([source_date, type])
   @@index([source_date, source])
   @@index([source, source_type])
+  @@index([source, extraction_stage])
   @@map("knowledge_triples")
 }
 
