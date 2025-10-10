@@ -170,6 +170,22 @@ export async function updateJobProgress(
 	progress: number,
 	metrics?: any
 ): Promise<void> {
+	// Defensive check: verify job exists before updating
+	const job = await db.processingJob.findUnique({
+		where: { id: jobId },
+		select: { id: true },
+	});
+
+	if (!job) {
+		log(
+			'WARN',
+			createContext('PIPELINE_COORDINATOR', 'update_job_progress', { jobId }),
+			`Job ${jobId} not found, skipping progress update`,
+			{ progress, requestedUpdate: 'progress' }
+		);
+		return;
+	}
+
 	const clampedProgress = Math.min(100, Math.max(0, progress));
 	const updateData: any = {
 		progress: clampedProgress,

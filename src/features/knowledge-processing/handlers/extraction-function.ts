@@ -38,7 +38,9 @@ export async function executeExtraction(
 ): Promise<JobResult> {
 	const updateProgress = async (progress: number) => {
 		onProgress?.(progress);
-		await updateProgressFn(job.id, progress);
+		if (!skipQStashUpdates) {
+			await updateProgressFn(job.id, progress);
+		}
 	};
 
 	const metadata = job.metadata as unknown as JobMetadata;

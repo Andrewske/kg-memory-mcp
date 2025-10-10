@@ -20,10 +20,19 @@ export async function cleanupTestDatabase(): Promise<void> {
 		await db.conceptualizationRelationship?.deleteMany({});
 		await db.conceptNode?.deleteMany({});
 		await db.knowledgeTriple?.deleteMany({});
+
+		// Delete child jobs BEFORE parent jobs to respect foreign key constraints
+		// With onDelete: Cascade, deleting parents will cascade to children
 		await db.processingJob?.deleteMany({});
 	} catch (error) {
-		// Ignore errors in cleanup for mocked tests
-		console.warn('Database cleanup skipped (likely mocked):', error);
+		// Only suppress errors for mocked tests, not real database issues
+		const errorMessage = error instanceof Error ? error.message : String(error);
+		if (errorMessage.includes('mock') || errorMessage.includes('jest')) {
+			console.warn('Database cleanup skipped (mocked):', error);
+		} else {
+			// Re-throw real database errors so tests fail fast
+			throw error;
+		}
 	}
 }
 

@@ -300,7 +300,7 @@ model ProcessingJob {
   metrics       Json       @default("{}") // Performance metrics
 
   // Self-referential relations for job hierarchy
-  parent_job    ProcessingJob?  @relation("JobHierarchy", fields: [parent_job_id], references: [id])
+  parent_job    ProcessingJob?  @relation("JobHierarchy", fields: [parent_job_id], references: [id], onDelete: Cascade)
   child_jobs    ProcessingJob[] @relation("JobHierarchy")
 
   // Indexes for efficient querying

@@ -2,7 +2,7 @@
  * Integration test for the 3-job knowledge processing pipeline
  */
 
-import { afterAll, beforeAll, describe, expect, it } from '@jest/globals';
+import { afterAll, beforeAll, describe, expect, it, jest } from '@jest/globals';
 import { JobStatus, JobType } from '@prisma/client';
 import { routeJob } from '~/features/knowledge-processing/job-router.js';
 import {
@@ -11,6 +11,30 @@ import {
 	isPipelineComplete,
 } from '~/features/knowledge-processing/pipeline-coordinator.js';
 import { db } from '~/shared/database/client.js';
+import {
+	cleanupTestDatabase,
+	setupTestSuite,
+	testEnv,
+} from '~//__tests__/helpers/test-setup.js';
+import {
+	createMockAIProvider,
+	createMockEmbeddingService,
+	createMockQStash,
+	mockEnv,
+} from '~//__tests__/helpers/mock-factories.js';
+import { createAIProvider } from '~/shared/services/ai-provider-service.js';
+import { createEmbeddingService } from '~/shared/services/embedding-service.js';
+import { getQStash } from '~/shared/services/qstash.js';
+import { env } from '~/shared/env.js';
+
+// Setup test environment
+setupTestSuite();
+
+// Mock external dependencies
+jest.mock('~/shared/services/ai-provider-service.js');
+jest.mock('~/shared/services/embedding-service.js');
+jest.mock('~/shared/services/qstash.js');
+jest.mock('~/shared/env.js');
 
 describe('Knowledge Processing Pipeline Integration', () => {
 	const testSource = 'pipeline-test';
@@ -22,28 +46,25 @@ describe('Knowledge Processing Pipeline Integration', () => {
 		The product launch event happened last month and was very successful.
 	`;
 
-	beforeAll(async () => {
-		// Clean up any existing test data
-		await db.processingJob.deleteMany({
-			where: {
-				metadata: {
-					path: ['source_type'],
-					equals: testSourceType,
-				},
-			},
-		});
+	let mockAIProvider: ReturnType<typeof createMockAIProvider>;
+	let mockEmbeddingService: ReturnType<typeof createMockEmbeddingService>;
+	let mockQStash: ReturnType<typeof createMockQStash>;
+
+	beforeAll(() => {
+		// Setup mocks once for all tests
+		mockAIProvider = createMockAIProvider();
+		mockEmbeddingService = createMockEmbeddingService();
+		mockQStash = createMockQStash();
+
+		(createAIProvider as jest.Mock).mockReturnValue(mockAIProvider);
+		(createEmbeddingService as jest.Mock).mockReturnValue(mockEmbeddingService);
+		(getQStash as jest.Mock).mockReturnValue(mockQStash);
+		Object.assign(env, { ...mockEnv });
 	});
 
 	afterAll(async () => {
-		// Clean up test data
-		await db.processingJob.deleteMany({
-			where: {
-				metadata: {
-					path: ['source_type'],
-					equals: testSourceType,
-				},
-			},
-		});
+		// Final cleanup
+		await cleanupTestDatabase();
 	});
 
 	it('should initiate pipeline successfully', async () => {

@@ -90,6 +90,21 @@ async function updateJobStatus(
 	result?: any,
 	errorMessage?: string
 ): Promise<void> {
+	// Defensive check: verify job exists before updating
+	const job = await db.processingJob.findUnique({
+		where: { id: jobId },
+		select: { id: true },
+	});
+
+	if (!job) {
+		const context = createContext('JOB_ROUTER', 'update_job_status', { jobId });
+		log('WARN', context, `Job ${jobId} not found, skipping status update`, {
+			status,
+			requestedUpdate: 'status',
+		});
+		return;
+	}
+
 	const updateData: any = {
 		status,
 	};

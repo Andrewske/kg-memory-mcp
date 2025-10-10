@@ -53,7 +53,7 @@ describe('Full Pipeline Integration', () => {
 
 	beforeEach(async () => {
 		jest.clearAllMocks();
-		await cleanupTestDatabase();
+		// Note: cleanupTestDatabase() is already called by setupTestSuite()
 
 		// Setup mocks
 		mockAIProvider = createMockAIProvider();
