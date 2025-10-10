@@ -53,7 +53,9 @@ function generateMarkdownReport(metrics: BenchmarkMetrics): string {
 	const { benchmark_type, config, performance, quality, cost, timestamp, notes, fixture_info } =
 		metrics;
 
-	let report = `# Benchmark Report: ${benchmark_type.toUpperCase()}
+	const lines: string[] = [];
+
+	lines.push(`# Benchmark Report: ${benchmark_type.toUpperCase()}
 
 **Run ID**: \`${metrics.id}\`
 **Timestamp**: ${formatPstForDisplay(timestamp)}
@@ -76,58 +78,61 @@ ${notes ? `\n**Notes**: ${notes}\n` : ''}
 - **Tokens/Second**: ${performance.tokens_per_second.toFixed(2)}
 - **MS/Token**: ${performance.ms_per_token.toFixed(2)}
 - **Memory Used**: ${performance.memory_used_mb.toFixed(2)}MB
-`;
+`);
 
 	if (performance.stage_durations) {
-		report += '\n### Stage Durations\n\n';
+		lines.push('\n### Stage Durations\n\n');
 		for (const [stage, duration] of Object.entries(performance.stage_durations)) {
-			report += `- **${stage}**: ${duration.toLocaleString()}ms (${(duration / 1000).toFixed(2)}s)\n`;
+			lines.push(`- **${stage}**: ${duration.toLocaleString()}ms (${(duration / 1000).toFixed(2)}s)\n`);
 		}
 	}
 
-	report += `
+	lines.push(`
 ---
 
 ## 📊 Quality Metrics
 
-`;
+`);
 
 	if (quality.triples_generated !== undefined) {
-		report += `- **Triples Generated (AI)**: ${quality.triples_generated.toLocaleString()}\n`;
+		lines.push(`- **Triples Generated (AI)**: ${quality.triples_generated.toLocaleString()}\n`);
 	}
 	if (quality.triples_extracted !== undefined) {
-		report += `- **Triples Stored (Unique)**: ${quality.triples_extracted.toLocaleString()}`;
+		let line = `- **Triples Stored (Unique)**: ${quality.triples_extracted.toLocaleString()}`;
 		if (quality.triples_generated && quality.triples_extracted) {
 			const dupRate = (
 				((quality.triples_generated - quality.triples_extracted) / quality.triples_generated) *
 				100
 			).toFixed(1);
-			report += ` (${dupRate}% dedup rate)`;
+			line += ` (${dupRate}% dedup rate)`;
 		}
-		report += '\n';
+		line += '\n';
+		lines.push(line);
 	}
 
 	if (quality.concepts_generated !== undefined) {
-		report += `- **Concepts Generated (AI)**: ${quality.concepts_generated.toLocaleString()}\n`;
+		lines.push(`- **Concepts Generated (AI)**: ${quality.concepts_generated.toLocaleString()}\n`);
 	}
 	if (quality.concepts_extracted !== undefined) {
-		report += `- **Concepts Stored (Unique)**: ${quality.concepts_extracted.toLocaleString()}`;
+		let line = `- **Concepts Stored (Unique)**: ${quality.concepts_extracted.toLocaleString()}`;
 		if (quality.concepts_generated && quality.concepts_extracted) {
 			const dupRate = (
 				((quality.concepts_generated - quality.concepts_extracted) / quality.concepts_generated) *
 				100
 			).toFixed(1);
-			report += ` (${dupRate}% dedup rate)`;
+			line += ` (${dupRate}% dedup rate)`;
 		}
-		report += '\n';
+		line += '\n';
+		lines.push(line);
 	}
 
 	if (quality.duplicates_removed !== undefined && quality.duplicates_removed > 0) {
-		report += `- **Duplicates Removed**: ${quality.duplicates_removed.toLocaleString()}`;
+		let line = `- **Duplicates Removed**: ${quality.duplicates_removed.toLocaleString()}`;
 		if (quality.duplicate_rate !== undefined) {
-			report += ` (${(quality.duplicate_rate * 100).toFixed(1)}%)`;
+			line += ` (${(quality.duplicate_rate * 100).toFixed(1)}%)`;
 		}
-		report += '\n';
+		line += '\n';
+		lines.push(line);
 
 		// Add breakdown if duplicate_analysis is available
 		if (metrics.output_analysis?.duplicate_analysis) {
@@ -137,26 +142,26 @@ ${notes ? `\n**Notes**: ${notes}\n` : ''}
 			if (dup.internal_duplicates > 0 || dup.database_duplicates > 0) {
 				if (dup.internal_duplicates > 0) {
 					const pct = ((dup.internal_duplicates / totalGenerated) * 100).toFixed(1);
-					report += `  - Internal Duplicates: ${dup.internal_duplicates.toLocaleString()} (${pct}%)\n`;
+					lines.push(`  - Internal Duplicates: ${dup.internal_duplicates.toLocaleString()} (${pct}%)\n`);
 				}
 				if (dup.database_duplicates > 0) {
 					const pct = ((dup.database_duplicates / totalGenerated) * 100).toFixed(1);
-					report += `  - Database Duplicates: ${dup.database_duplicates.toLocaleString()} (${pct}%)\n`;
+					lines.push(`  - Database Duplicates: ${dup.database_duplicates.toLocaleString()} (${pct}%)\n`);
 				}
 			}
 		}
 	}
 	if (quality.avg_confidence !== undefined) {
-		report += `- **Average Confidence**: ${(quality.avg_confidence * 100).toFixed(1)}%\n`;
+		lines.push(`- **Average Confidence**: ${(quality.avg_confidence * 100).toFixed(1)}%\n`);
 	}
 	if (quality.search_recall !== undefined) {
-		report += `- **Search Recall**: ${(quality.search_recall * 100).toFixed(1)}%\n`;
+		lines.push(`- **Search Recall**: ${(quality.search_recall * 100).toFixed(1)}%\n`);
 	}
 	if (quality.search_precision !== undefined) {
-		report += `- **Search Precision**: ${(quality.search_precision * 100).toFixed(1)}%\n`;
+		lines.push(`- **Search Precision**: ${(quality.search_precision * 100).toFixed(1)}%\n`);
 	}
 
-	report += `
+	lines.push(`
 ---
 
 ## 💰 Cost Analysis
@@ -167,36 +172,36 @@ ${notes ? `\n**Notes**: ${notes}\n` : ''}
 - **Estimated Cost**: $${cost.estimated_cost_usd.toFixed(4)}
 - **API Calls**: ${cost.api_calls}
 - **Cost per Token**: $${(cost.estimated_cost_usd / cost.total_tokens).toFixed(6)}
-`;
+`);
 
 	// Output analysis if available
 	if (metrics.output_analysis) {
-		report += '\n---\n\n## 📈 Output Analysis\n\n';
+		lines.push('\n---\n\n## 📈 Output Analysis\n\n');
 
 		if (metrics.output_analysis.triple_types) {
-			report += '### Triple Types Distribution\n\n';
+			lines.push('### Triple Types Distribution\n\n');
 			const total = Object.values(metrics.output_analysis.triple_types).reduce(
 				(sum, count) => sum + count,
 				0
 			);
 			for (const [type, count] of Object.entries(metrics.output_analysis.triple_types)) {
 				const pct = ((count / total) * 100).toFixed(1);
-				report += `- **${type}**: ${count} (${pct}%)\n`;
+				lines.push(`- **${type}**: ${count} (${pct}%)\n`);
 			}
-			report += '\n';
+			lines.push('\n');
 		}
 
 		if (metrics.output_analysis.abstraction_levels) {
-			report += '### Abstraction Levels Distribution\n\n';
+			lines.push('### Abstraction Levels Distribution\n\n');
 			const total = Object.values(metrics.output_analysis.abstraction_levels).reduce(
 				(sum, count) => sum + count,
 				0
 			);
 			for (const [level, count] of Object.entries(metrics.output_analysis.abstraction_levels)) {
 				const pct = ((count / total) * 100).toFixed(1);
-				report += `- **${level}**: ${count} (${pct}%)\n`;
+				lines.push(`- **${level}**: ${count} (${pct}%)\n`);
 			}
-			report += '\n';
+			lines.push('\n');
 		}
 
 		// Sample Triples section
@@ -204,13 +209,13 @@ ${notes ? `\n**Notes**: ${notes}\n` : ''}
 			metrics.output_analysis.sample_triples &&
 			metrics.output_analysis.sample_triples.length > 0
 		) {
-			report += '### 📋 Sample Triples Extracted (Top 20)\n\n';
+			lines.push('### 📋 Sample Triples Extracted (Top 20)\n\n');
 			for (const [i, t] of metrics.output_analysis.sample_triples.entries()) {
 				const conf = (t.confidence * 100).toFixed(0);
 				const stage = t.extraction_stage ? `, stage: ${t.extraction_stage}` : '';
-				report += `${i + 1}. \`${t.subject}\` --[${t.predicate}]--> \`${t.object}\` (${t.type}, conf: ${conf}%${stage})\n`;
+				lines.push(`${i + 1}. \`${t.subject}\` --[${t.predicate}]--> \`${t.object}\` (${t.type}, conf: ${conf}%${stage})\n`);
 			}
-			report += '\n';
+			lines.push('\n');
 		}
 
 		// Raw Extraction Data with Duplicate Markers
@@ -219,26 +224,27 @@ ${notes ? `\n**Notes**: ${notes}\n` : ''}
 			metrics.output_analysis.raw_extraction_data.stages.length > 0
 		) {
 			const rawData = metrics.output_analysis.raw_extraction_data;
-			report += '### 🔍 Raw Extraction by Stage (with Duplicate Markers)\n\n';
+			lines.push('### 🔍 Raw Extraction by Stage (with Duplicate Markers)\n\n');
 
-			report += '**Summary**\n';
-			report += `- Total Extracted: ${rawData.summary.total_extracted}\n`;
-			report += `- Total Kept: ${rawData.summary.total_kept}\n`;
-			report += `- Exact Duplicates: ${rawData.summary.total_exact_duplicates}\n`;
-			report += `- Semantic Duplicates: ${rawData.summary.total_semantic_duplicates}\n`;
-			report += `- Cross-Stage Duplicates: ${rawData.summary.total_cross_stage_duplicates}\n`;
-			report += `- Database Duplicates: ${rawData.summary.total_database_duplicates}`;
+			lines.push('**Summary**\n');
+			lines.push(`- Total Extracted: ${rawData.summary.total_extracted}\n`);
+			lines.push(`- Total Kept: ${rawData.summary.total_kept}\n`);
+			lines.push(`- Exact Duplicates: ${rawData.summary.total_exact_duplicates}\n`);
+			lines.push(`- Semantic Duplicates: ${rawData.summary.total_semantic_duplicates}\n`);
+			lines.push(`- Cross-Stage Duplicates: ${rawData.summary.total_cross_stage_duplicates}\n`);
+			let dbDupLine = `- Database Duplicates: ${rawData.summary.total_database_duplicates}`;
 			if (rawData.summary.total_database_duplicates > 0) {
-				report += ' ⚠️ **WARNING: Cleanup function may not be working!**';
+				dbDupLine += ' ⚠️ **WARNING: Cleanup function may not be working!**';
 			}
-			report += '\n\n';
+			dbDupLine += '\n\n';
+			lines.push(dbDupLine);
 
 			// Show each stage
 			for (const stage of rawData.stages) {
-				report += `#### ${stage.stage_name} (${stage.total_extracted} extracted)\n\n`;
-				report += `- Kept: ${stage.kept}\n`;
-				report += `- Exact Duplicates: ${stage.exact_duplicates}\n`;
-				report += `- Semantic Duplicates: ${stage.semantic_duplicates}\n\n`;
+				lines.push(`#### ${stage.stage_name} (${stage.total_extracted} extracted)\n\n`);
+				lines.push(`- Kept: ${stage.kept}\n`);
+				lines.push(`- Exact Duplicates: ${stage.exact_duplicates}\n`);
+				lines.push(`- Semantic Duplicates: ${stage.semantic_duplicates}\n\n`);
 
 				// Show all triples with status markers
 				for (const [i, t] of stage.triples.entries()) {
@@ -275,9 +281,9 @@ ${notes ? `\n**Notes**: ${notes}\n` : ''}
 						}
 					}
 
-					report += `${i + 1}. \`${t.subject}\` --[${t.predicate}]--> \`${t.object}\` (${t.type}, conf: ${conf}%) **${statusMarker}**\n`;
+					lines.push(`${i + 1}. \`${t.subject}\` --[${t.predicate}]--> \`${t.object}\` (${t.type}, conf: ${conf}%) **${statusMarker}**\n`);
 				}
-				report += '\n';
+				lines.push('\n');
 			}
 		}
 
@@ -287,19 +293,19 @@ ${notes ? `\n**Notes**: ${notes}\n` : ''}
 			metrics.output_analysis.concepts_generated.length > 0
 		) {
 			const concepts = metrics.output_analysis.concepts_generated;
-			report += '### 💡 Concepts Generated (with Duplicate Markers)\n\n';
+			lines.push('### 💡 Concepts Generated (with Duplicate Markers)\n\n');
 
 			const kept = concepts.filter(c => c.status === 'KEPT').length;
 			const exactDups = concepts.filter(c => c.status === 'EXACT_DUPLICATE').length;
 			const semanticDups = concepts.filter(c => c.status === 'SEMANTIC_DUPLICATE').length;
 
-			report += `**Summary**\n`;
-			report += `- Total Generated: ${concepts.length}\n`;
-			report += `- Kept: ${kept}\n`;
-			report += `- Exact Duplicates: ${exactDups}\n`;
-			report += `- Semantic Duplicates: ${semanticDups}\n\n`;
+			lines.push('**Summary**\n');
+			lines.push(`- Total Generated: ${concepts.length}\n`);
+			lines.push(`- Kept: ${kept}\n`);
+			lines.push(`- Exact Duplicates: ${exactDups}\n`);
+			lines.push(`- Semantic Duplicates: ${semanticDups}\n\n`);
 
-			report += '**All Concepts**\n\n';
+			lines.push('**All Concepts**\n\n');
 			for (const [i, c] of concepts.entries()) {
 				const conf = (c.confidence * 100).toFixed(0);
 				let statusMarker = '';
@@ -311,57 +317,57 @@ ${notes ? `\n**Notes**: ${notes}\n` : ''}
 						statusMarker += ` of #${c.duplicate_of_index + 1}`;
 					}
 				} else if (c.status === 'SEMANTIC_DUPLICATE') {
-					statusMarker += '⚠️ SEMANTIC DUPLICATE';
+					statusMarker = '⚠️ SEMANTIC DUPLICATE';
 					if (c.duplicate_of_index !== undefined) {
 						statusMarker += ` of #${c.duplicate_of_index + 1}`;
 					}
 				}
 
-				report += `${i + 1}. **${c.concept}** (${c.abstraction_level}, conf: ${conf}%) **${statusMarker}**\n`;
+				lines.push(`${i + 1}. **${c.concept}** (${c.abstraction_level}, conf: ${conf}%) **${statusMarker}**\n`);
 			}
-			report += '\n';
+			lines.push('\n');
 		}
 
 		// Vocabulary Analysis section
 		if (metrics.output_analysis.vocabulary_analysis) {
 			const vocab = metrics.output_analysis.vocabulary_analysis;
-			report += '### 📚 Vocabulary Analysis\n\n';
+			lines.push('### 📚 Vocabulary Analysis\n\n');
 
-			report += '**Current Run Statistics**\n';
-			report += `- Total Terms: ${vocab.total_terms}\n`;
-			report += `- New Terms: ${vocab.new_terms_count} (${(vocab.novelty_rate * 100).toFixed(1)}% novelty rate)\n`;
-			report += `- Known Terms: ${vocab.known_terms_count} (${(vocab.recognition_rate * 100).toFixed(1)}% recognition rate)\n\n`;
+			lines.push('**Current Run Statistics**\n');
+			lines.push(`- Total Terms: ${vocab.total_terms}\n`);
+			lines.push(`- New Terms: ${vocab.new_terms_count} (${(vocab.novelty_rate * 100).toFixed(1)}% novelty rate)\n`);
+			lines.push(`- Known Terms: ${vocab.known_terms_count} (${(vocab.recognition_rate * 100).toFixed(1)}% recognition rate)\n\n`);
 
-			report += '**Vocabulary Growth**\n';
-			report += `- Total Entities: ${vocab.vocabulary_size.entities} (+${vocab.vocabulary_growth.entities})\n`;
-			report += `- Total Relationships: ${vocab.vocabulary_size.relationships} (+${vocab.vocabulary_growth.relationships})\n`;
-			report += `- Total Concepts: ${vocab.vocabulary_size.concepts} (+${vocab.vocabulary_growth.concepts})\n`;
-			report += `- Total Terms: ${vocab.vocabulary_size.total} (+${vocab.vocabulary_growth.total})\n`;
-			report += `- Total Benchmark Runs: ${vocab.total_runs}\n\n`;
+			lines.push('**Vocabulary Growth**\n');
+			lines.push(`- Total Entities: ${vocab.vocabulary_size.entities} (+${vocab.vocabulary_growth.entities})\n`);
+			lines.push(`- Total Relationships: ${vocab.vocabulary_size.relationships} (+${vocab.vocabulary_growth.relationships})\n`);
+			lines.push(`- Total Concepts: ${vocab.vocabulary_size.concepts} (+${vocab.vocabulary_growth.concepts})\n`);
+			lines.push(`- Total Terms: ${vocab.vocabulary_size.total} (+${vocab.vocabulary_growth.total})\n`);
+			lines.push(`- Total Benchmark Runs: ${vocab.total_runs}\n\n`);
 
 			// Top frequent terms
 			if (vocab.top_frequent.entities.length > 0) {
-				report += '**Most Frequent Entities (Top 10)**\n';
+				lines.push('**Most Frequent Entities (Top 10)**\n');
 				for (const { term, count } of vocab.top_frequent.entities.slice(0, 10)) {
-					report += `- ${term} (${count})\n`;
+					lines.push(`- ${term} (${count})\n`);
 				}
-				report += '\n';
+				lines.push('\n');
 			}
 
 			if (vocab.top_frequent.relationships.length > 0) {
-				report += '**Most Frequent Relationships (Top 10)**\n';
+				lines.push('**Most Frequent Relationships (Top 10)**\n');
 				for (const { term, count } of vocab.top_frequent.relationships.slice(0, 10)) {
-					report += `- ${term} (${count})\n`;
+					lines.push(`- ${term} (${count})\n`);
 				}
-				report += '\n';
+				lines.push('\n');
 			}
 
 			if (vocab.top_frequent.concepts.length > 0) {
-				report += '**Most Frequent Concepts (Top 10)**\n';
+				lines.push('**Most Frequent Concepts (Top 10)**\n');
 				for (const { term, count } of vocab.top_frequent.concepts.slice(0, 10)) {
-					report += `- ${term} (${count})\n`;
+					lines.push(`- ${term} (${count})\n`);
 				}
-				report += '\n';
+				lines.push('\n');
 			}
 
 			// New terms discovered
@@ -371,64 +377,67 @@ ${notes ? `\n**Notes**: ${notes}\n` : ''}
 				vocab.new_term_list.concepts.length > 0;
 
 			if (hasNewTerms) {
-				report += '**New Terms Discovered This Run**\n';
+				lines.push('**New Terms Discovered This Run**\n');
 				if (vocab.new_term_list.entities.length > 0) {
-					report += `- **Entities**: ${vocab.new_term_list.entities.slice(0, 20).join(', ')}`;
+					let entitiesLine = `- **Entities**: ${vocab.new_term_list.entities.slice(0, 20).join(', ')}`;
 					if (vocab.new_term_list.entities.length > 20) {
-						report += ` ... (${vocab.new_term_list.entities.length - 20} more)`;
+						entitiesLine += ` ... (${vocab.new_term_list.entities.length - 20} more)`;
 					}
-					report += '\n';
+					entitiesLine += '\n';
+					lines.push(entitiesLine);
 				}
 				if (vocab.new_term_list.relationships.length > 0) {
-					report += `- **Relationships**: ${vocab.new_term_list.relationships.slice(0, 20).join(', ')}`;
+					let relationshipsLine = `- **Relationships**: ${vocab.new_term_list.relationships.slice(0, 20).join(', ')}`;
 					if (vocab.new_term_list.relationships.length > 20) {
-						report += ` ... (${vocab.new_term_list.relationships.length - 20} more)`;
+						relationshipsLine += ` ... (${vocab.new_term_list.relationships.length - 20} more)`;
 					}
-					report += '\n';
+					relationshipsLine += '\n';
+					lines.push(relationshipsLine);
 				}
 				if (vocab.new_term_list.concepts.length > 0) {
-					report += `- **Concepts**: ${vocab.new_term_list.concepts.slice(0, 20).join(', ')}`;
+					let conceptsLine = `- **Concepts**: ${vocab.new_term_list.concepts.slice(0, 20).join(', ')}`;
 					if (vocab.new_term_list.concepts.length > 20) {
-						report += ` ... (${vocab.new_term_list.concepts.length - 20} more)`;
+						conceptsLine += ` ... (${vocab.new_term_list.concepts.length - 20} more)`;
 					}
-					report += '\n';
+					conceptsLine += '\n';
+					lines.push(conceptsLine);
 				}
-				report += '\n';
+				lines.push('\n');
 			}
 		}
 
 		// Duplicate Analysis section
 		if (metrics.output_analysis.duplicate_analysis) {
 			const dup = metrics.output_analysis.duplicate_analysis;
-			report += '\n---\n\n## 🔄 Duplicate Analysis\n\n';
+			lines.push('\n---\n\n## 🔄 Duplicate Analysis\n\n');
 
-			report += '**Generation Summary**\n';
-			report += `- Triples Generated (AI): ${dup.total_generated.toLocaleString()}\n`;
-			report += `- Internal Duplicates: ${dup.internal_duplicates.toLocaleString()} (${((dup.internal_duplicates / dup.total_generated) * 100).toFixed(1)}%)\n`;
-			report += `- Database Duplicates: ${dup.database_duplicates.toLocaleString()}\n`;
-			report += `- Unique Triples Stored: ${dup.unique_stored.toLocaleString()}\n\n`;
+			lines.push('**Generation Summary**\n');
+			lines.push(`- Triples Generated (AI): ${dup.total_generated.toLocaleString()}\n`);
+			lines.push(`- Internal Duplicates: ${dup.internal_duplicates.toLocaleString()} (${((dup.internal_duplicates / dup.total_generated) * 100).toFixed(1)}%)\n`);
+			lines.push(`- Database Duplicates: ${dup.database_duplicates.toLocaleString()}\n`);
+			lines.push(`- Unique Triples Stored: ${dup.unique_stored.toLocaleString()}\n\n`);
 
 			if (Object.keys(dup.cross_stage_overlaps).length > 0) {
-				report += '**Cross-Stage Duplication Matrix**\n';
+				lines.push('**Cross-Stage Duplication Matrix**\n');
 				const sortedOverlaps = Object.entries(dup.cross_stage_overlaps).sort((a, b) => b[1] - a[1]);
 				for (const [stages, count] of sortedOverlaps) {
-					report += `- ${stages}: ${count} overlap${count > 1 ? 's' : ''}\n`;
+					lines.push(`- ${stages}: ${count} overlap${count > 1 ? 's' : ''}\n`);
 				}
-				report += '\n';
+				lines.push('\n');
 			}
 
 			if (dup.duplicate_examples.length > 0) {
-				report += '### Example Duplicates\n\n';
+				lines.push('### Example Duplicates\n\n');
 				for (const [i, example] of dup.duplicate_examples.entries()) {
 					const t = example.triple;
-					report += `${i + 1}. ✅ **KEPT**: \`${t.subject}\` --[${t.predicate}]--> \`${t.object}\` (${t.type}, stage: ${example.kept_from_stage})\n`;
-					report += `   ❌ Rejected from: ${example.rejected_stages.join(', ')}\n\n`;
+					lines.push(`${i + 1}. ✅ **KEPT**: \`${t.subject}\` --[${t.predicate}]--> \`${t.object}\` (${t.type}, stage: ${example.kept_from_stage})\n`);
+					lines.push(`   ❌ Rejected from: ${example.rejected_stages.join(', ')}\n\n`);
 				}
 			}
 		}
 	}
 
-	report += `
+	lines.push(`
 ---
 
 ## 🔧 Configuration Details
@@ -441,9 +450,9 @@ ${JSON.stringify(config, null, 2)}
 
 *Generated by KG Memory MCP Benchmark Suite*
 *Run ID: ${metrics.id}*
-`;
+`);
 
-	return report;
+	return lines.join('');
 }
 
 /**

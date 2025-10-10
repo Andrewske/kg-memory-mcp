@@ -4,6 +4,7 @@ import { v4 as uuidv4 } from 'uuid';
 import { db } from '~/shared/database/client.js';
 import { generateTripleId } from '~/shared/database/database-utils.js';
 import type { Concept, Triple } from '~/shared/types/core.js';
+import { getValidExtractionStage } from '~/shared/types/extraction-stages.js';
 import type { Result } from '~/shared/types/services.js';
 import { createContext, log, logDataFlow, logError } from '~/shared/utils/debug-logger.js';
 
@@ -368,19 +369,28 @@ export async function batchStoreKnowledge(
 
 					if (newTriples.length > 0) {
 						// Prepare triples for Prisma
-						const prismaTriples = newTriples.map(triple => ({
-							id: triple.id,
-							subject: triple.subject,
-							predicate: triple.predicate,
-							object: triple.object,
-							type: triple.type,
-							source: triple.source,
-							source_type: triple.source_type,
-							source_date: triple.source_date ? new Date(triple.source_date) : null,
-							extracted_at: new Date(triple.extracted_at),
-							confidence: triple.confidence,
-							extraction_stage: (triple as any).extraction_stage || null, // NEW: Store extraction stage
-						}));
+						const prismaTriples = newTriples.map(triple => {
+							// Validate extraction_stage using type-safe validation
+							const extractionStage = getValidExtractionStage((triple as any).extraction_stage);
+
+							if ((triple as any).extraction_stage && !extractionStage) {
+								console.warn(`Invalid extraction_stage: ${(triple as any).extraction_stage}`);
+							}
+
+							return {
+								id: triple.id,
+								subject: triple.subject,
+								predicate: triple.predicate,
+								object: triple.object,
+								type: triple.type,
+								source: triple.source,
+								source_type: triple.source_type,
+								source_date: triple.source_date ? new Date(triple.source_date) : null,
+								extracted_at: new Date(triple.extracted_at),
+								confidence: triple.confidence,
+								extraction_stage: extractionStage, // Validated or null
+							};
+						});
 
 						await tx.knowledgeTriple.createMany({
 							data: prismaTriples,

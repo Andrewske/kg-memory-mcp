@@ -118,22 +118,98 @@ function createEmptyVocabulary(model: string, provider: string): Vocabulary {
 }
 
 /**
- * Save vocabulary to disk
+ * Create a timestamped backup of the vocabulary file
+ */
+export async function createVocabularyBackup(
+	vocabularyPath: string,
+	maxBackups: number = 10
+): Promise<void> {
+	const fullPath = path.join(process.cwd(), vocabularyPath);
+
+	// Check if vocabulary file exists
+	try {
+		await fs.access(fullPath);
+	} catch {
+		// No file to backup
+		return;
+	}
+
+	const dir = path.dirname(fullPath);
+	const ext = path.extname(fullPath);
+	const basename = path.basename(fullPath, ext);
+
+	// Create backup filename with ISO timestamp
+	const timestamp = new Date().toISOString().replace(/[:.]/g, '-');
+	const backupPath = path.join(dir, `${basename}.backup.${timestamp}${ext}`);
+
+	// Copy current file to backup
+	await fs.copyFile(fullPath, backupPath);
+
+	// Rotate old backups (keep only maxBackups most recent)
+	await rotateBackups(dir, basename, ext, maxBackups);
+}
+
+/**
+ * Remove old backups, keeping only the most recent N files
+ */
+async function rotateBackups(
+	dir: string,
+	basename: string,
+	ext: string,
+	maxBackups: number
+): Promise<void> {
+	const backupPattern = new RegExp(`^${basename}\\.backup\\..+${ext.replace('.', '\\.')}$`);
+
+	// List all backup files
+	const files = await fs.readdir(dir);
+	const backups = files
+		.filter(f => backupPattern.test(f))
+		.map(f => ({
+			name: f,
+			path: path.join(dir, f),
+		}));
+
+	// Sort by modification time (newest first)
+	const backupsWithStats = await Promise.all(
+		backups.map(async b => ({
+			...b,
+			stat: await fs.stat(b.path),
+		}))
+	);
+
+	backupsWithStats.sort((a, b) => b.stat.mtime.getTime() - a.stat.mtime.getTime());
+
+	// Delete old backups beyond maxBackups
+	const toDelete = backupsWithStats.slice(maxBackups);
+	await Promise.all(toDelete.map(b => fs.unlink(b.path)));
+}
+
+/**
+ * Save vocabulary to disk with atomic writes and automatic backup
  */
 export async function saveVocabulary(
 	vocabulary: Vocabulary,
-	vocabularyPath: string
+	vocabularyPath: string,
+	createBackup: boolean = true,
+	maxBackups: number = 10
 ): Promise<void> {
 	const fullPath = path.join(process.cwd(), vocabularyPath);
 
 	// Ensure directory exists
 	await fs.mkdir(path.dirname(fullPath), { recursive: true });
 
+	// Create backup before overwriting (if file exists and backup enabled)
+	if (createBackup) {
+		await createVocabularyBackup(vocabularyPath, maxBackups);
+	}
+
 	// Update metadata
 	vocabulary.metadata.last_updated = new Date().toISOString();
 
-	// Write to disk
-	await fs.writeFile(fullPath, JSON.stringify(vocabulary, null, 2));
+	// Atomic write: write to temp file, then rename
+	const tempPath = `${fullPath}.tmp`;
+	await fs.writeFile(tempPath, JSON.stringify(vocabulary, null, 2));
+	await fs.rename(tempPath, fullPath);
 }
 
 /**

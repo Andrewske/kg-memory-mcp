@@ -16,38 +16,55 @@ export function getPstTimestamp(): string {
  * Convert a Date object to Pacific Time ISO string
  */
 export function convertToPstIso(date: Date): string {
-	// Format the date in Pacific timezone
-	const pstDateTimeFormat = new Intl.DateTimeFormat('en-US', {
-		timeZone: 'America/Los_Angeles',
-		year: 'numeric',
-		month: '2-digit',
-		day: '2-digit',
-		hour: '2-digit',
-		minute: '2-digit',
-		second: '2-digit',
-		fractionalSecondDigits: 3,
-		hour12: false,
-	});
+    try {
+        // Validate input
+        if (!(date instanceof Date) || isNaN(date.getTime())) {
+            console.warn('[PST-TIME] Invalid date, using current time');
+            date = new Date();
+        }
 
-	// Get parts of the date in PST
-	const parts = pstDateTimeFormat.formatToParts(date);
-	const partsMap = Object.fromEntries(parts.map(p => [p.type, p.value]));
+        const pstDateTimeFormat = new Intl.DateTimeFormat('en-US', {
+            timeZone: 'America/Los_Angeles',
+            year: 'numeric',
+            month: '2-digit',
+            day: '2-digit',
+            hour: '2-digit',
+            minute: '2-digit',
+            second: '2-digit',
+            fractionalSecondDigits: 3,
+            hour12: false,
+        });
 
-	// Get the timezone offset for PST/PDT
-	// Create a date string in PST and parse it to get the offset
-	const pstDate = new Date(
-		date.toLocaleString('en-US', { timeZone: 'America/Los_Angeles' })
-	);
-	const utcDate = new Date(date.toLocaleString('en-US', { timeZone: 'UTC' }));
-	const offsetMinutes = (utcDate.getTime() - pstDate.getTime()) / (1000 * 60);
-	const offsetHours = Math.floor(Math.abs(offsetMinutes) / 60);
-	const offsetSign = offsetMinutes <= 0 ? '+' : '-';
-	const offsetString = `${offsetSign}${String(offsetHours).padStart(2, '0')}:00`;
+        const parts = pstDateTimeFormat.formatToParts(date);
+        const partsMap = new Map<string, string>();
 
-	// Construct ISO string with Pacific timezone offset
-	const isoString = `${partsMap.year}-${partsMap.month}-${partsMap.day}T${partsMap.hour}:${partsMap.minute}:${partsMap.second}.${partsMap.fractionalSecond}${offsetString}`;
+        for (const part of parts) {
+            if (part.type !== 'literal') {
+                partsMap.set(part.type, part.value);
+            }
+        }
 
-	return isoString;
+        // Validate required parts
+        const required = ['year', 'month', 'day', 'hour', 'minute', 'second', 'fractionalSecond'];
+        for (const part of required) {
+            if (!partsMap.has(part)) {
+                throw new Error(`Missing part: ${part}`);
+            }
+        }
+
+        // Calculate offset
+        const pstDate = new Date(date.toLocaleString('en-US', { timeZone: 'America/Los_Angeles' }));
+        const utcDate = new Date(date.toLocaleString('en-US', { timeZone: 'UTC' }));
+        const offsetMinutes = (utcDate.getTime() - pstDate.getTime()) / (1000 * 60);
+        const offsetHours = Math.floor(Math.abs(offsetMinutes) / 60);
+        const offsetSign = offsetMinutes <= 0 ? '+' : '-';
+        const offsetString = `${offsetSign}${String(offsetHours).padStart(2, '0')}:00`;
+
+        return `${partsMap.get('year')}-${partsMap.get('month')}-${partsMap.get('day')}T${partsMap.get('hour')}:${partsMap.get('minute')}:${partsMap.get('second')}.${partsMap.get('fractionalSecond')}${offsetString}`;
+    } catch (error) {
+        console.error('[PST-TIME] Error, falling back to UTC:', error);
+        return date.toISOString();
+    }
 }
 
 /**
