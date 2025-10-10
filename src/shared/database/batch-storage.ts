@@ -154,13 +154,27 @@ function validateAndSanitizeInput(input: BatchStorageInput): Result<BatchStorage
 			throw new Error(`Too many concepts: ${sanitizedConcepts.length} (max 5000)`);
 		}
 
+		// Validate embedding map entries for security
+		const EXPECTED_EMBEDDING_DIMENSION = 1536; // OpenAI text-embedding-3-small
+		for (const [key, embedding] of input.embeddingMap.entries()) {
+			if (!Array.isArray(embedding)) {
+				throw new Error(`Invalid embedding for key "${key}": expected array, got ${typeof embedding}`);
+			}
+			if (embedding.some(val => typeof val !== 'number' || !Number.isFinite(val))) {
+				throw new Error(`Invalid embedding values for key "${key}": all values must be finite numbers`);
+			}
+			if (embedding.length !== EXPECTED_EMBEDDING_DIMENSION) {
+				throw new Error(`Embedding dimension mismatch for "${key}": expected ${EXPECTED_EMBEDDING_DIMENSION}, got ${embedding.length}`);
+			}
+		}
+
 		return {
 			success: true,
 			data: {
 				triples: sanitizedTriples,
 				concepts: sanitizedConcepts,
 				conceptualizations: sanitizedConceptualizations,
-				embeddingMap: input.embeddingMap, // Embedding map is already validated by embedding service
+				embeddingMap: input.embeddingMap,
 			},
 		};
 	} catch (error) {
@@ -792,87 +806,54 @@ async function generateAndStoreVectorsPostTransaction(
 			};
 		}
 
-		// Use bulk INSERT for massive performance improvement (~30x faster)
-		// Batch size of 100 vectors per query to balance performance and memory
-		const batchSize = 100;
+		// SECURITY: Use parameterized queries to prevent SQL injection
+		// Process in batches for performance while maintaining security
+		const batchSize = 50; // Reduced batch size to stay within parameter limits
 		let successCount = 0;
 
 		for (let i = 0; i < allVectors.length; i += batchSize) {
 			const batch = allVectors.slice(i, i + batchSize);
 
-			try {
-				// Build bulk INSERT query
-				const values = batch
-					.map(
-						v =>
-							`(
-							'${v.id}',
-							'${v.vector_id}',
-							'${v.text.replace(/'/g, "''")}',
-							'${v.embedding}'::vector,
-							'${v.vector_type}'::vector_type,
-							${v.entity_name ? `'${v.entity_name.replace(/'/g, "''")}'` : 'NULL'},
-							${v.knowledge_triple_id ? `'${v.knowledge_triple_id}'` : 'NULL'},
+			// Process each vector with parameterized queries (SQL injection safe)
+			for (const vector of batch) {
+				try {
+					await db.$executeRaw`
+						INSERT INTO vector_embeddings (
+							id, vector_id, text, embedding, vector_type,
+							entity_name, knowledge_triple_id, concept_node_id,
+							created_at, updated_at
+						) VALUES (
+							${vector.id},
+							${vector.vector_id},
+							${vector.text},
+							${vector.embedding}::vector,
+							${vector.vector_type}::vector_type,
+							${vector.entity_name ?? null},
+							${vector.knowledge_triple_id ?? null},
 							NULL,
 							NOW(),
 							NOW()
-						)`
-					)
-					.join(',\n');
-
-				await db.$executeRawUnsafe(`
-					INSERT INTO vector_embeddings (
-						id, vector_id, text, embedding, vector_type,
-						entity_name, knowledge_triple_id, concept_node_id,
-						created_at, updated_at
-					) VALUES ${values}
-				`);
-
-				successCount += batch.length;
-				log('DEBUG', storageContext, 'Bulk inserted vector batch', {
-					batchNumber: Math.floor(i / batchSize) + 1,
-					vectorsInBatch: batch.length,
-					totalInserted: successCount,
-				});
-			} catch (error) {
-				log('WARN', storageContext, 'Failed to insert vector batch, trying individually', {
-					batchNumber: Math.floor(i / batchSize) + 1,
-					error: error instanceof Error ? error.message : String(error),
-				});
-
-				// Fallback: Try each vector individually if batch fails
-				for (const vector of batch) {
-					try {
-						await db.$executeRaw`
-							INSERT INTO vector_embeddings (
-								id, vector_id, text, embedding, vector_type,
-								entity_name, knowledge_triple_id, concept_node_id,
-								created_at, updated_at
-							) VALUES (
-								${vector.id},
-								${vector.vector_id},
-								${vector.text},
-								${vector.embedding}::vector,
-								${vector.vector_type}::vector_type,
-								${vector.entity_name},
-								${vector.knowledge_triple_id},
-								NULL,
-								NOW(),
-								NOW()
-							)
-						`;
-						successCount++;
-					} catch (individualError) {
-						log('WARN', storageContext, 'Failed to create individual vector', {
-							vectorText: vector.text,
-							error:
-								individualError instanceof Error
-									? individualError.message
-									: String(individualError),
-						});
-					}
+						)
+						ON CONFLICT (id) DO NOTHING
+					`;
+					successCount++;
+				} catch (individualError) {
+					log('WARN', storageContext, 'Failed to create vector', {
+						vectorId: vector.id,
+						vectorType: vector.vector_type,
+						error:
+							individualError instanceof Error
+								? individualError.message
+								: String(individualError),
+					});
 				}
 			}
+
+			log('DEBUG', storageContext, 'Processed vector batch', {
+				batchNumber: Math.floor(i / batchSize) + 1,
+				vectorsInBatch: batch.length,
+				totalInserted: successCount,
+			});
 		}
 
 		log('INFO', storageContext, 'Successfully stored vectors', {
