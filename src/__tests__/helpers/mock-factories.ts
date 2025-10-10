@@ -160,6 +160,7 @@ export function createTestTriple(overrides: Partial<Triple> = {}): Triple {
 		source_date: new Date('2025-01-01T00:00:00.000Z'),
 		extracted_at: new Date('2025-01-01T00:00:00.000Z'),
 		confidence: new Decimal(0.95),
+		extraction_stage: null,
 		...overrides,
 	};
 }

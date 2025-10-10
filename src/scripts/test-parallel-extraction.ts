@@ -73,23 +73,15 @@ async function main() {
 
 	const sumOfIndividual = sequentialTimings.reduce((a, b) => a + b, 0);
 	console.log(`\nSum of individual sequential calls: ${sumOfIndividual}ms`);
-	console.log(
-		`Ratio (parallel/sequential): ${(parallelTotal / sequentialTotal).toFixed(2)}`
-	);
+	console.log(`Ratio (parallel/sequential): ${(parallelTotal / sequentialTotal).toFixed(2)}`);
 
 	if (parallelTotal < sequentialTotal * 0.4) {
-		console.log(
-			'\n✅ SUCCESS: Parallel execution is working! (>60% time reduction)'
-		);
+		console.log('\n✅ SUCCESS: Parallel execution is working! (>60% time reduction)');
 	} else if (parallelTotal < sequentialTotal * 0.7) {
-		console.log(
-			'\n⚠️  PARTIAL: Some parallelization detected, but not optimal'
-		);
+		console.log('\n⚠️  PARTIAL: Some parallelization detected, but not optimal');
 	} else {
 		console.log('\n❌ ISSUE: Parallel execution appears to be running sequentially');
-		console.log(
-			'   The parallel time should be much less than sequential time if truly parallel.'
-		);
+		console.log('   The parallel time should be much less than sequential time if truly parallel.');
 	}
 }
 

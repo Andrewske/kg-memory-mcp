@@ -23,10 +23,11 @@ model KnowledgeTriple {
   type      TripleType
 
   // Data lineage fields
-  source       String
-  source_type  String // "thread", "file", "manual", "api", etc.
-  source_date  DateTime?
-  extracted_at DateTime
+  source           String
+  source_type      String // "thread", "file", "manual", "api", etc.
+  source_date      DateTime?
+  extracted_at     DateTime
+  extraction_stage String? // Track which extraction stage produced this triple
 
   // Quality fields
   confidence Decimal? @db.Decimal(3, 2) // 0.00 to 1.00

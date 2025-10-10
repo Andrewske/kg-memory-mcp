@@ -3,8 +3,12 @@
  */
 
 import type { ProcessingJob } from '@prisma/client';
-import { deduplicateTriples } from '~/features/deduplication/deduplicate.js';
+import {
+	createDetailedDeduplicationBreakdownWithDatabase,
+	deduplicateTriples,
+} from '~/features/deduplication/deduplicate.js';
 import { extractKnowledgeTriples } from '~/features/knowledge-extraction/extract.js';
+import type { RawExtractionData, StageBreakdown } from '~/benchmarks/shared/types.js';
 import type { ProcessKnowledgeArgs } from '~/server/transport-manager.js';
 import { batchStoreKnowledge } from '~/shared/database/batch-storage.js';
 import { env } from '~/shared/env.js';
@@ -15,6 +19,7 @@ import { chunkText, type TextChunk } from '~/shared/utils/text-chunking.js';
 import type { JobMetadata, JobResult } from '../job-types.js';
 import { schedulePostProcessingJobs, updateJobProgress } from '../pipeline-coordinator.js';
 import { ResourceManager, Semaphore } from '../resource-manager.js';
+import type { Triple } from '~/shared/types/core.js';
 
 /**
  * Execute extraction logic - pure function version
@@ -86,24 +91,36 @@ export async function executeExtraction(
 
 		await updateProgress(80);
 
-		// Merge chunk results
+		// Merge chunk results while preserving stage information
 		const allTriples: any[] = [];
 		const allConcepts: any[] = [];
+		const stageResultsMap: Record<string, Triple[]> = {};
+
 		for (const result of chunkResults) {
 			if (result.data?.triples) allTriples.push(...result.data.triples);
 			if (result.data?.concepts) allConcepts.push(...result.data.concepts);
+
+			// Merge stage results from each chunk
+			if (result.data?.stageResults) {
+				for (const [stage, stageTriples] of Object.entries(result.data.stageResults)) {
+					if (!stageResultsMap[stage]) {
+						stageResultsMap[stage] = [];
+					}
+					stageResultsMap[stage].push(...(stageTriples as Triple[]));
+				}
+			}
 		}
 		logDataFlow(
 			context,
 			{
 				input: chunkResults,
-				output: { allTriples, allConcepts },
+				output: { allTriples, allConcepts, stageResultsMap },
 				counts: {
 					inputCount: chunkResults.length,
 					outputCount: allTriples.length + allConcepts.length,
 				},
 			},
-			'Chunk results merged'
+			'Chunk results merged with stage tracking'
 		);
 
 		// Generate comprehensive embedding map ONCE for all operations
@@ -141,16 +158,20 @@ export async function executeExtraction(
 			batchCalls: embeddingStats.batchCalls,
 		});
 
-		// Deduplicate triples using embedding map
+		// Deduplicate triples using embedding map (extraction-stage deduplication)
 		let dedupTriples = allTriples;
+		let dedupMetadata: any;
+
 		if (allTriples.length > 0) {
 			log('DEBUG', context, 'Starting triple deduplication', { tripleCount: allTriples.length });
 			const deduplicationResult = await deduplicateTriples(
 				allTriples,
 				embeddingMapResult.data.embeddings
 			);
-			if (deduplicationResult.success) {
-				dedupTriples = deduplicationResult.data?.uniqueTriples ?? allTriples;
+			if (deduplicationResult.success && deduplicationResult.data) {
+				dedupTriples = deduplicationResult.data.uniqueTriples;
+				dedupMetadata = deduplicationResult.data.mergedMetadata;
+
 				logDataFlow(
 					context,
 					{
@@ -196,6 +217,64 @@ export async function executeExtraction(
 			duplicatesSkipped: storageResult.data.duplicatesSkipped,
 		});
 
+		// Create detailed breakdown AFTER storage to capture database and cross-stage duplicates
+		let rawExtractionData: RawExtractionData | undefined = undefined;
+		if (allTriples.length > 0 && dedupMetadata) {
+			// Create detailed breakdown with status markers for benchmarking (includes database and cross-stage duplicates)
+			const triplesWithStatus = createDetailedDeduplicationBreakdownWithDatabase(
+				allTriples,
+				dedupMetadata,
+				storageResult.data.duplicateAnalysis?.database_duplicate_details,
+				storageResult.data.duplicateAnalysis?.cross_stage_duplicate_details
+			);
+
+			// Group by extraction stage
+			const stageBreakdowns: StageBreakdown[] = [];
+			for (const [stageName, stageTriples] of Object.entries(stageResultsMap)) {
+				const stageTripleIds = new Set(
+					stageTriples.map(t => `${t.subject}|${t.predicate}|${t.object}|${t.type}`)
+				);
+				const stageTripleStatuses = triplesWithStatus.filter(t => {
+					const id = `${t.subject}|${t.predicate}|${t.object}|${t.type}`;
+					return stageTripleIds.has(id);
+				});
+
+				const kept = stageTripleStatuses.filter(t => t.status === 'KEPT').length;
+				const exactDups = stageTripleStatuses.filter(t => t.status === 'EXACT_DUPLICATE').length;
+				const semanticDups = stageTripleStatuses.filter(
+					t => t.status === 'SEMANTIC_DUPLICATE'
+				).length;
+
+				stageBreakdowns.push({
+					stage_name: stageName,
+					total_extracted: stageTripleStatuses.length,
+					kept,
+					exact_duplicates: exactDups,
+					semantic_duplicates: semanticDups,
+					triples: stageTripleStatuses,
+				});
+			}
+
+			rawExtractionData = {
+				stages: stageBreakdowns,
+				summary: {
+					total_extracted: allTriples.length,
+					total_kept: storageResult.data.triplesStored, // Use actual stored count from database
+					total_exact_duplicates: triplesWithStatus.filter(t => t.status === 'EXACT_DUPLICATE')
+						.length,
+					total_semantic_duplicates: triplesWithStatus.filter(
+						t => t.status === 'SEMANTIC_DUPLICATE'
+					).length,
+					total_database_duplicates: triplesWithStatus.filter(
+						t => t.status === 'DATABASE_DUPLICATE'
+					).length,
+					total_cross_stage_duplicates: triplesWithStatus.filter(
+						t => t.status === 'CROSS_STAGE_DUPLICATE'
+					).length,
+				},
+			};
+		}
+
 		// Schedule post-processing jobs (concepts and deduplication) - only if not skipping QStash
 		if (job.parent_job_id && !skipQStashUpdates) {
 			await schedulePostProcessingJobs(job.parent_job_id, {
@@ -215,6 +294,8 @@ export async function executeExtraction(
 				conceptsStored: storageResult.data.conceptsStored,
 				vectorsGenerated: embeddingStats.uniqueTexts,
 				chunksProcessed: chunks.length,
+				duplicateAnalysis: storageResult.data.duplicateAnalysis, // NEW: Pass through duplicate analysis
+				rawExtractionData, // NEW: Full stage-by-stage breakdown with database-aware duplicates
 				metrics: {
 					embeddingEfficiency: embeddingStats.duplicatesAverted,
 					processingTime: Date.now() - job.createdAt.getTime(),

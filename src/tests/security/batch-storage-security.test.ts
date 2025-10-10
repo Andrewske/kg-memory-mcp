@@ -32,6 +32,7 @@ describe('Batch Storage Security Tests', () => {
 				extracted_at: new Date(),
 				confidence: new Decimal(0.9),
 				source_date: null,
+				extraction_stage: null,
 			};
 
 			const input: BatchStorageInput = {
@@ -60,6 +61,7 @@ describe('Batch Storage Security Tests', () => {
 				extracted_at: new Date(),
 				confidence: new Decimal(0.9),
 				source_date: null,
+				extraction_stage: null,
 			};
 
 			const input: BatchStorageInput = {
@@ -86,6 +88,7 @@ describe('Batch Storage Security Tests', () => {
 				extracted_at: new Date(),
 				confidence: new Decimal(0.9),
 				source_date: null,
+				extraction_stage: null,
 			};
 
 			const input: BatchStorageInput = {
@@ -110,6 +113,7 @@ describe('Batch Storage Security Tests', () => {
 				extracted_at: new Date(),
 				confidence: new Decimal(999.9), // Invalid confidence value
 				source_date: null,
+				extraction_stage: null,
 			};
 
 			const input: BatchStorageInput = {
@@ -135,6 +139,7 @@ describe('Batch Storage Security Tests', () => {
 				extracted_at: new Date(),
 				confidence: new Decimal(0.9),
 				source_date: null,
+				extraction_stage: null,
 			}));
 
 			const input: BatchStorageInput = {
@@ -172,6 +177,7 @@ describe('Batch Storage Security Tests', () => {
 						extracted_at: new Date(),
 						confidence: new Decimal(0.9),
 						source_date: null,
+						extraction_stage: null,
 					},
 				],
 				concepts: [],

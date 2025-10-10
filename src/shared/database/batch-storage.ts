@@ -29,6 +29,43 @@ export interface BatchStorageResult {
 	conceptualizationsStored: number;
 	vectorsGenerated: number;
 	duplicatesSkipped: number;
+	duplicateAnalysis?: {
+		total_generated: number;
+		internal_duplicates: number;
+		database_duplicates: number;
+		unique_stored: number;
+		cross_stage_overlaps: Record<string, number>;
+		duplicate_examples: Array<{
+			triple: {
+				subject: string;
+				predicate: string;
+				object: string;
+				type: string;
+			};
+			kept_from_stage: string;
+			rejected_stages: string[];
+		}>;
+		database_duplicate_details?: Array<{
+			triple: {
+				subject: string;
+				predicate: string;
+				object: string;
+				type: string;
+			};
+			existing_id: string;
+			stored_at: string;
+		}>;
+		cross_stage_duplicate_details?: Array<{
+			triple: {
+				subject: string;
+				predicate: string;
+				object: string;
+				type: string;
+			};
+			kept_from_stage: string;
+			rejected_stages: string[];
+		}>;
+	};
 }
 
 /**
@@ -179,6 +216,7 @@ export async function batchStoreKnowledge(
 				let conceptualizationsStored = 0;
 				const vectorsGenerated = 0;
 				let duplicatesSkipped = 0;
+				let duplicateAnalysis: any;
 
 				// Step 1: Store triples if any
 				if (triples.length > 0) {
@@ -197,15 +235,122 @@ export async function batchStoreKnowledge(
 
 					// Check for existing triples within transaction
 					const ids = triplesWithIds.map(t => t.id);
-					const existingIds = await tx.knowledgeTriple.findMany({
+					const existingTriples = await tx.knowledgeTriple.findMany({
 						where: { id: { in: ids } },
-						select: { id: true },
+						select: { id: true, created_at: true, subject: true, predicate: true, object: true, type: true },
 					});
-					const existingIdSet = new Set(existingIds.map(t => t.id));
+					const existingIdSet = new Set(existingTriples.map(t => t.id));
+
+					// Create detailed map of database duplicates for debugging
+					const databaseDuplicateDetailsMap = new Map<string, { existing_id: string; stored_at: Date }>();
+					for (const existing of existingTriples) {
+						databaseDuplicateDetailsMap.set(existing.id, {
+							existing_id: existing.id,
+							stored_at: existing.created_at,
+						});
+					}
 
 					// Filter out duplicates
 					const newTriples = triplesWithIds.filter(t => !existingIdSet.has(t.id));
 					duplicatesSkipped = triplesWithIds.length - newTriples.length;
+
+					// Build duplicate analysis by stage
+					const triplesByStage = new Map<string, Set<string>>();
+					const tripleDetails = new Map<string, any>();
+
+					for (const triple of triplesWithIds) {
+						if (!triplesByStage.has(triple.id)) {
+							triplesByStage.set(triple.id, new Set());
+							tripleDetails.set(triple.id, triple);
+						}
+						const stage = (triple as any).extraction_stage || 'unknown';
+						triplesByStage.get(triple.id)!.add(stage);
+					}
+
+					// Build cross-stage duplication matrix
+					const crossStageMatrix = new Map<string, number>();
+					const duplicateExamples: any[] = [];
+
+					for (const [id, stages] of triplesByStage.entries()) {
+						if (stages.size > 1) {
+							// This triple was produced by multiple stages
+							const stageArray = Array.from(stages).sort();
+							const key = stageArray.join('→');
+							crossStageMatrix.set(key, (crossStageMatrix.get(key) || 0) + 1);
+
+							// Capture first 10 examples
+							if (duplicateExamples.length < 10) {
+								const triple = tripleDetails.get(id);
+								duplicateExamples.push({
+									triple: {
+										subject: triple.subject,
+										predicate: triple.predicate,
+										object: triple.object,
+										type: triple.type,
+									},
+									kept_from_stage: stageArray[0],
+									rejected_stages: stageArray.slice(1),
+								});
+							}
+						}
+					}
+
+					// Build database duplicate details array for debugging
+					const databaseDuplicateDetails = triplesWithIds
+						.filter(t => existingIdSet.has(t.id))
+						.map(t => {
+							const details = databaseDuplicateDetailsMap.get(t.id);
+							return {
+								triple: {
+									subject: t.subject,
+									predicate: t.predicate,
+									object: t.object,
+									type: t.type,
+								},
+								existing_id: details!.existing_id,
+								stored_at: details!.stored_at.toISOString(),
+							};
+						});
+
+					// Build cross-stage duplicate details - ALL triples that were extracted by multiple stages
+					const crossStageDuplicateDetails: Array<{
+						triple: { subject: string; predicate: string; object: string; type: string };
+						kept_from_stage: string;
+						rejected_stages: string[];
+					}> = [];
+
+					for (const [id, stages] of triplesByStage.entries()) {
+						if (stages.size > 1) {
+							// This triple was extracted by multiple stages
+							const triple = tripleDetails.get(id)!;
+							const stageArray = Array.from(stages).sort();
+							crossStageDuplicateDetails.push({
+								triple: {
+									subject: triple.subject,
+									predicate: triple.predicate,
+									object: triple.object,
+									type: triple.type,
+								},
+								kept_from_stage: stageArray[0], // First stage alphabetically is kept
+								rejected_stages: stageArray.slice(1), // Other stages are rejected
+							});
+						}
+					}
+
+					console.log(
+						`[BATCH STORAGE] Cross-stage duplicates detected: ${crossStageDuplicateDetails.length} (from ${triples.length} total triples, ${triplesByStage.size} unique)`
+					);
+
+					duplicateAnalysis = {
+						total_generated: triplesWithIds.length,
+						internal_duplicates: triplesWithIds.length - triplesByStage.size,
+						database_duplicates: existingIdSet.size,
+						unique_stored: newTriples.length,
+						cross_stage_overlaps: Object.fromEntries(crossStageMatrix),
+						duplicate_examples: duplicateExamples,
+						database_duplicate_details: databaseDuplicateDetails,
+						cross_stage_duplicate_details: crossStageDuplicateDetails,
+					};
 
 					if (newTriples.length > 0) {
 						// Prepare triples for Prisma
@@ -220,6 +365,7 @@ export async function batchStoreKnowledge(
 							source_date: triple.source_date ? new Date(triple.source_date) : null,
 							extracted_at: new Date(triple.extracted_at),
 							confidence: triple.confidence,
+							extraction_stage: (triple as any).extraction_stage || null, // NEW: Store extraction stage
 						}));
 
 						await tx.knowledgeTriple.createMany({
@@ -363,6 +509,7 @@ export async function batchStoreKnowledge(
 					conceptualizationsStored,
 					vectorsGenerated,
 					duplicatesSkipped,
+					duplicateAnalysis: triples.length > 0 ? duplicateAnalysis : undefined,
 				};
 			},
 			{

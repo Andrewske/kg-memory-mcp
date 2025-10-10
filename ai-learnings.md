@@ -662,3 +662,149 @@ With Phases 1-3 complete, the system now has:
 The architecture is now optimized and ready to tackle the real bottleneck: AI API request optimization, retry mechanisms, and background processing. This represents the highest-impact optimization opportunity with 60-80% potential improvement.
 
 This knowledge graph system has significant potential for optimization, and the performance testing infrastructure is now in place to measure and validate improvements systematically. **Phase 3 successfully completed the foundational optimizations and identified the path forward for maximum impact.**
+
+## 🔧 Benchmark Deduplication Reporting (In Progress - October 2025)
+
+### Problem Statement
+Pipeline benchmark reports showed inconsistent triple counts:
+- **Quality Metrics**: "24 triples stored"
+- **Raw Extraction Summary**: "39 extracted, 39 kept" ❌ **Wrong!**
+- **Reality**: 39 extracted → database deduplication removed 15 → only 24 actually stored
+
+The `rawExtractionData.summary.total_kept` count didn't reflect database-level deduplication.
+
+### Root Cause Analysis
+The issue had two layers of deduplication that weren't being tracked correctly:
+
+1. **Extraction-Stage Deduplication** (in `extraction-function.ts`)
+   - Semantic deduplication using embeddings BEFORE storage
+   - Creates `rawExtractionData` with status markers (KEPT, SEMANTIC_DUPLICATE, EXACT_DUPLICATE)
+   - This WAS working correctly
+
+2. **Database-Level Deduplication** (in `batch-storage.ts`)
+   - `checkExistingTriples()` finds duplicates already in database
+   - Filters them out before insertion
+   - This was NOT reflected in `rawExtractionData`
+
+**The bug**: `rawExtractionData` was created BEFORE database storage, so it used the extraction-stage dedup count instead of the actual stored count.
+
+### Changes Made
+
+#### 1. Enhanced Deduplication Function (`deduplication-function.ts`)
+**Location**: `src/features/knowledge-processing/handlers/deduplication-function.ts:187-231`
+
+Added return data to track removed triples:
+```typescript
+return {
+  success: true,
+  data: {
+    originalCount: triples.length,
+    uniqueCount: uniqueTriples.length,
+    duplicatesRemoved: duplicateCount,
+    removedTripleIds,           // NEW: IDs of removed triples
+    removedTriples: [...],      // NEW: Full triple data
+    processingTime: Date.now() - job.createdAt.getTime(),
+  },
+};
+```
+
+**Status**: ✅ Complete, but not actually used in benchmarks (database dedup stage rarely finds duplicates in clean benchmark runs)
+
+#### 2. Updated Pipeline Benchmark (`pipeline.ts`)
+**Location**: `src/benchmarks/pipeline.ts:185-222`
+
+- Re-queries triples after database deduplication to get actual stored count
+- Updates `triplesAfterDedup` variable for accurate reporting
+- Uses post-dedup count in all metrics and vocabulary analysis
+
+**Status**: ✅ Complete
+
+#### 3. Fixed Raw Extraction Data Creation (`extraction-function.ts`)
+**Location**: `src/features/knowledge-processing/handlers/extraction-function.ts:220-268`
+
+**Major Change**: Moved `rawExtractionData` creation to AFTER database storage
+
+```typescript
+// OLD (WRONG): Created before storage
+let rawExtractionData = { summary: { total_kept: dedupTriples.length } }; // ❌
+await batchStoreKnowledge({ triples: dedupTriples, ... });
+
+// NEW (CORRECT): Created after storage
+await batchStoreKnowledge({ triples: dedupTriples, ... });
+let rawExtractionData = {
+  summary: {
+    total_kept: storageResult.data.triplesStored  // ✅ Actual stored count
+  }
+};
+```
+
+**Status**: ✅ Complete - Summary now shows correct counts
+
+### Current Status
+
+**✅ What's Fixed:**
+- `rawExtractionData.summary.total_kept` now shows actual stored count (e.g., 17 instead of 50)
+- Quality metrics and raw extraction summary counts now match
+- Code correctly tracks extraction-stage vs database-level deduplication
+
+**❌ What's Still Broken:**
+- Individual triples are all marked as `✅ KEPT` even when many were database duplicates
+- No visual indication of which specific triples were filtered by database deduplication
+- The 50 extracted → 17 stored shows the count difference, but doesn't explain WHERE the 33 went
+
+**Example Current Output:**
+```markdown
+### 🔍 Raw Extraction by Stage
+
+**Summary**
+- Total Extracted: 50
+- Total Kept: 17        ✅ CORRECT NOW!
+- Exact Duplicates: 0
+- Semantic Duplicates: 0
+- Database Duplicates: ??? MISSING!
+
+#### ENTITY_ENTITY (18 extracted)
+1. `Mom` --[worried]--> `wedding` **✅ KEPT**
+2. `Emma` --[has]--> `anxiety` **✅ KEPT**    (But might be DB duplicate!)
+```
+
+### What Still Needs To Be Done
+
+1. **Add Database Duplicate Tracking**
+   - Capture which triples were filtered during `checkExistingTriples()`
+   - Add `DATABASE_DUPLICATE` status to triple markers
+   - Update summary to show: `Database Duplicates: 33`
+
+2. **Update Triple Status Markers**
+   - Mark database-filtered triples with `⚠️ DATABASE DUPLICATE`
+   - Show which triples were kept vs filtered at each stage
+   - Provide clear visual distinction in reports
+
+3. **Enhance Batch Storage Return Data**
+   - `batchStoreKnowledge()` should return which specific triples were database duplicates
+   - Pass this information back to extraction handler
+   - Use it to update `rawExtractionData` with correct status markers
+
+### Key Files Involved
+
+- **`src/features/knowledge-processing/handlers/extraction-function.ts`**: Creates rawExtractionData
+- **`src/shared/database/batch-storage.ts`**: Detects database duplicates (line ~220-226)
+- **`src/benchmarks/pipeline.ts`**: Pipeline benchmark orchestration
+- **`src/benchmarks/shared/storage.ts`**: Markdown report generation (line ~194-237)
+- **`src/benchmarks/shared/types.ts`**: Schema definitions for RawExtractionData
+
+### Technical Notes
+
+**Why Database Duplicates Happen:**
+- Previous benchmark runs may leave data in database
+- Cleanup might not catch all records
+- Same text extracted multiple times across different runs
+- Cross-stage duplicates (ENTITY_ENTITY vs EVENT_EVENT for same triple)
+
+**Why This Matters:**
+- Helps identify prompt issues causing duplicate extraction
+- Shows effectiveness of deduplication at different stages
+- Useful for debugging extraction quality
+- Important for cost analysis (generated but not stored = wasted AI calls)
+
+**Status**: Work paused - will resume later to add database duplicate tracking and proper status markers.

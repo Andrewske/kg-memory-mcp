@@ -91,6 +91,7 @@ export async function executeDeduplication(
 				source_date: true,
 				extracted_at: true,
 				confidence: true,
+				extraction_stage: true,
 			},
 		});
 
@@ -183,20 +184,22 @@ export async function executeDeduplication(
 		await updateProgress(60);
 
 		// Remove duplicates from database if any found
+		const uniqueIds = new Set(uniqueTriples.map((t: any) => t.id).filter(Boolean));
+		const removedTriples = triples.filter(t => !uniqueIds.has(t.id));
+		const removedTripleIds = removedTriples.map(t => t.id);
+
 		if (duplicateCount > 0) {
 			log('DEBUG', context, 'Removing duplicates from database', { duplicateCount });
-			const uniqueIds = new Set(uniqueTriples.map((t: any) => t.id).filter(Boolean));
-			const duplicateIds = triples.filter(t => !uniqueIds.has(t.id)).map(t => t.id);
 
 			// Use transaction to remove duplicates and their associated vectors
 			await db.$transaction([
 				// Delete duplicate triples
 				db.knowledgeTriple.deleteMany({
-					where: { id: { in: duplicateIds } },
+					where: { id: { in: removedTripleIds } },
 				}),
 				// Delete associated vectors from unified VectorEmbedding table
 				db.vectorEmbedding.deleteMany({
-					where: { knowledge_triple_id: { in: duplicateIds } },
+					where: { knowledge_triple_id: { in: removedTripleIds } },
 				}),
 			]);
 
@@ -214,6 +217,15 @@ export async function executeDeduplication(
 				originalCount: triples.length,
 				uniqueCount: uniqueTriples.length,
 				duplicatesRemoved: duplicateCount,
+				removedTripleIds,
+				removedTriples: removedTriples.map(t => ({
+					id: t.id,
+					subject: t.subject,
+					predicate: t.predicate,
+					object: t.object,
+					type: t.type,
+					extraction_stage: t.extraction_stage,
+				})),
 				processingTime: Date.now() - job.createdAt.getTime(),
 			},
 		};

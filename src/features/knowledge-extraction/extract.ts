@@ -192,7 +192,7 @@ export async function extractKnowledgeTriples(data: ProcessKnowledgeArgs) {
 			throw new Error(extractionResult.error?.message);
 		}
 
-		const { triples } = extractionResult.data;
+		const { triples, stageResults } = extractionResult.data;
 
 		// NOTE: Concept generation removed from extraction stage
 		// Concepts are now generated separately in the dedicated concept generation job
@@ -203,6 +203,7 @@ export async function extractKnowledgeTriples(data: ProcessKnowledgeArgs) {
 			success: true,
 			data: {
 				triples,
+				stageResults: stageResults || {}, // Pass through stage results for benchmarking
 				concepts: [], // Empty - concepts generated in separate stage
 				conceptualizations: [], // Empty - generated with concepts
 			},
@@ -246,6 +247,7 @@ async function extractSinglePass(data: ProcessKnowledgeArgs) {
 			predicate: rel.predicate,
 			object: rel.object,
 			type: rel.relationship_type as TripleType,
+			extraction_stage: 'single-pass', // Track extraction method
 			source: data.source,
 			source_type: data.source_type,
 			source_date: new Date(data.source_date),
@@ -260,6 +262,7 @@ async function extractSinglePass(data: ProcessKnowledgeArgs) {
 			success: true,
 			data: {
 				triples,
+				stageResults: { 'single-pass': triples }, // Group all under single-pass stage
 			},
 		};
 	} catch (error) {
@@ -279,6 +282,7 @@ async function extractSinglePass(data: ProcessKnowledgeArgs) {
  */
 async function extractFourStage(data: ProcessKnowledgeArgs) {
 	const allTriples = [];
+	const stageResults: Record<string, Triple[]> = {};
 
 	try {
 		// Run all four extraction stages in parallel for 75% performance improvement
@@ -296,8 +300,10 @@ async function extractFourStage(data: ProcessKnowledgeArgs) {
 		for (let i = 0; i < results.length; i++) {
 			const result = results[i];
 			const type = extractionTypes[i];
+			stageResults[type] = []; // Initialize stage results
 
 			if (result.status === 'fulfilled' && result.value.success && result.value.data) {
+				stageResults[type] = result.value.data;
 				allTriples.push(...result.value.data);
 			} else if (result.status === 'rejected') {
 				// Log error but continue processing - don't let one failure crash everything
@@ -329,6 +335,7 @@ async function extractFourStage(data: ProcessKnowledgeArgs) {
 									predicate: triple.predicate,
 									object: triple.object,
 									type,
+									extraction_stage: type, // Track which stage extracted this
 									source: data.source,
 									source_type: data.source_type,
 									source_date: new Date(data.source_date),
@@ -340,6 +347,7 @@ async function extractFourStage(data: ProcessKnowledgeArgs) {
 											? new Decimal(triple.confidence)
 											: null,
 								}));
+								stageResults[type] = mappedTriples;
 								allTriples.push(...mappedTriples);
 							}
 						}
@@ -365,6 +373,7 @@ async function extractFourStage(data: ProcessKnowledgeArgs) {
 			success: true,
 			data: {
 				triples: allTriples,
+				stageResults, // NEW: Return stage-separated results
 			},
 		};
 	} catch (error) {
@@ -378,6 +387,7 @@ async function extractFourStage(data: ProcessKnowledgeArgs) {
 				success: true,
 				data: {
 					triples: allTriples,
+					stageResults, // NEW: Include even on partial failure
 				},
 			};
 		}
@@ -436,6 +446,7 @@ export async function extractByType(data: ProcessKnowledgeArgs, type: TripleType
 			predicate: triple.predicate,
 			object: triple.object,
 			type,
+			extraction_stage: type, // Track which stage extracted this triple
 			source: data.source,
 			source_type: data.source_type,
 			source_date: new Date(data.source_date),

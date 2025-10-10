@@ -1,5 +1,6 @@
 import { env } from '~/shared/env.js';
 import type { Triple } from '~/shared/types/core.js';
+import type { TripleWithStatus } from '~/benchmarks/shared/types.js';
 
 export interface DeduplicationResult {
 	uniqueTriples: Triple[];
@@ -9,6 +10,10 @@ export interface DeduplicationResult {
 		mergedIntoId: string;
 		reason: 'exact' | 'semantic';
 	}>;
+}
+
+export interface DetailedDeduplicationResult extends DeduplicationResult {
+	triplesWithStatus: TripleWithStatus[];
 }
 
 export interface SimilarityScore {
@@ -289,4 +294,236 @@ function calculateCosineSimilarity(a: number[], b: number[]): number {
 	}
 
 	return dotProduct / (Math.sqrt(normA) * Math.sqrt(normB));
+}
+
+/**
+ * Create detailed deduplication breakdown with status markers
+ * Maps each triple to KEPT, EXACT_DUPLICATE, or SEMANTIC_DUPLICATE
+ */
+export function createDetailedDeduplicationBreakdown(
+	originalTriples: Triple[],
+	mergedMetadata: Array<{
+		originalId: string;
+		mergedIntoId: string;
+		reason: 'exact' | 'semantic';
+	}>
+): TripleWithStatus[] {
+	// Create map of duplicate IDs to their status
+	const duplicateMap = new Map<
+		string,
+		{ status: 'EXACT_DUPLICATE' | 'SEMANTIC_DUPLICATE'; mergedIntoId: string }
+	>();
+
+	for (const merge of mergedMetadata) {
+		duplicateMap.set(merge.originalId, {
+			status: merge.reason === 'exact' ? 'EXACT_DUPLICATE' : 'SEMANTIC_DUPLICATE',
+			mergedIntoId: merge.mergedIntoId,
+		});
+	}
+
+	// Create ID to index map for finding duplicate_of_index
+	const idToIndexMap = new Map<string, number>();
+	for (let i = 0; i < originalTriples.length; i++) {
+		const triple = originalTriples[i];
+		const id = generateTripleId(triple);
+		idToIndexMap.set(id, i);
+	}
+
+	// Map triples to their status
+	return originalTriples.map((triple, index) => {
+		const id = generateTripleId(triple);
+		const duplicateInfo = duplicateMap.get(id);
+
+		if (!duplicateInfo) {
+			// This triple was kept
+			return {
+				subject: triple.subject,
+				predicate: triple.predicate,
+				object: triple.object,
+				type: triple.type,
+				confidence: Number(triple.confidence || 0),
+				extraction_stage: (triple as any).extraction_stage || triple.type,
+				status: 'KEPT' as const,
+			};
+		}
+
+		// This triple is a duplicate
+		const mergedIntoIndex = idToIndexMap.get(duplicateInfo.mergedIntoId);
+		return {
+			subject: triple.subject,
+			predicate: triple.predicate,
+			object: triple.object,
+			type: triple.type,
+			confidence: Number(triple.confidence || 0),
+			extraction_stage: (triple as any).extraction_stage || triple.type,
+			status: duplicateInfo.status,
+			duplicate_of_index: mergedIntoIndex,
+		};
+	});
+}
+
+/**
+ * Enhanced deduplication breakdown that includes database-level and cross-stage duplicates
+ * This tracks extraction-stage duplicates (exact/semantic), database duplicates, AND cross-stage duplicates
+ */
+export function createDetailedDeduplicationBreakdownWithDatabase(
+	originalTriples: Triple[],
+	extractionMergedMetadata: Array<{
+		originalId: string;
+		mergedIntoId: string;
+		reason: 'exact' | 'semantic';
+	}>,
+	databaseDuplicates?: Array<{
+		triple: {
+			subject: string;
+			predicate: string;
+			object: string;
+			type: string;
+		};
+		existing_id: string;
+		stored_at: string;
+	}>,
+	crossStageDuplicates?: Array<{
+		triple: {
+			subject: string;
+			predicate: string;
+			object: string;
+			type: string;
+		};
+		kept_from_stage: string;
+		rejected_stages: string[];
+	}>
+): TripleWithStatus[] {
+	// Create map of extraction-stage duplicates
+	const extractionDuplicateMap = new Map<
+		string,
+		{ status: 'EXACT_DUPLICATE' | 'SEMANTIC_DUPLICATE'; mergedIntoId: string }
+	>();
+
+	for (const merge of extractionMergedMetadata) {
+		extractionDuplicateMap.set(merge.originalId, {
+			status: merge.reason === 'exact' ? 'EXACT_DUPLICATE' : 'SEMANTIC_DUPLICATE',
+			mergedIntoId: merge.mergedIntoId,
+		});
+	}
+
+	// Create map of database duplicates
+	const databaseDuplicateMap = new Map<
+		string,
+		{ existing_id: string; stored_at: string }
+	>();
+
+	if (databaseDuplicates) {
+		for (const dbDup of databaseDuplicates) {
+			const triple = dbDup.triple;
+			const id = generateTripleId({
+				subject: triple.subject,
+				predicate: triple.predicate,
+				object: triple.object,
+				type: triple.type,
+			} as Triple);
+			databaseDuplicateMap.set(id, {
+				existing_id: dbDup.existing_id,
+				stored_at: dbDup.stored_at,
+			});
+		}
+	}
+
+	// Create map of cross-stage duplicates
+	const crossStageDuplicateMap = new Map<
+		string,
+		{ kept_from_stage: string; rejected_stages: string[] }
+	>();
+
+	if (crossStageDuplicates) {
+		for (const crossDup of crossStageDuplicates) {
+			const triple = crossDup.triple;
+			const id = generateTripleId({
+				subject: triple.subject,
+				predicate: triple.predicate,
+				object: triple.object,
+				type: triple.type,
+			} as Triple);
+			crossStageDuplicateMap.set(id, {
+				kept_from_stage: crossDup.kept_from_stage,
+				rejected_stages: crossDup.rejected_stages,
+			});
+		}
+	}
+
+	// Create ID to index map for finding duplicate_of_index
+	const idToIndexMap = new Map<string, number>();
+	for (let i = 0; i < originalTriples.length; i++) {
+		const triple = originalTriples[i];
+		const id = generateTripleId(triple);
+		idToIndexMap.set(id, i);
+	}
+
+	// Map triples to their status (prioritize: database > cross-stage > semantic > exact > kept)
+	return originalTriples.map((triple, index) => {
+		const id = generateTripleId(triple);
+
+		// Check database duplicates first (highest priority)
+		const dbDupInfo = databaseDuplicateMap.get(id);
+		if (dbDupInfo) {
+			return {
+				subject: triple.subject,
+				predicate: triple.predicate,
+				object: triple.object,
+				type: triple.type,
+				confidence: Number(triple.confidence || 0),
+				extraction_stage: (triple as any).extraction_stage || triple.type,
+				status: 'DATABASE_DUPLICATE' as const,
+				existing_triple_id: dbDupInfo.existing_id,
+				stored_at: dbDupInfo.stored_at,
+			};
+		}
+
+		// Check cross-stage duplicates (second priority)
+		const crossDupInfo = crossStageDuplicateMap.get(id);
+		if (crossDupInfo) {
+			const tripleStage = (triple as any).extraction_stage || triple.type;
+			// If this triple is from a rejected stage, mark it as cross-stage duplicate
+			if (crossDupInfo.rejected_stages.includes(tripleStage)) {
+				return {
+					subject: triple.subject,
+					predicate: triple.predicate,
+					object: triple.object,
+					type: triple.type,
+					confidence: Number(triple.confidence || 0),
+					extraction_stage: tripleStage,
+					status: 'CROSS_STAGE_DUPLICATE' as const,
+					kept_from_stage: crossDupInfo.kept_from_stage,
+					rejected_stages: crossDupInfo.rejected_stages,
+				};
+			}
+		}
+
+		// Check extraction-stage duplicates
+		const extractionDupInfo = extractionDuplicateMap.get(id);
+		if (extractionDupInfo) {
+			const mergedIntoIndex = idToIndexMap.get(extractionDupInfo.mergedIntoId);
+			return {
+				subject: triple.subject,
+				predicate: triple.predicate,
+				object: triple.object,
+				type: triple.type,
+				confidence: Number(triple.confidence || 0),
+				extraction_stage: (triple as any).extraction_stage || triple.type,
+				status: extractionDupInfo.status,
+				duplicate_of_index: mergedIntoIndex,
+			};
+		}
+
+		// This triple was kept
+		return {
+			subject: triple.subject,
+			predicate: triple.predicate,
+			object: triple.object,
+			type: triple.type,
+			confidence: Number(triple.confidence || 0),
+			extraction_stage: (triple as any).extraction_stage || triple.type,
+			status: 'KEPT' as const,
+		};
+	});
 }

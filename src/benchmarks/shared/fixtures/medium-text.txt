@@ -1,0 +1,39 @@
+# Journal Entry - April 22nd, 2024
+
+## Work Challenges
+
+Today was one of those days where everything at work felt overwhelming. The deadline for the client presentation to Northern Bank got moved up by a week, which means I'm now scrambling to finish the blockchain integration proof-of-concept that I've been working on with my team. Jennifer keeps pushing for faster delivery, but she doesn't understand the technical complexity involved.
+
+Had a tense conversation with Luis this morning. He's frustrated with the timeline too, and I can tell the stress is getting to both of us. We spent three hours debugging an issue with the cryptocurrency wallet integration, only to discover it was a simple configuration error. Sometimes I feel like we're going in circles.
+
+David has been supportive though. He covered for me during the standup meeting when I was running late because of a doctor's appointment. I really appreciate having someone reliable on the team who understands the pressure we're under.
+
+Dr. Rodriguez emailed me about the research paper we're collaborating on. She wants to set up a call next week to discuss the methodology section. I'm excited about this opportunity, but also anxious about balancing it with everything else on my plate.
+
+## Personal Reflections
+
+Emma and I had our first real argument last night. She's upset that I've been working late almost every night this week, and honestly, she's right. I promised we'd have more quality time together, but I keep breaking that promise. The stress from work is bleeding into our relationship, and I hate it.
+
+She asked me point blank if I'm really committed to us, which hurt more than I expected. Of course I am - I love her. But I understand why she's questioning it when I'm constantly choosing work over spending time with her. We're supposed to move in together next month, and now I'm worried about whether we're ready for that step.
+
+I've been thinking a lot about what my therapist Dr. Matthews said about work-life boundaries. He's right that I use work as an escape when I'm anxious about other things. Maybe I'm avoiding dealing with my commitment fears by throwing myself into projects.
+
+## Family Update
+
+Mom called this afternoon to check in. She's still struggling with Dad being retired and home all the time. Apparently he's decided to reorganize the entire kitchen now, which is driving her crazy. She laughed about it, but I can hear the strain in her voice.
+
+My brother Jake sent photos of the wedding venue in Portland. It's beautiful - right on the waterfront with mountain views. The ceremony is in six weeks, and I still need to book my flight. Emma's supposed to be my plus-one, but after last night's fight, I'm not sure if she'll still want to come.
+
+Claire texted that baby Oliver is finally sleeping through the night, which is a huge relief. She sounded much better - less exhausted and overwhelmed. The postpartum support group she joined seems to be helping. I'm glad she's getting the help she needs.
+
+## Random Thoughts
+
+The weather has been gorgeous lately - finally feels like spring is really here. I keep looking out the office window and wishing I could be outside instead of staring at code all day. Emma mentioned wanting to go hiking this weekend at Mount Tamalpais again. I should make that happen, even if it means working extra hours during the week to catch up.
+
+Discovered a new coffee place near the apartment called Blue Bottle. Their cold brew is amazing. The barista, Sofia, makes conversation easy and remembered my order the second time I came in. Small things like that make the morning commute more bearable.
+
+Been listening to a lot of jazz again while coding. Found a great album by Chet Baker that helps me focus. There's something about trumpet solos that clears my head when I'm stuck on a difficult problem.
+
+I need to figure out how to manage all of this better - work, relationship, family obligations, personal health. Something has to give, but I don't know what. Maybe I should talk to Dr. Matthews about prioritization techniques in our next session.
+
+Overall feeling: stressed, guilty, and overwhelmed, but trying to stay positive. Tomorrow is a new day.

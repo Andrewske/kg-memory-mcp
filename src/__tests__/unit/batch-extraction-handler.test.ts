@@ -86,7 +86,7 @@ describe('executeExtraction', () => {
 				extractKnowledgeTriples as jest.MockedFunction<typeof extractKnowledgeTriples>
 			).mockResolvedValue({
 				success: true,
-				data: { triples: mockTriples, concepts: [], conceptualizations: [] },
+				data: { triples: mockTriples, concepts: [], conceptualizations: [], stageResults: {} },
 			} as ExtractKTResult);
 
 			(generateEmbeddingMap as jest.MockedFunction<typeof generateEmbeddingMap>).mockResolvedValue({
@@ -138,7 +138,7 @@ describe('executeExtraction', () => {
 				extractKnowledgeTriples as jest.MockedFunction<typeof extractKnowledgeTriples>
 			).mockResolvedValue({
 				success: true,
-				data: { triples: mockTriples, concepts: [], conceptualizations: [] },
+				data: { triples: mockTriples, concepts: [], conceptualizations: [], stageResults: {} },
 			} as ExtractKTResult);
 			(generateEmbeddingMap as jest.MockedFunction<typeof generateEmbeddingMap>).mockResolvedValue({
 				success: true,
@@ -181,7 +181,7 @@ describe('executeExtraction', () => {
 				extractKnowledgeTriples as jest.MockedFunction<typeof extractKnowledgeTriples>
 			).mockResolvedValue({
 				success: true,
-				data: { triples: mockTriples, concepts: [], conceptualizations: [] },
+				data: { triples: mockTriples, concepts: [], conceptualizations: [], stageResults: {} },
 			} as ExtractKTResult);
 			(generateEmbeddingMap as jest.MockedFunction<typeof generateEmbeddingMap>).mockResolvedValue({
 				success: true,
@@ -226,6 +226,7 @@ describe('executeExtraction', () => {
 				success: true,
 				data: {
 					triples: mockTriples,
+					stageResults: {},
 					concepts: [] as ExtractKTSuccess['data']['concepts'],
 					conceptualizations: [] as ExtractKTSuccess['data']['conceptualizations'],
 				},
@@ -269,6 +270,7 @@ describe('executeExtraction', () => {
 				success: true,
 				data: {
 					triples: [] as ExtractKTSuccess['data']['triples'],
+					stageResults: {},
 					concepts: [] as ExtractKTSuccess['data']['concepts'],
 					conceptualizations: [] as ExtractKTSuccess['data']['conceptualizations'],
 				},
@@ -302,6 +304,7 @@ describe('executeExtraction', () => {
 				success: true,
 				data: {
 					triples: mockTriples,
+					stageResults: {},
 					concepts: [], // Empty - concepts now generated in separate stage
 					conceptualizations: [] as ExtractKTSuccess['data']['conceptualizations'],
 				},
@@ -353,6 +356,7 @@ describe('executeExtraction', () => {
 				success: true,
 				data: {
 					triples: [createTestTriple()],
+					stageResults: {},
 					concepts: [] as ExtractKTSuccess['data']['concepts'],
 					conceptualizations: [] as ExtractKTSuccess['data']['conceptualizations'],
 				},
@@ -399,6 +403,7 @@ describe('executeExtraction', () => {
 				success: true,
 				data: {
 					triples: [] as ExtractKTSuccess['data']['triples'],
+					stageResults: {},
 					concepts: [] as ExtractKTSuccess['data']['concepts'],
 					conceptualizations: [] as ExtractKTSuccess['data']['conceptualizations'],
 				},
@@ -433,6 +438,7 @@ describe('executeExtraction', () => {
 				success: true,
 				data: {
 					triples: [createTestTriple()],
+					stageResults: {},
 					concepts: [] as ExtractKTSuccess['data']['concepts'],
 					conceptualizations: [] as ExtractKTSuccess['data']['conceptualizations'],
 				},
@@ -457,6 +463,7 @@ describe('executeExtraction', () => {
 				success: true,
 				data: {
 					triples: [] as ExtractKTSuccess['data']['triples'],
+					stageResults: {},
 					concepts: [] as ExtractKTSuccess['data']['concepts'],
 					conceptualizations: [] as ExtractKTSuccess['data']['conceptualizations'],
 				},
@@ -490,6 +497,7 @@ describe('executeExtraction', () => {
 					success: true,
 					data: {
 						triples: [createTestTriple()],
+						stageResults: {},
 						concepts: [],
 						conceptualizations: [],
 					},
@@ -499,6 +507,7 @@ describe('executeExtraction', () => {
 					success: true,
 					data: {
 						triples: [createTestTriple()],
+						stageResults: {},
 						concepts: [],
 						conceptualizations: [],
 					},
@@ -561,6 +570,7 @@ describe('executeExtraction', () => {
 				success: true,
 				data: {
 					triples: [] as ExtractKTSuccess['data']['triples'],
+					stageResults: {},
 					concepts: [] as ExtractKTSuccess['data']['concepts'],
 					conceptualizations: [] as ExtractKTSuccess['data']['conceptualizations'],
 				},

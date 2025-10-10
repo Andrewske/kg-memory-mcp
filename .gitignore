@@ -68,3 +68,7 @@ prisma/migrations/
 .ignore
 .claude
 .mcp.json
+
+# Benchmark results
+benchmarks/results/
+benchmarks/vocabulary.json

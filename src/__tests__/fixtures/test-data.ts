@@ -72,6 +72,7 @@ function createTriple(
 		source_date: new Date('2025-01-01T00:00:00.000Z'),
 		extracted_at: new Date('2025-01-01T00:00:00.000Z'),
 		confidence: new Decimal(confidence),
+		extraction_stage: null,
 	};
 }
 
@@ -94,6 +95,7 @@ export const sampleTriples: Record<string, Triple[]> = {
 			source_type: 'test',
 			source_date: new Date('2025-01-01T00:00:00.000Z'),
 			extracted_at: new Date('2025-01-01T00:00:00.000Z'),
+			extraction_stage: null,
 		},
 		{
 			subject: 'Tech Corp',
@@ -105,6 +107,7 @@ export const sampleTriples: Record<string, Triple[]> = {
 			source_type: 'test',
 			source_date: new Date('2025-01-01T00:00:00.000Z'),
 			extracted_at: new Date('2025-01-01T00:00:00.000Z'),
+			extraction_stage: null,
 		},
 	],
 
@@ -119,6 +122,7 @@ export const sampleTriples: Record<string, Triple[]> = {
 			source_type: 'test',
 			source_date: new Date('2025-01-01T00:00:00.000Z'),
 			extracted_at: new Date('2025-01-01T00:00:00.000Z'),
+			extraction_stage: null,
 		},
 		{
 			subject: 'product launch event',
@@ -130,6 +134,7 @@ export const sampleTriples: Record<string, Triple[]> = {
 			source_type: 'test',
 			source_date: new Date('2025-01-01T00:00:00.000Z'),
 			extracted_at: new Date('2025-01-01T00:00:00.000Z'),
+			extraction_stage: null,
 		},
 	],
 
@@ -144,6 +149,7 @@ export const sampleTriples: Record<string, Triple[]> = {
 			source_type: 'test',
 			source_date: new Date('2025-01-01T00:00:00.000Z'),
 			extracted_at: new Date('2025-01-01T00:00:00.000Z'),
+			extraction_stage: null,
 		},
 		{
 			subject: 'Sarah Johnson',
@@ -155,6 +161,7 @@ export const sampleTriples: Record<string, Triple[]> = {
 			source_type: 'test',
 			source_date: new Date('2025-01-01T00:00:00.000Z'),
 			extracted_at: new Date('2025-01-01T00:00:00.000Z'),
+			extraction_stage: null,
 		},
 	],
 };
