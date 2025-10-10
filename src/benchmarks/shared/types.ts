@@ -4,6 +4,30 @@
 
 import { z } from 'zod';
 
+// Import shared extraction metadata types for local use and re-export
+import {
+	type RawExtractionData,
+	RawExtractionDataSchema,
+	type StageBreakdown,
+	StageBreakdownSchema,
+	type TripleWithStatus,
+	TripleWithStatusSchema,
+	type ConceptWithStatus,
+	ConceptWithStatusSchema,
+} from '~/shared/types/extraction-metadata.js';
+
+// Re-export for external consumers
+export {
+	type RawExtractionData,
+	RawExtractionDataSchema,
+	type StageBreakdown,
+	StageBreakdownSchema,
+	type TripleWithStatus,
+	TripleWithStatusSchema,
+	type ConceptWithStatus,
+	ConceptWithStatusSchema,
+};
+
 /**
  * Benchmark configuration schema
  */
@@ -131,75 +155,7 @@ export const SampleTripleSchema = z.object({
 
 export type SampleTriple = z.infer<typeof SampleTripleSchema>;
 
-/**
- * Triple with duplicate status tracking
- */
-export const TripleWithStatusSchema = z.object({
-	subject: z.string(),
-	predicate: z.string(),
-	object: z.string(),
-	type: z.string(),
-	confidence: z.number(),
-	extraction_stage: z.string(),
-	status: z.enum([
-		'KEPT',
-		'EXACT_DUPLICATE',
-		'SEMANTIC_DUPLICATE',
-		'DATABASE_DUPLICATE',
-		'CROSS_STAGE_DUPLICATE',
-	]),
-	duplicate_of_index: z.number().optional(), // Index of the original triple this is a duplicate of
-	existing_triple_id: z.string().optional(), // Database ID of existing triple (for DATABASE_DUPLICATE)
-	stored_at: z.string().optional(), // When the existing triple was stored (for DATABASE_DUPLICATE)
-	kept_from_stage: z.string().optional(), // Which stage's version was kept (for CROSS_STAGE_DUPLICATE)
-	rejected_stages: z.array(z.string()).optional(), // Which other stages extracted it (for CROSS_STAGE_DUPLICATE)
-});
 
-export type TripleWithStatus = z.infer<typeof TripleWithStatusSchema>;
-
-/**
- * Extraction stage breakdown
- */
-export const StageBreakdownSchema = z.object({
-	stage_name: z.string(),
-	total_extracted: z.number(),
-	kept: z.number(),
-	exact_duplicates: z.number(),
-	semantic_duplicates: z.number(),
-	triples: z.array(TripleWithStatusSchema),
-});
-
-export type StageBreakdown = z.infer<typeof StageBreakdownSchema>;
-
-/**
- * Concept with duplicate status tracking
- */
-export const ConceptWithStatusSchema = z.object({
-	concept: z.string(),
-	abstraction_level: z.string(),
-	confidence: z.number(),
-	status: z.enum(['KEPT', 'EXACT_DUPLICATE', 'SEMANTIC_DUPLICATE']),
-	duplicate_of_index: z.number().optional(),
-});
-
-export type ConceptWithStatus = z.infer<typeof ConceptWithStatusSchema>;
-
-/**
- * Raw extraction data with deduplication tracking
- */
-export const RawExtractionDataSchema = z.object({
-	stages: z.array(StageBreakdownSchema),
-	summary: z.object({
-		total_extracted: z.number(),
-		total_kept: z.number(),
-		total_exact_duplicates: z.number(),
-		total_semantic_duplicates: z.number(),
-		total_database_duplicates: z.number(),
-		total_cross_stage_duplicates: z.number(),
-	}),
-});
-
-export type RawExtractionData = z.infer<typeof RawExtractionDataSchema>;
 
 /**
  * Fixture information schema

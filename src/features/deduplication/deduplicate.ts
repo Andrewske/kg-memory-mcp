@@ -1,6 +1,6 @@
 import { env } from '~/shared/env.js';
 import type { Triple } from '~/shared/types/core.js';
-import type { TripleWithStatus } from '~/benchmarks/shared/types.js';
+import type { TripleWithStatus } from '~/shared/types/extraction-metadata.js';
 
 export interface DeduplicationResult {
 	uniqueTriples: Triple[];

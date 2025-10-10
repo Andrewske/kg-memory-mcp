@@ -7,7 +7,7 @@ import {
 	extractElementsFromTriples,
 	generateConcepts,
 } from '~/features/conceptualization/conceptualize.js';
-import type { ConceptWithStatus } from '~/benchmarks/shared/types.js';
+import type { ConceptWithStatus } from '~/shared/types/extraction-metadata.js';
 import { db } from '~/shared/database/client.js';
 import {
 	createContext,

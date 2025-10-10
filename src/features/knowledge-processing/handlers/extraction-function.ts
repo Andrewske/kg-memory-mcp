@@ -8,7 +8,7 @@ import {
 	deduplicateTriples,
 } from '~/features/deduplication/deduplicate.js';
 import { extractKnowledgeTriples } from '~/features/knowledge-extraction/extract.js';
-import type { RawExtractionData, StageBreakdown } from '~/benchmarks/shared/types.js';
+import type { RawExtractionData, StageBreakdown } from '~/shared/types/extraction-metadata.js';
 import type { ProcessKnowledgeArgs } from '~/server/transport-manager.js';
 import { batchStoreKnowledge } from '~/shared/database/batch-storage.js';
 import { env } from '~/shared/env.js';
