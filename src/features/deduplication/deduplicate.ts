@@ -254,7 +254,10 @@ export async function removeSemanticDuplicates(
 
 // Helper functions
 function createTripleKey(triple: Triple) {
-	return `${triple.subject}|${triple.predicate}|${triple.object}|${triple.type}`;
+	// BUGFIX: Remove type from key to enable cross-type deduplication
+	// This allows detecting duplicates across different extraction stages
+	// (e.g., ENTITY_ENTITY vs EVENT_EVENT with same content)
+	return `${triple.subject}|${triple.predicate}|${triple.object}`;
 }
 
 function generateTripleId(triple: Triple): string {
