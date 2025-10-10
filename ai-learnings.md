@@ -1,810 +1,418 @@
 # AI Learnings - Knowledge Graph MCP Server
 
-This file contains insights and lessons learned from working on the Knowledge Graph MCP Server project, specifically to help future developers understand the codebase structure, performance characteristics, and optimization opportunities.
+This file contains critical insights for working on the Knowledge Graph MCP Server. It focuses on information that prevents bugs, saves debugging time, and highlights architectural constraints.
 
-## 📁 Project Structure & Architecture
+## 📋 How to Use & Maintain This File
 
-### Core Architecture
-- **Dual Transport**: Supports both STDIO (traditional MCP) and HTTP (REST API) simultaneously
-- **Pure Functional Design**: No factories, no hidden state - all dependencies passed as parameters
-- **Database-First**: All operations go directly to PostgreSQL with proper indexing
-- **TypeScript with ES Modules**: Uses strict typing with path aliases (`~` maps to `src/`)
-- **Unified Vector Storage**: Single `VectorEmbedding` table with `vector_type` field (ENTITY, RELATIONSHIP, SEMANTIC, CONCEPT)
+### When to ADD Information
+✅ **Add** if it meets ANY of these criteria:
+- **Silent failures**: Errors that don't throw exceptions or produce clear error messages
+- **Architectural constraints**: Non-negotiable patterns (e.g., unified vector storage)
+- **Performance gotchas**: Things that cause 2x+ slowdowns
+- **Non-obvious solutions**: Solutions that took >2 hours to discover
+- **Breaking changes**: Major refactors that change how agents should work
+
+❌ **Don't add**:
+- Historical performance data (keep only current baseline)
+- Step-by-step debugging narratives
+- Errors with clear stack traces
+- Information redundant with CLAUDE.md or README.md
+- Temporary workarounds (add TODOs instead)
+
+### Where to UPDATE Information
+
+| Type of Update | Section to Modify |
+|----------------|-------------------|
+| Performance baseline changes | → **Current Performance State** |
+| New critical gotchas | → **Critical Implementation Details** |
+| Completed optimizations | → Remove from **Active Work**, update **Current Performance State** |
+| Architecture changes | → **Core Architecture Essentials** |
+| New testing insights | → **Development & Testing** |
+| Breaking changes | → **Critical Implementation Details** + add warning |
+
+### Maintenance Guidelines
+- **Quality bar**: "Would this save an agent 2+ hours of debugging?"
+- **Conciseness**: If you add >50 lines, condense something else
+- **Current state over history**: Replace old performance data, don't append
+- **Examples**: One concise example per issue, not multiple variations
+
+---
+
+## 🏗️ Core Architecture Essentials
+
+### Non-Negotiable Patterns
+
+1. **Pure Functional Design**
+   - No factory functions or hidden state
+   - All dependencies passed explicitly as parameters
+   - Functions return `Result<T>` types for errors
+   - Example: `storeTriples(triples, db, embeddingMap, config)` not `storeTriples(triples)`
+
+2. **Unified Vector Storage** ⚠️ CRITICAL
+   - Single `vector_embeddings` table with `vector_type` field (ENTITY, RELATIONSHIP, SEMANTIC, CONCEPT)
+   - **DO NOT** reference old table names: `entity_vectors`, `relationship_vectors`, `semantic_vectors`
+   - All vector operations use: `await db.vectorEmbedding.create({ data: { vector_type: 'ENTITY', ... } })`
+
+3. **Dual Transport Support**
+   - STDIO (traditional MCP) and HTTP (REST API + SSE) run independently or together
+   - Both transports share same tool handlers in `transport-manager.ts`
+   - Environment flags: `ENABLE_STDIO_TRANSPORT`, `ENABLE_HTTP_TRANSPORT`
+
+4. **3-Stage Processing Pipeline**
+   - Jobs flow: EXTRACTION → CONCEPTS → DEDUPLICATION
+   - Each stage uses pure functions in `src/features/knowledge-processing/handlers/`
+   - QStash queue manages async processing with progress tracking
 
 ### Key Directories
+
 ```
 src/
-├── features/           # Pure stateless functions (business logic)
-│   ├── knowledge-extraction/     # AI-powered triple extraction
-│   ├── conceptualization/        # Concept hierarchy generation
-│   ├── deduplication/            # Smart duplicate detection
-│   └── knowledge-graph/          # Core graph operations and search
-├── server/             # Transport implementations
-│   ├── stdio-server.ts          # Traditional MCP
-│   ├── http-server.ts           # Express.js HTTP server
-│   └── transport-manager.ts     # Shared tool handling logic
-├── shared/             # Shared infrastructure
-│   ├── database/               # PostgreSQL adapter with Prisma
-│   ├── services/               # AI, embedding, queue services
-│   ├── types/                  # Comprehensive TypeScript definitions
-│   └── utils/                  # Utility functions and configuration
-└── tests/performance/   # Performance testing infrastructure
+├── features/                      # Pure stateless functions (business logic)
+│   ├── knowledge-extraction/      # AI-powered triple extraction
+│   ├── conceptualization/         # Concept hierarchy generation
+│   ├── deduplication/             # Semantic duplicate detection
+│   ├── knowledge-graph/           # Graph operations and search
+│   └── knowledge-processing/      # Job pipeline coordination
+│       ├── handlers/              # Functional job handlers (CRITICAL)
+│       │   ├── extraction-function.ts
+│       │   ├── concept-function.ts
+│       │   └── deduplication-function.ts
+│       ├── pipeline-coordinator.ts
+│       └── job-router.ts
+├── server/                        # Transport implementations
+│   ├── stdio-server.ts           # Traditional MCP
+│   ├── http-server.ts            # Express.js HTTP server
+│   ├── transport-manager.ts      # Shared tool handling
+│   └── routes/                   # HTTP endpoint implementations
+└── shared/                        # Shared infrastructure
+    ├── database/                  # PostgreSQL operations
+    │   ├── batch-storage.ts      # ⚠️ SQL injection risk (lines 368-388)
+    │   └── vector-operations.ts  # Unified vector storage
+    ├── services/                  # AI provider services
+    ├── types/                     # TypeScript definitions
+    └── utils/                     # Utility functions
 ```
 
-## 🔧 Development Environment & Setup
+---
 
-### Essential Environment Variables
-```bash
-# Required
-DATABASE_URL="postgresql://username:password@localhost:5432/knowledge_graph"
-OPENAI_API_KEY="sk-..." # OR ANTHROPIC_API_KEY
-AI_GATEWAY_API_KEY="..." # For AI provider service
+## ⚡ Current Performance State
 
-# Performance-related
-EXTRACTION_METHOD="four-stage" # vs "single-pass"
-BATCH_SIZE="32" # Embedding batch size
-AI_MODEL="gpt-4o-mini" # Current default
-EMBEDDING_MODEL="text-embedding-3-small"
-```
+### Performance Baseline (October 2025)
+- **Processing Speed**: ~20ms/token with gpt-4o-mini (68% improvement from original 66.6ms/token)
+- **Primary Bottleneck**: AI extraction API calls (95% of processing time)
+- **Highly Optimized Areas**:
+  - Database operations: 526ms (0.8% of total time)
+  - Embedding generation: 100% cache hit rate (0 duplicate API calls)
+  - Parallel extraction: 4 stages run concurrently
 
-### Development Commands
-```bash
-# Testing & Building
-pnpm test              # Jest tests
-pnpm run build         # TypeScript compilation with path aliases
-pnpm run check         # Lint + typecheck + tests
+### What's Already Optimized
+✅ **Extraction**: Four-stage extraction runs in parallel using `Promise.allSettled()`
+✅ **Embeddings**: `generateEmbeddingMap()` creates embeddings once, 70-80% cost reduction
+✅ **Database**: Atomic transactions via `batchStoreKnowledge()`, 526ms storage time
+✅ **Deduplication**: Semantic duplicate detection using embedding similarity (0.85 threshold)
 
-# Performance Benchmarking
-npx tsx src/tests/performance/run-benchmark.ts
+### Known Performance Characteristics
+- **Small Text (315 tokens)**: May timeout at 45s (API latency issues)
+- **Medium Text (982 tokens)**: ~20s processing time
+- **Large Text (2000+ tokens)**: Scales linearly with token count
+- **Embedding Batch Size**: Default 100 (configurable via `BATCH_SIZE` env var)
 
-# Development modes
-pnpm run dev:stdio     # STDIO transport only
-pnpm run dev:http      # HTTP transport only  
-pnpm run dev:dual      # Both transports
-```
+---
 
-## ⚡ Performance Characteristics & Bottlenecks
+## 🔧 Critical Implementation Details
 
-### Phase 0 Baseline Performance (Established August 2025)
-**Small Text (315 tokens)**: Times out at 45s (slower than expected)
-**Medium Text (982 tokens)**:
-- **Processing Time**: 65.4 seconds  
-- **Throughput**: 15.0 tokens/second
-- **Time per Token**: 66.6ms (very slow)
-- **Memory Usage**: 30.9MB (31.5KB per token)
-- **Extraction Efficiency**: 78.4 triples per 1000 tokens
-- **Vector Operations**: 308 vectors generated (154 entity, 77 relationship, 77 semantic)
+### ⚠️ Things That Break Silently
 
-### Phase 1 Results (Parallel Extraction - August 2025)
-**Small Text (315 tokens)**: Still times out at 45s (unchanged)
-**Medium Text (982 tokens)**:
-- **Processing Time**: 66.8 seconds (minimal improvement ~1.4s)
-- **Throughput**: 14.7 tokens/second
-- **Time per Token**: 68.0ms 
-- **Memory Usage**: 21.3MB (21.7KB per token - improved)
-- **Extraction Efficiency**: 55.0 triples per 1000 tokens
-- **Vector Operations**: 268 vectors generated (134 entity, 67 relationship, 67 semantic)
-
-### Phase 1 Analysis: Why Improvement Was Minimal
-✅ **Parallel Extraction Implemented Successfully**: Four-stage extraction now runs in parallel using `Promise.allSettled()`
-❌ **Vector Generation Bottleneck Dominates**: Extensive logging shows vector generation takes majority of processing time
-🔍 **Key Findings**:
-- Extraction optimization works but is masked by downstream bottlenecks
-- Vector generation shows extensive batch processing (3 batches for entities, 2-3 for semantic texts)
-- Multiple embedding API calls for duplicate entities across different vector types
-- Database storage operations also take significant time
-- **Next Priority**: Phase 2 embedding deduplication will likely show much larger gains
-
-### Phase 2 Results (Embedding Map Optimization - August 2025) 🚀
-**✅ MAJOR SUCCESS**: Embedding optimization delivers significant API call reduction!
-
-**Small Text (315 tokens)**: Still times out at 45s (remaining bottleneck to investigate)
-**Medium Text (982 tokens)**:
-- **Processing Time**: 62.17 seconds (**4.6s improvement**, 7% faster than Phase 1)
-- **Throughput**: 15.8 tokens/second (vs Phase 1: 14.7 tok/s)
-- **Time per Token**: 63.3ms (vs Phase 1: 68.0ms - **4.7ms improvement**)
-- **Memory Usage**: 32.4MB (33.0KB per token)
-- **Extraction Efficiency**: 39.7 triples per 1000 tokens
-- **Vector Operations**: 132 vectors generated (66 entity, 33 relationship, 33 semantic)
-
-### Phase 2 Analysis: Embedding Optimization Success ✅
-**🎯 CORE ACHIEVEMENT**: **Eliminated ALL duplicate embedding API calls in vector generation**
-- **Embedding Map Generation**: Single upfront cost - 4 API calls for 127 unique texts
-- **Vector Generation**: **0 additional API calls** (100% cache hit rate!)
-- **Deduplication**: **0 additional API calls** (uses embedding map)
-- **Concept Vectors**: **0 additional API calls** (uses embedding map)
-
-**🔧 Key Implementation Details**:
-- **New Architecture**: `generateEmbeddingMap()` creates comprehensive embedding map upfront
-- **Unified Approach**: All operations (deduplication, entity vectors, relationship vectors, semantic vectors, concept vectors) use single embedding map
-- **Perfect Cache Hit Rate**: All embedding lookups successful with message "✅ All embedding lookups successful - no API calls needed!"
-- **Batch Size Optimization**: Updated default from 32 to 100 for better throughput
-- **Smart Text Collection**: Automatically collects all unique texts (subjects, objects, predicates, semantic combinations, concepts)
-
-**📊 Efficiency Metrics**:
-- **API Call Reduction**: From ~10-15 separate embedding API calls to 3-4 batch calls total
-- **Embedding Reuse**: 100% reuse rate within processing pipeline 
-- **Memory Efficiency**: In-memory embedding map for instant lookups
-- **Cost Savings**: ~70-80% reduction in embedding API costs per document
-
-**🔍 Architecture Impact**:
-- **Function Signatures Updated**: `storeTriples()`, `storeConcepts()`, `deduplicateTriples()` now accept `embeddingMap` instead of `embeddingService`
-- **Centralized Generation**: Single call to `generateEmbeddingMap()` handles all embedding needs
-- **Zero Duplication**: No entity embedded multiple times across different vector types
-- **Scalable**: Larger documents will show even more dramatic savings due to entity reuse
-
-### Phase 3 Results (Database Transaction Batching - August 2025) ⚡
-**✅ DATABASE OPTIMIZATION SUCCESS**: Major efficiency gains in storage operations!
-
-**Medium Text (982 tokens) - Phase 3 Detailed Timing:**
-- **Processing Time**: 66.57 seconds (similar to Phase 2, focus on database optimization)
-- **Phase Breakdown**:
-  - **Extraction**: 63.56 seconds (95.5% of total) ⚠️ **MAJOR BOTTLENECK IDENTIFIED**
-  - **Embedding Generation**: 2.48 seconds (3.7%)
-  - **Deduplication**: 0.001 seconds (0.01%)
-  - **Database Storage**: 0.526 seconds (0.8%) ✅ **HIGHLY OPTIMIZED**
-  - **Total**: 66.57 seconds
-
-**🎯 KEY PHASE 3 ACHIEVEMENTS**:
-- **Database Transaction Batching**: Reduced storage operations to **526ms** total
-- **Atomic Operations**: All storage (triples, concepts, conceptualizations) in single transaction
-- **Connection Pool Optimization**: 10→20 connections, 5s→10s timeouts
-- **Performance Monitoring**: Comprehensive phase timing reveals true bottlenecks
-- **pgvector Compatibility**: Post-transaction vector storage resolves Prisma limitations
-
-**🔍 CRITICAL DISCOVERY**: **AI Extraction Dominates Performance (95%+ of processing time)**
-- **Root Cause**: API latency, rate limiting, or model response time 
-- **Database Operations**: Now highly efficient at **0.8%** of total time
-- **Next Priority**: AI request optimization, background processing, timeout strategies
-
-**⚠️ Remaining Performance Bottlenecks**:
-- **AI Extraction Phase**: 63.5s for 982 tokens (64ms per token!) - likely API/network issues
-- **Small Text Timeouts**: Likely due to API issues, not code efficiency  
-- **Investigation Needed**: API rate limiting, model selection, retry strategies
-
-### Performance Analysis Summary (After Phase 3)
-- **PRIMARY BOTTLENECK (95.5%)**: AI Extraction API calls dominate processing time
-- **OPTIMIZED: Database Operations (0.8%)**: Highly efficient with transaction batching
-- **OPTIMIZED: Embedding Generation (3.7%)**: Efficient with embedding map reuse  
-- **OPTIMIZED: Deduplication (0.01%)**: Nearly instantaneous
-- **Memory**: Reasonable usage patterns, no major leaks detected
-
-### Identified Performance Bottlenecks
-
-#### 1. Sequential Four-Stage Extraction (Highest Impact)
-**Location**: `src/features/knowledge-extraction/extract.ts:172-182`
+#### 1. Vector Storage (MOST COMMON ERROR)
+**Problem**: Using old table names or wrong patterns causes silent failures.
 
 ```typescript
-// Current: Sequential processing
-for (const type of ['ENTITY_ENTITY', 'ENTITY_EVENT', 'EVENT_EVENT', 'EMOTIONAL_CONTEXT']) {
-    const result = await extractByType(data, type); // Each waits for the previous!
+// ❌ WRONG - These tables don't exist
+await db.entity_vectors.create(...)
+await db.relationship_vectors.create(...)
+
+// ✅ CORRECT - Use unified table with vector_type
+await db.vectorEmbedding.create({
+  data: {
+    entity_id: entityId,
+    vector_type: 'ENTITY',
+    vector: `[${embedding.join(',')}]::vector`,
+    ...
+  }
+})
+```
+
+**Key Points**:
+- All vectors stored in `vector_embeddings` table
+- Use `vector_type` field: 'ENTITY' | 'RELATIONSHIP' | 'SEMANTIC' | 'CONCEPT'
+- Vector format: `[${embedding.join(',')}]::vector` for raw SQL
+
+#### 2. Embedding Deduplication (PERFORMANCE CRITICAL)
+**Problem**: Not using `generateEmbeddingMap()` causes duplicate API calls (70-80% cost increase).
+
+```typescript
+// ❌ WRONG - Embeds same text multiple times
+for (const triple of triples) {
+  const embedding = await embeddingService.generateEmbedding(triple.subject);
 }
 
-// Recommended: Parallel processing  
-const results = await Promise.all([
-    extractByType(data, 'ENTITY_ENTITY'),
-    extractByType(data, 'ENTITY_EVENT'), 
-    extractByType(data, 'EVENT_EVENT'),
-    extractByType(data, 'EMOTIONAL_CONTEXT')
-]);
+// ✅ CORRECT - Generate embedding map once
+const allTexts = [...new Set(triples.flatMap(t => [t.subject, t.object, t.predicate]))];
+const embeddingMap = await generateEmbeddingMap(allTexts, embeddingService, config);
+// Now lookup embeddings from map (no additional API calls)
 ```
-**Expected Impact**: 75% faster extraction
 
-#### 2. Duplicate Embedding Generation (High Impact)
-**Location**: Multiple locations in vector generation pipeline
+**Implementation**: See `src/shared/database/batch-storage.ts:generateEmbeddingMap()`
 
-**Current Issue**: Same text embedded multiple times
-- During deduplication (all triples)
-- During entity vector storage (duplicates for each triple)
-- During relationship vector storage
-- During semantic vector storage
+#### 3. Database Transactions with Vectors
+**Problem**: Prisma doesn't support `createMany()` for models with `Unsupported("vector")` fields.
 
-**Solution**: Generate embedding map once at the start
 ```typescript
-const allTexts = [...new Set([...triples.map(t => t.subject), ...])];
-const embeddingMap = await generateEmbeddingMap(allTexts);
-// Reuse throughout pipeline
-```
-**Expected Impact**: 50-60% reduction in embedding calls
+// ❌ WRONG - Fails silently with vector fields
+await db.$transaction(async (tx) => {
+  await tx.vectorEmbedding.createMany({ data: vectors }); // ERROR
+});
 
-#### 3. ✅ Database Transaction Inefficiency (SOLVED - Phase 3)
-**Location**: Database storage operations
-
-**✅ IMPLEMENTED**: Batch all operations in single atomic transaction via `batchStoreKnowledge()`
-**✅ RESULT**: Database operations reduced to 526ms (0.8% of total processing time)
-**✅ ACHIEVED**: 20-30% faster database operations + atomic consistency
-
-## 🧪 Testing Infrastructure
-
-### Performance Testing Setup
-Created comprehensive testing infrastructure in `src/tests/performance/`:
-
-- **Fixtures**: 4 text sizes (small: 315 tokens → xlarge: ~4000+ tokens)
-- **Mock Services**: Database and embedding services for isolated testing  
-- **Real Benchmarks**: Actual AI calls with detailed timing and memory tracking
-- **Automated Reports**: JSON reports with optimization suggestions
-- **Working Benchmark Scripts**: Multiple approaches for different testing needs
-
-### Performance Testing Files (Fixed & Working)
-```bash
-# ✅ WORKING: Simple benchmark script (bypasses Jest issues)
-pnpm run benchmark           # Quick test (small + medium)
-pnpm run benchmark:full      # Full test (all sizes)
-npx tsx src/tests/performance/benchmark.js
-
-# ✅ WORKING: Direct runner (longer timeouts)
-npx tsx src/tests/performance/run-benchmark.ts
-
-# ❌ BROKEN: Jest-based tests (ES module path mapping issues)
-# These have import issues with .js extensions and path aliases
-src/tests/performance/process-knowledge-benchmark.test.ts
-src/tests/performance/fixed-benchmark.test.ts
+// ✅ CORRECT - Separate core data and vectors
+await db.$transaction(async (tx) => {
+  await tx.knowledgeTriple.createMany({ data: triples });
+  await tx.conceptNode.createMany({ data: concepts });
+});
+// Generate vectors AFTER transaction
+await generateAndStoreVectorsPostTransaction(vectorData);
 ```
 
-### Jest Testing Issues & Solutions
-**Problem**: Jest moduleNameMapper fails with .js extensions in imports
-- `transport-manager.js` imports fail due to path alias mapping
-- ES module `import.meta.url` not supported in Jest environment
-- `.js` extensions in imports cause resolution failures
+**Reason**: pgvector compatibility issue with Prisma bulk operations.
 
-**Working Solution**: Use standalone scripts with `tsx` instead of Jest for performance tests
-```bash
-# ✅ This works
-npx tsx src/tests/performance/benchmark.js
+#### 4. SQL Injection Vulnerability ⚠️ SECURITY
+**Location**: `src/shared/database/batch-storage.ts:368-388`
 
-# ❌ This fails due to ES module issues
-npx jest src/tests/performance/
-```
-
-**Alternative Fix**: If Jest tests are needed, use relative imports instead of path aliases:
+**Problem**: Raw SQL with string interpolation for vector storage:
 ```typescript
-// ❌ Fails in Jest
-import { processKnowledge } from '~/server/transport-manager';
-
-// ✅ Works in Jest
-import { processKnowledge } from '../../server/transport-manager';
+// ⚠️ VULNERABLE - Needs parameterization
+const query = `INSERT INTO vector_embeddings (vector) VALUES ([${vector.join(',')}]::vector)`;
 ```
 
-### Running Performance Tests
-```bash
-# ✅ RECOMMENDED: Working benchmark commands
-pnpm run benchmark          # Quick baseline (small + medium, ~2-3 min)
-pnpm run benchmark:full     # Full benchmark (all sizes, ~10-15 min)
+**Status**: Known issue, needs migration to Prisma parameterized queries or `Prisma.sql`.
 
-# ✅ Alternative working approach
-npx tsx src/tests/performance/run-benchmark.ts
+### 🐛 Common Gotchas
 
-# ❌ Avoid Jest-based performance tests (broken)
-# pnpm test src/tests/performance/
-```
-
-### Key Metrics Tracked
-- Processing time per phase (extraction, deduplication, storage)
-- Memory usage and peak consumption  
-- Embedding API call efficiency (duplicates detected)
-- Tokens processed per second (currently ~15 tok/s)
-- Database operation timing
-- Extraction efficiency (triples per 1000 tokens)
-
-## 🎯 Optimization Roadmap
-
-### ✅ Phase 1: Parallel Extraction (COMPLETED - August 2025)
-- ✅ Implemented Promise.all() for four-stage extraction
-- ✅ Added proper error handling with Promise.allSettled()
-- ✅ Maintained same output format for compatibility
-- **Result**: Minimal improvement (~1.4s) due to vector generation bottleneck dominance
-
-### ✅ Phase 2: Embedding Optimization (COMPLETED - August 2025) 🚀
-- ✅ Generated comprehensive embedding map once at start of pipeline
-- ✅ Eliminated ALL duplicate embeddings across vector types (100% cache hit rate)
-- ✅ Increased batch size to 100 (from 32)
-- ✅ Updated architecture: `embeddingMap` parameter instead of `embeddingService`
-- ✅ Implemented `generateEmbeddingMap()` utility for centralized embedding generation
-- **Result**: 7% speed improvement + 70-80% reduction in embedding API costs
-
-### ✅ Phase 3: Database Transaction Batching (COMPLETED - August 2025) ⚡
-- ✅ Implemented `batchStoreKnowledge()` utility for atomic transaction storage
-- ✅ Replaced 3 separate database operations with single atomic transaction
-- ✅ Optimized database connection pool: 10→20 connections, 5s→10s timeout
-- ✅ Added comprehensive phase timing and performance monitoring
-- ✅ Resolved pgvector compatibility issues with post-transaction vector storage
-- **Result**: Database operations reduced to 526ms, identified AI extraction as 95% bottleneck
-
-### Phase 4: AI Request & Background Processing Optimization (HIGH IMPACT POTENTIAL)
-Based on Phase 3 findings, focus on the 95% bottleneck:
-
-**4A: AI Request Optimization (Highest Impact - 60-80% potential improvement)**
-- **Problem**: 63.5s extraction time for 982 tokens (64ms per token!)
-- **Investigation**: API rate limiting, timeout issues, model selection
-- **Solutions**: 
-  - Retry mechanisms with exponential backoff
-  - Circuit breakers for failed API calls  
-  - Model switching for different text sizes
-  - Request batching optimization
-  - Concurrent request limits tuning
-
-**4B: Background Conceptualization (30-40% user experience improvement)**
-- **Problem**: Conceptualization runs inline, blocking user response
-- **Solution**: Queue conceptualization as non-blocking background process
-- **Benefit**: Immediate response to user, concepts generated asynchronously
-
-**4C: Advanced Text Processing (20-30% improvement)**
-- Text chunking for inputs >3000 tokens with parallel processing
-- Progressive result streaming for long-running operations
-- Smart timeout strategies based on text size
-
-**Total Expected Improvement**: 70-90% faster processing (focusing on the real bottleneck)
-
-## 🔥 Recent Architectural Changes (August 2025)
-
-### ✅ Vector Storage Consolidation (Commit 5109125)
-**MAJOR ARCHITECTURAL IMPROVEMENT**: Consolidated all vector operations into unified `VectorEmbedding` table
-
-**What Changed:**
-- **Removed**: Separate `entity_vectors`, `relationship_vectors`, `semantic_vectors` tables  
-- **Added**: Single `VectorEmbedding` table with `vector_type` enum field
-- **Updated**: All vector operations to use unified storage pattern
-- **Simplified**: Deduplication handler now deletes from single table
-
-**Code Impact:**
-- **Modified Files**: 
-  - `src/shared/database/batch-storage.ts` - Unified vector generation and storage
-  - `src/shared/database/vector-operations.ts` - Single table operations  
-  - `src/features/knowledge-processing/handlers/deduplication-handler.ts` - Simplified deletions
-- **Removed Code**: ~2,100 lines of legacy vector handling code
-- **Performance**: Database operations now 526ms (0.8% of total processing time)
-
-**⚠️ CRITICAL SECURITY NOTE**: The consolidation uses raw SQL with potential injection vulnerability in `batch-storage.ts:368-388`. Immediate fix required using Prisma parameterized queries.
-
-**Developer Impact:**
-- ✅ Much simpler vector operations (single table, single insert pattern)
-- ✅ Better performance with bulk operations
-- ✅ Easier maintenance and debugging
-- ⚠️ Must use `vector_type` field in all queries now
-- ⚠️ Update any custom queries to use `vector_embeddings` table
-
-## 🐛 Common Issues & Solutions
-
-### Performance Testing Setup Issues
-**Problem**: Junior developers may struggle with performance testing due to complex setup
-**Solution**: Use the established working patterns:
-```bash
-# ✅ Always use these commands for performance testing
-pnpm run benchmark          # Quick baseline
-pnpm run benchmark:full     # Full benchmark
-
-# ✅ Direct script execution works
-npx tsx src/tests/performance/benchmark.js
-
-# ❌ Avoid Jest for performance tests - use standalone scripts
-```
-
-### TypeScript/Jest Configuration Issues  
-**Problem**: Path alias resolution fails in tests with .js extensions
-**Root Cause**: Jest moduleNameMapper doesn't handle ES modules with .js extensions properly
-**Solutions**:
-1. **Recommended**: Use `tsx` directly for performance tests (bypasses Jest)
-2. **Alternative**: Use relative imports in Jest tests:
+#### Path Aliases in Tests
 ```typescript
-// ❌ Fails in Jest
+// ❌ FAILS in Jest tests
 import { processKnowledge } from '~/server/transport-manager.js';
 
-// ✅ Works in Jest  
+// ✅ WORKS in Jest
 import { processKnowledge } from '../../server/transport-manager';
+
+// ✅ WORKS in tsx/runtime
+import { processKnowledge } from '~/server/transport-manager.js';
 ```
 
-**Jest Config Issue**: The current Jest config has correct moduleNameMapper but fails with .js imports:
-```javascript
-moduleNameMapper: {
-  '^~/(.*)$': '<rootDir>/src/$1',      // ✅ This is correct
-  '^(\\.{1,2}/.*)\\.js$': '$1'        // ✅ This should help but doesn't work fully
-}
-```
+**Solution**: Use `tsx` for performance tests, not Jest. Or use relative imports in Jest tests.
 
-### Import/Export Issues with ES Modules
-**Problem**: `require.main === module` doesn't work in ES modules
-**Solution**: Use `import.meta.url === \`file://\${process.argv[1]}\``
-
-**Problem**: `__dirname` not available in ES modules
-**Solution**: 
+#### ES Module Issues
 ```typescript
 // ❌ Not available in ES modules
 const __dirname = dirname(__filename);
 
-// ✅ Works in Node.js/tsx
+// ✅ Works in ES modules
+import { fileURLToPath } from 'url';
+import { dirname } from 'path';
 const __dirname = dirname(fileURLToPath(import.meta.url));
-
-// ✅ Alternative for tests
-const testDir = resolve(process.cwd(), 'src/tests/performance');
 ```
 
-### Prisma Type Imports
-**Problem**: Custom type definitions conflict with Prisma-generated types
-**Solution**: Import directly from `@prisma/client` for database types:
+#### Prisma Type Imports
 ```typescript
+// ✅ Import database types from Prisma client
 import type { KnowledgeTriple, ConceptNode } from '@prisma/client';
 ```
 
-### Environment Variable Validation
-**Problem**: Missing or invalid environment variables cause runtime failures
-**Solution**: The project uses Zod validation in `src/shared/env.ts` - check this file for required variables
+---
 
-### Performance Test Timeout Issues
-**Problem**: Tests may timeout on slower systems or with larger texts
-**Solution**: The benchmark scripts have appropriate timeouts built in:
-- Small text: 45s timeout (may still timeout on very slow systems)
-- Medium text: 80s timeout  
-- Large text: 120s timeout
-- XLarge text: 300s timeout (5 minutes)
+## 🧪 Development & Testing
 
-Adjust timeouts in `benchmark.js` if needed for your system.
+### Essential Commands
 
-### Database Transaction & pgvector Issues (Phase 3)
-**Problem**: Vector storage fails in transactions with `createMany()` operations
-**Root Cause**: Prisma doesn't support `createMany` for models with `Unsupported("vector")` fields
-**Solution**: 
-1. **Implemented**: Post-transaction vector storage using existing `createVectors()` operations
-2. **Architecture**: Separate core data storage (atomic transaction) from vector generation
-3. **Benefit**: Maintains atomicity for core data, proper pgvector handling for vectors
+```bash
+# Performance Testing (RECOMMENDED)
+pnpm run benchmark          # Quick baseline (small + medium, ~2-3 min)
+pnpm run benchmark:full     # Full benchmark (all sizes, ~10-15 min)
 
-```typescript
-// ✅ Working approach
-await db.$transaction(async (tx) => {
-  // Store core data only
-  await tx.knowledgeTriple.createMany({ data: triples });
-  await tx.conceptNode.createMany({ data: concepts });
-});
+# Development
+pnpm run dev:stdio          # STDIO transport only
+pnpm run dev:http           # HTTP transport only
+pnpm run dev:dual           # Both transports
 
-// Vector generation outside transaction
-await createVectors(vectorData); // Uses proper pgvector operations
+# Code Quality
+pnpm run check              # Lint + typecheck + tests
+
+# Database
+pnpm run db:push            # Push schema changes
+pnpm run db:studio          # Open Prisma Studio GUI
 ```
 
-**Alternative**: Use individual `create()` calls within transaction, but this is slower and more complex.
+### Testing Strategy
 
-## 📊 Database Schema Insights
+#### Performance Testing ✅
+```bash
+# ✅ WORKS - Use these
+pnpm run benchmark
+npx tsx src/tests/performance/benchmark.js
 
-### Key Tables and Relationships
+# ❌ BROKEN - Jest has ES module issues
+npx jest src/tests/performance/
+```
+
+**Why Jest Fails**: moduleNameMapper doesn't handle ES modules with `.js` extensions properly.
+
+#### Performance Metrics to Track
+- **Tokens/second**: Current baseline ~50 tok/s (20ms/token)
+- **Time per token**: Current baseline ~20ms
+- **Memory usage**: Should be <50MB for medium text (982 tokens)
+- **API call efficiency**: Should be 0 duplicate embeddings (100% cache hit rate)
+- **Extraction efficiency**: Triples per 1000 tokens varies by content
+
+#### Test Fixtures
+- **Small**: 315 tokens (timeout: 45s)
+- **Medium**: 982 tokens (timeout: 80s)
+- **Large**: ~2000 tokens (timeout: 120s)
+- **XLarge**: ~4000+ tokens (timeout: 300s)
+
+### Environment Variables (Performance-Related)
+
+```bash
+# AI Configuration
+AI_MODEL="gpt-4o-mini"                    # Current default (fast)
+EXTRACTION_METHOD="four-stage"            # vs "single-pass"
+EMBEDDING_MODEL="text-embedding-3-small"
+
+# Performance Tuning
+BATCH_SIZE="100"                          # Embedding batch size (increased from 32)
+SEARCH_TOP_K="10"                         # Initial search candidates
+MIN_SCORE="0.7"                           # Similarity threshold
+SEMANTIC_THRESHOLD="0.85"                 # Deduplication threshold
+```
+
+---
+
+## 🚀 Active Work & Next Steps
+
+### In Progress: Benchmark Deduplication Reporting (October 2025)
+
+**Problem**: Pipeline benchmark reports showed inconsistent triple counts:
+- Quality metrics: "24 triples stored"
+- Raw extraction summary: "39 extracted, 39 kept" (wrong!)
+- Reality: 39 extracted → 15 removed by database dedup → 24 stored
+
+**Status**: Partially fixed
+- ✅ `rawExtractionData.summary.total_kept` now shows actual stored count
+- ❌ Individual triples not marked with database duplicate status
+- ❌ Summary missing "Database Duplicates: 33" count
+
+**Key Files**:
+- `src/features/knowledge-processing/handlers/extraction-function.ts:220-268`
+- `src/shared/database/batch-storage.ts` (checkExistingTriples)
+- `src/benchmarks/pipeline.ts:185-222`
+
+**What Still Needs Work**:
+1. Add `DATABASE_DUPLICATE` status to triple markers
+2. Capture which triples filtered during `checkExistingTriples()`
+3. Update reports to show database duplicates separately from semantic duplicates
+
+### Next Optimization: Text Generation vs Structured Output
+
+**Current Bottleneck**: AI extraction takes 95% of processing time.
+
+**Hypothesis**: Switching from `generateObject()` to `generateText()` + JSON parsing will be 40-50% faster.
+
+**Current Approach (Slower)**:
+```typescript
+const response = await aiProvider.generateObject({
+  model: 'gpt-4o-mini',
+  schema: TripleSchema, // Zod schema validation during generation
+  prompt: extractionPrompt
+});
+```
+
+**Proposed Approach (40-50% Faster)**:
+```typescript
+const response = await aiProvider.generateText({
+  model: 'gpt-4o-mini',
+  prompt: `${extractionPrompt}\n\nReturn ONLY valid JSON, no markdown.`
+});
+const triples = JSON.parse(response.text);
+const validated = TripleSchema.safeParse({ triples });
+```
+
+**Why Faster**:
+- Structured output adds 40-50% overhead during generation
+- Modern LLMs (gpt-4o-mini) are excellent at generating valid JSON
+- Parsing + validation after generation is much faster than inline schema validation
+
+**Expected Impact**:
+- Current: 20ms/token → Optimized: 8-10ms/token (60% improvement)
+- Small text: 2-3s, Medium text: 5-8s
+
+**Implementation Location**: `src/shared/services/ai-provider-service.ts:32-38`
+
+### Database Schema Notes
+
+**Unified Vector Storage** (Updated August 2025):
+- Single `vector_embeddings` table with polymorphic relationships
+- `vector_type` field: 'ENTITY' | 'RELATIONSHIP' | 'SEMANTIC' | 'CONCEPT'
+- Benefits: 60% code reduction, simpler maintenance, better bulk operations
+
+**Key Tables**:
 - `KnowledgeTriple`: Core relationship storage with extraction metadata
 - `ConceptNode`: Hierarchical concept abstractions
-- `VectorEmbedding`: **UNIFIED** vector storage with `vector_type` field (replaces separate vector tables)
-- `ConceptualizationRelationship`: Links between entities and their conceptual abstractions
+- `VectorEmbedding`: Unified vector storage (replaces 4 separate tables)
+- `ConceptualizationRelationship`: Links entities to concepts
+- `ProcessingJob`: QStash job tracking with progress updates
 
-### Vector Storage Strategy (Updated August 2025)
-**✅ UNIFIED ARCHITECTURE**: Single `VectorEmbedding` table with polymorphic relationships:
-- **Entity vectors**: `vector_type = 'ENTITY'` for subject/object entities
-- **Relationship vectors**: `vector_type = 'RELATIONSHIP'` for predicates  
-- **Semantic vectors**: `vector_type = 'SEMANTIC'` for full triple meaning
-- **Concept vectors**: `vector_type = 'CONCEPT'` for conceptual abstractions
+---
 
-**Benefits of Unified Storage:**
-- ✅ Reduces code duplication by ~60% (single insert/query logic)
-- ✅ Better performance with bulk operations
-- ✅ Simpler maintenance and schema evolution
-- ✅ Consistent indexing strategy across all vector types
-- ✅ Single deduplication process handles all vector types
+## 📊 Code Quality & Style
 
-**CRITICAL**: All vector operations now use the unified table - no more separate `entity_vectors`, `relationship_vectors`, etc.
+### Functional Programming Patterns
+- **Functions**: ≤20 lines, ≤3 nesting levels, single purpose
+- **No classes**: Use pure functions, not OOP patterns (except framework requirements)
+- **Explicit dependencies**: All parameters passed explicitly
+- **Result types**: Return `Result<T>` for error handling
 
-## 🔍 Debugging & Monitoring
+### Error Handling
+- Database errors: Return `Result<T>` with error details
+- AI API failures: Retry logic with exponential backoff
+- Validation errors: Zod schema validation with detailed messages
+- Never log sensitive information (API keys, user data)
 
-### Useful Debug Environment Variables
+### Debugging
 ```bash
+# Useful debug environment variables
 LOG_LEVEL="DEBUG"           # Detailed logging
 DIAGNOSTIC_MODE="true"      # Full request/response payloads
 LOG_TO_STDERR="true"        # Logs to stderr for debugging
 ```
 
-### Performance Monitoring
-- Memory usage tracking with `process.memoryUsage()`
-- Timing with `performance.now()`
-- Token usage tracking (see `src/shared/utils/token-tracking.ts`)
-- Vector operation logging (very detailed output available)
-
-### Common Debug Patterns
-The codebase uses extensive console logging with prefixes like:
+**Common Debug Prefixes**:
 - `[ProcessKnowledge]` - Main processing pipeline
 - `[VECTOR DEBUG]` - Vector generation debugging
 - `[Background]` - Background processing (currently disabled)
 
-## 🚀 Next Developer Recommendations
+---
 
-### Immediate Priorities (Phase 3 COMPLETED - August 2025) 
-1. **✅ PHASE 0 COMPLETE**: Performance baseline established (66.6ms/token)
-2. **✅ PHASE 1 COMPLETE**: Parallel Extraction implemented 
-   - Location: `src/features/knowledge-extraction/extract.ts:172-182` ✅ DONE
-   - Changed sequential for-loop to `Promise.allSettled()` ✅ DONE
-   - Result: Minimal improvement due to vector generation bottleneck dominance
-3. **✅ PHASE 2 COMPLETE**: Embedding Map Optimization - 70-80% API call reduction ✅ DELIVERED
-   - **Location**: All vector generation functions updated ✅ DONE
-   - **Achievement**: Eliminated ALL duplicate embeddings (100% cache hit rate) ✅ DONE
-   - **New Architecture**: `generateEmbeddingMap()` + embedding map parameters ✅ DONE  
-   - **Result**: 7% speed improvement + massive embedding cost reduction ✅ DELIVERED
-4. **✅ PHASE 3 COMPLETE**: Database Transaction Batching - 526ms database operations ✅ DELIVERED
-   - **Location**: `src/shared/database/batch-storage.ts` ✅ CREATED
-   - **Achievement**: Single atomic transaction for all storage operations ✅ DONE
-   - **New Architecture**: `batchStoreKnowledge()` with post-transaction vector storage ✅ DONE
-   - **Result**: Database operations now 0.8% of total time, identified AI extraction as 95% bottleneck ✅ DELIVERED
-5. **🔥 NEXT PRIORITY: Phase 4A - AI Request Optimization** - 60-80% potential improvement 
-   - **Critical Discovery**: AI extraction takes 63.5s of 66.5s total (95.5% of processing time!)
-   - **Root Cause**: API latency, rate limiting, or model response time issues
-   - **Focus Areas**: Retry mechanisms, circuit breakers, model selection, request optimization
-   - **Expected Impact**: Massive improvement by addressing the real bottleneck
+## 🎯 Summary
 
-### Phase 4A: Model Switch & Text Generation Optimization (August 2025) 🚀
+This knowledge graph system has been extensively optimized:
+- ✅ **Extraction**: Parallel four-stage processing
+- ✅ **Embeddings**: Zero duplicate API calls (70-80% cost reduction)
+- ✅ **Database**: Atomic transactions (526ms, 0.8% of total time)
+- ✅ **Architecture**: Pure functional design with unified vector storage
 
-**✅ MASSIVE IMPROVEMENT**: Switching from gpt-5-nano to gpt-4o-mini delivered 68% performance improvement!
+**Next high-impact optimization**: Replace structured output with text generation (40-50% potential improvement).
 
-**Performance Comparison:**
-- **gpt-5-nano**: 64-70ms/token (EVENT_EVENT: 69.6ms/token, ENTITY_EVENT: 68.6ms/token)
-- **gpt-4o-mini**: 18-22ms/token (EVENT_EVENT: 21.9ms/token, ENTITY_EVENT: 21.2ms/token)
-- **Improvement**: 68% reduction in processing time
-- **Result**: Medium text processing reduced from 66.5s to ~20s
-
-**🎯 Next Optimization: Replace Structured Output with Text Generation**
-
-**Current Approach (Slower):**
-- Using `generateObject()` with Zod schema validation
-- Structured output adds 40-50% overhead
-- Schema validation happens during generation
-- Location: `src/shared/services/ai-provider-service.ts:32-38`
-
-**Optimized Approach (40-50% Faster):**
-```typescript
-// Instead of generateObject with schema
-const response = await aiProvider.generateText(
-  `${prompt}\n\nReturn ONLY valid JSON, no markdown formatting.`
-);
-const triples = JSON.parse(response.text);
-const validated = TripleSchema.safeParse({ triples });
-```
-
-**Why Text Generation is Faster:**
-- Less overhead than structured output generation
-- No inline schema validation during generation
-- Model generates JSON more naturally
-- Parsing and validation happen after generation (much faster)
-- Modern LLMs (especially gpt-4o-mini) are excellent at generating valid JSON
-
-**Expected Impact:**
-- Current: 20ms/token with structured output
-- Optimized: 8-10ms/token with text generation
-- Total improvement: Additional 50% reduction in processing time
-- Final expected: Small text in 2-3s, Medium text in 5-8s
-
-**Implementation Steps:**
-1. Add `generateTextAndParse()` function to extraction module
-2. Modify prompts to request pure JSON output (no markdown)
-3. Parse and validate response after generation
-4. Handle parsing errors with retry logic
-5. Test quality to ensure no degradation
-
-**Key Insight:** The AI SDK's `generateObject()` is convenient but adds significant overhead. For performance-critical applications, using `generateText()` with manual JSON parsing is much faster while maintaining the same quality.
-
-### Code Quality Improvements
-1. **Add comprehensive error handling** in parallel operations
-2. **Implement proper retry mechanisms** for AI API calls  
-3. **Add circuit breakers** for external service failures
-4. **Improve memory management** for large text processing
-
-### Testing Strategy (Lessons from Phase 0)
-1. **✅ WORKING**: Use `pnpm run benchmark` for performance testing
-2. **❌ AVOID**: Jest-based performance tests (ES module issues)
-3. **🔧 TODO**: Fix Jest path mapping for regular unit tests
-4. **📊 TODO**: Add regression test suite comparing before/after optimizations
-
-### Performance Testing Guidelines for Future Developers
-```bash
-# Before making performance changes:
-pnpm run benchmark          # Establish baseline
-
-# After making changes:  
-pnpm run benchmark          # Compare results
-# Look for improvement in tokens/second and ms/token metrics
-
-# For comprehensive testing:
-pnpm run benchmark:full     # Test all text sizes (10-15 min)
-```
-
-### Architecture Considerations
-1. **Consider caching layer** for frequently processed texts
-2. **Evaluate queue-based processing** for large batch operations
-3. **Implement progressive results streaming** for long-running operations
-4. **Add horizontal scaling capabilities** for high-throughput scenarios
-
-## 📝 Development Workflow Tips
-
-### Before Making Performance Changes
-1. **Establish Baseline**: `pnpm run benchmark` (save JSON report for comparison)
-2. **Check Tests**: `pnpm run check` (lint + typecheck + tests)  
-3. **Review Plan**: Check `improve_efficiency.md` for optimization roadmap
-4. **Note Current Metrics**: Document current tokens/second and ms/token
-
-### After Making Performance Changes
-1. **Run Benchmark**: `pnpm run benchmark` (compare with baseline)
-2. **Validate Tests**: `pnpm run check` (ensure no regressions)
-3. **Update Documentation**: 
-   - Update this ai-learnings.md with new performance numbers
-   - Document any breaking changes or new environment requirements
-   - Update improvement plan with completed phases
-4. **Save Results**: Keep performance reports for regression testing
-
-### Working with Performance Test Issues
-If you encounter Jest/testing issues like the Phase 0 review:
-1. **First try**: Use `tsx` directly instead of Jest for performance tests
-2. **If Jest needed**: Use relative imports, avoid path aliases with .js extensions  
-3. **Timeout issues**: Adjust timeouts in benchmark scripts for slower systems
-4. **Always verify**: Test with real API calls, not just mocks for performance work
-
-### Code Style Notes
-- Functions are pure with explicit dependencies (no hidden state)
-- Use `Result<T>` types for error handling instead of throwing exceptions
-- Path aliases (`~`) are preferred for imports
-- Database operations should be wrapped in transactions
-- All AI operations should include token usage tracking
-
-## 🎯 Phase 3 Summary: Major Architectural Achievement
-
-### ✅ Database Optimization: Complete Success
-**Phase 3 delivered exactly as planned**: Database operations went from multiple separate calls to a **single 526ms atomic transaction** - representing only **0.8% of total processing time**. This is a textbook example of successful database optimization.
-
-### 🔍 Critical Performance Discovery  
-The **most valuable outcome** of Phase 3 was identifying the true bottleneck: **AI extraction API calls consume 95.5% of processing time** (63.5 seconds out of 66.5 total). This shifts the optimization focus from database/architecture to AI request handling.
-
-### 🏗️ Robust Architecture Foundation
-With Phases 1-3 complete, the system now has:
-- **Parallel extraction processing** ✅
-- **Zero duplicate embeddings** (70-80% API cost reduction) ✅  
-- **Atomic database transactions** (20-30% database improvement) ✅
-- **Comprehensive performance monitoring** ✅
-- **pgvector compatibility** ✅
-
-### 🚀 Ready for Phase 4
-The architecture is now optimized and ready to tackle the real bottleneck: AI API request optimization, retry mechanisms, and background processing. This represents the highest-impact optimization opportunity with 60-80% potential improvement.
-
-This knowledge graph system has significant potential for optimization, and the performance testing infrastructure is now in place to measure and validate improvements systematically. **Phase 3 successfully completed the foundational optimizations and identified the path forward for maximum impact.**
-
-## 🔧 Benchmark Deduplication Reporting (In Progress - October 2025)
-
-### Problem Statement
-Pipeline benchmark reports showed inconsistent triple counts:
-- **Quality Metrics**: "24 triples stored"
-- **Raw Extraction Summary**: "39 extracted, 39 kept" ❌ **Wrong!**
-- **Reality**: 39 extracted → database deduplication removed 15 → only 24 actually stored
-
-The `rawExtractionData.summary.total_kept` count didn't reflect database-level deduplication.
-
-### Root Cause Analysis
-The issue had two layers of deduplication that weren't being tracked correctly:
-
-1. **Extraction-Stage Deduplication** (in `extraction-function.ts`)
-   - Semantic deduplication using embeddings BEFORE storage
-   - Creates `rawExtractionData` with status markers (KEPT, SEMANTIC_DUPLICATE, EXACT_DUPLICATE)
-   - This WAS working correctly
-
-2. **Database-Level Deduplication** (in `batch-storage.ts`)
-   - `checkExistingTriples()` finds duplicates already in database
-   - Filters them out before insertion
-   - This was NOT reflected in `rawExtractionData`
-
-**The bug**: `rawExtractionData` was created BEFORE database storage, so it used the extraction-stage dedup count instead of the actual stored count.
-
-### Changes Made
-
-#### 1. Enhanced Deduplication Function (`deduplication-function.ts`)
-**Location**: `src/features/knowledge-processing/handlers/deduplication-function.ts:187-231`
-
-Added return data to track removed triples:
-```typescript
-return {
-  success: true,
-  data: {
-    originalCount: triples.length,
-    uniqueCount: uniqueTriples.length,
-    duplicatesRemoved: duplicateCount,
-    removedTripleIds,           // NEW: IDs of removed triples
-    removedTriples: [...],      // NEW: Full triple data
-    processingTime: Date.now() - job.createdAt.getTime(),
-  },
-};
-```
-
-**Status**: ✅ Complete, but not actually used in benchmarks (database dedup stage rarely finds duplicates in clean benchmark runs)
-
-#### 2. Updated Pipeline Benchmark (`pipeline.ts`)
-**Location**: `src/benchmarks/pipeline.ts:185-222`
-
-- Re-queries triples after database deduplication to get actual stored count
-- Updates `triplesAfterDedup` variable for accurate reporting
-- Uses post-dedup count in all metrics and vocabulary analysis
-
-**Status**: ✅ Complete
-
-#### 3. Fixed Raw Extraction Data Creation (`extraction-function.ts`)
-**Location**: `src/features/knowledge-processing/handlers/extraction-function.ts:220-268`
-
-**Major Change**: Moved `rawExtractionData` creation to AFTER database storage
-
-```typescript
-// OLD (WRONG): Created before storage
-let rawExtractionData = { summary: { total_kept: dedupTriples.length } }; // ❌
-await batchStoreKnowledge({ triples: dedupTriples, ... });
-
-// NEW (CORRECT): Created after storage
-await batchStoreKnowledge({ triples: dedupTriples, ... });
-let rawExtractionData = {
-  summary: {
-    total_kept: storageResult.data.triplesStored  // ✅ Actual stored count
-  }
-};
-```
-
-**Status**: ✅ Complete - Summary now shows correct counts
-
-### Current Status
-
-**✅ What's Fixed:**
-- `rawExtractionData.summary.total_kept` now shows actual stored count (e.g., 17 instead of 50)
-- Quality metrics and raw extraction summary counts now match
-- Code correctly tracks extraction-stage vs database-level deduplication
-
-**❌ What's Still Broken:**
-- Individual triples are all marked as `✅ KEPT` even when many were database duplicates
-- No visual indication of which specific triples were filtered by database deduplication
-- The 50 extracted → 17 stored shows the count difference, but doesn't explain WHERE the 33 went
-
-**Example Current Output:**
-```markdown
-### 🔍 Raw Extraction by Stage
-
-**Summary**
-- Total Extracted: 50
-- Total Kept: 17        ✅ CORRECT NOW!
-- Exact Duplicates: 0
-- Semantic Duplicates: 0
-- Database Duplicates: ??? MISSING!
-
-#### ENTITY_ENTITY (18 extracted)
-1. `Mom` --[worried]--> `wedding` **✅ KEPT**
-2. `Emma` --[has]--> `anxiety` **✅ KEPT**    (But might be DB duplicate!)
-```
-
-### What Still Needs To Be Done
-
-1. **Add Database Duplicate Tracking**
-   - Capture which triples were filtered during `checkExistingTriples()`
-   - Add `DATABASE_DUPLICATE` status to triple markers
-   - Update summary to show: `Database Duplicates: 33`
-
-2. **Update Triple Status Markers**
-   - Mark database-filtered triples with `⚠️ DATABASE DUPLICATE`
-   - Show which triples were kept vs filtered at each stage
-   - Provide clear visual distinction in reports
-
-3. **Enhance Batch Storage Return Data**
-   - `batchStoreKnowledge()` should return which specific triples were database duplicates
-   - Pass this information back to extraction handler
-   - Use it to update `rawExtractionData` with correct status markers
-
-### Key Files Involved
-
-- **`src/features/knowledge-processing/handlers/extraction-function.ts`**: Creates rawExtractionData
-- **`src/shared/database/batch-storage.ts`**: Detects database duplicates (line ~220-226)
-- **`src/benchmarks/pipeline.ts`**: Pipeline benchmark orchestration
-- **`src/benchmarks/shared/storage.ts`**: Markdown report generation (line ~194-237)
-- **`src/benchmarks/shared/types.ts`**: Schema definitions for RawExtractionData
-
-### Technical Notes
-
-**Why Database Duplicates Happen:**
-- Previous benchmark runs may leave data in database
-- Cleanup might not catch all records
-- Same text extracted multiple times across different runs
-- Cross-stage duplicates (ENTITY_ENTITY vs EVENT_EVENT for same triple)
-
-**Why This Matters:**
-- Helps identify prompt issues causing duplicate extraction
-- Shows effectiveness of deduplication at different stages
-- Useful for debugging extraction quality
-- Important for cost analysis (generated but not stored = wasted AI calls)
-
-**Status**: Work paused - will resume later to add database duplicate tracking and proper status markers.
+**Critical warnings**:
+- ⚠️ SQL injection vulnerability in batch-storage.ts:368-388
+- ⚠️ Always use unified `vector_embeddings` table (not separate tables)
+- ⚠️ Always use `generateEmbeddingMap()` to avoid duplicate embeddings
+- ⚠️ Use `pnpm run benchmark` for performance testing (not Jest)
