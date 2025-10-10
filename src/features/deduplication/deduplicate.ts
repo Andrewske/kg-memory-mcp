@@ -1,6 +1,7 @@
 import { env } from '~/shared/env.js';
 import type { Triple } from '~/shared/types/core.js';
 import type { TripleWithStatus } from '~/shared/types/extraction-metadata.js';
+import { createTripleKeyString, generateTripleId } from '~/shared/database/database-utils.js';
 
 export interface DeduplicationResult {
 	uniqueTriples: Triple[];
@@ -109,7 +110,7 @@ export function removeExactDuplicates(triples: Triple[]) {
 	}> = [];
 
 	for (const triple of triples) {
-		const key = createTripleKey(triple);
+		const key = createTripleKeyString(triple);
 
 		if (uniqueMap.has(key)) {
 			// This is a duplicate - merge metadata
@@ -253,17 +254,8 @@ export async function removeSemanticDuplicates(
 }
 
 // Helper functions
-function createTripleKey(triple: Triple) {
-	// BUGFIX: Remove type from key to enable cross-type deduplication
-	// This allows detecting duplicates across different extraction stages
-	// (e.g., ENTITY_ENTITY vs EVENT_EVENT with same content)
-	return `${triple.subject}|${triple.predicate}|${triple.object}`;
-}
-
-function generateTripleId(triple: Triple): string {
-	const key = createTripleKey(triple);
-	return Buffer.from(key).toString('base64').replace(/[+/=]/g, '_');
-}
+// NOTE: createTripleKeyString and generateTripleId are now imported from database-utils.ts
+// This ensures consistency between deduplication and database storage
 
 function mergeTripleMetadata(existing: Triple, duplicate: Triple) {
 	return {

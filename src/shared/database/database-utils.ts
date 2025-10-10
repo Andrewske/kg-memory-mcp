@@ -11,11 +11,21 @@ function generateId(key: string): string {
 }
 
 /**
+ * Create triple key string for uniqueness determination
+ * NOTE: Type is excluded to enable cross-type deduplication
+ * Triples with identical (subject, predicate, object) are considered duplicates
+ * regardless of their type (ENTITY_ENTITY, EVENT_EVENT, etc.)
+ */
+export function createTripleKeyString(triple: Triple): string {
+	return `${triple.subject}|${triple.predicate}|${triple.object}`;
+}
+
+/**
  * Generate unique ID for knowledge triple
+ * Uses createTripleKeyString for consistency with deduplication logic
  */
 export function generateTripleId(triple: Triple): string {
-	const key = `${triple.subject}|${triple.predicate}|${triple.object}|${triple.type}`;
-	return generateId(key);
+	return generateId(createTripleKeyString(triple));
 }
 
 /**

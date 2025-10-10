@@ -73,3 +73,5 @@ prisma/migrations/
 benchmarks/results/
 benchmarks/vocabulary.json
 benchmarks/
+
+EXTRACTION_FAILURE_INVESTIGATION.md
