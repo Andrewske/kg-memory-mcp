@@ -27,18 +27,18 @@ import type { Triple } from '~/shared/types/core.js';
  * @param skipQStashUpdates Skip QStash progress updates for testing
  * @param onProgress Optional progress callback for testing
  * @param updateProgressFn Optional dependency injection for progress updates
+ * @param schedulePostProcessingFn Optional dependency injection for post-processing scheduling
  */
 export async function executeExtraction(
 	job: ProcessingJob,
 	skipQStashUpdates: boolean = false,
 	onProgress?: (progress: number) => void,
-	updateProgressFn = updateJobProgress
+	updateProgressFn = updateJobProgress,
+	schedulePostProcessingFn = schedulePostProcessingJobs
 ): Promise<JobResult> {
 	const updateProgress = async (progress: number) => {
 		onProgress?.(progress);
-		if (!skipQStashUpdates) {
-			await updateProgressFn(job.id, progress);
-		}
+		await updateProgressFn(job.id, progress);
 	};
 
 	const metadata = job.metadata as unknown as JobMetadata;
@@ -88,6 +88,17 @@ export async function executeExtraction(
 			job.id,
 			updateProgress
 		);
+
+		// Check if all chunks failed
+		if (chunkResults.length === 0 && chunks.length > 0) {
+			return {
+				success: false,
+				error: {
+					message: 'All chunk extractions failed',
+					operation: 'batch_extraction',
+				},
+			};
+		}
 
 		await updateProgress(80);
 
@@ -275,9 +286,9 @@ export async function executeExtraction(
 			};
 		}
 
-		// Schedule post-processing jobs (concepts and deduplication) - only if not skipping QStash
-		if (job.parent_job_id && !skipQStashUpdates) {
-			await schedulePostProcessingJobs(job.parent_job_id, {
+		// Schedule post-processing jobs (concepts and deduplication)
+		if (job.parent_job_id) {
+			await schedulePostProcessingFn(job.parent_job_id, {
 				triplesExtracted: dedupTriples.length,
 				conceptsFound: allConcepts.length,
 				processingTime: Date.now() - job.createdAt.getTime(),

@@ -397,9 +397,10 @@ export async function batchStoreKnowledge(
 							};
 						});
 
+						// IMPORTANT: No skipDuplicates - we've already filtered them at line 271
+						// If a duplicate still exists, the transaction should fail so we can fix the bug
 						await tx.knowledgeTriple.createMany({
 							data: prismaTriples,
-							skipDuplicates: true,
 						});
 
 						triplesStored = newTriples.length;
@@ -450,9 +451,9 @@ export async function batchStoreKnowledge(
 						updated_at: new Date(),
 					}));
 
+					// No skipDuplicates - UUIDs should be unique, let transaction fail if not
 					await tx.conceptNode.createMany({
 						data: prismalConcepts,
-						skipDuplicates: true,
 					});
 
 					conceptsStored = concepts.length;
@@ -506,9 +507,9 @@ export async function batchStoreKnowledge(
 						updated_at: new Date(),
 					}));
 
+					// No skipDuplicates - UUIDs should be unique, let transaction fail if not
 					await tx.conceptualizationRelationship.createMany({
 						data: prismaConceptualizations,
-						skipDuplicates: true,
 					});
 
 					conceptualizationsStored = conceptualizations.length;

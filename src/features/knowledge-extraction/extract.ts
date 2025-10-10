@@ -93,20 +93,41 @@ IMPORTANT: Return ONLY a valid JSON object, no markdown formatting, no code bloc
 			};
 		}
 
-		// Pre-filter data to remove empty fields before schema validation
+		// Pre-filter data to remove empty fields and invalid confidence scores before schema validation
 		if (parsedData?.triples && Array.isArray(parsedData.triples)) {
+			const originalLength = parsedData.triples.length;
 			parsedData.triples = parsedData.triples.filter(
-				(triple: Record<string, unknown>) =>
-					triple.subject &&
-					typeof triple.subject === 'string' &&
-					triple.subject.trim() !== '' &&
-					triple.predicate &&
-					typeof triple.predicate === 'string' &&
-					triple.predicate.trim() !== '' &&
-					triple.object &&
-					typeof triple.object === 'string' &&
-					triple.object.trim() !== ''
+				(triple: Record<string, unknown>) => {
+					// Check required fields are non-empty
+					const hasValidFields =
+						triple.subject &&
+						typeof triple.subject === 'string' &&
+						triple.subject.trim() !== '' &&
+						triple.predicate &&
+						typeof triple.predicate === 'string' &&
+						triple.predicate.trim() !== '' &&
+						triple.object &&
+						typeof triple.object === 'string' &&
+						triple.object.trim() !== '';
+
+					// Check confidence is valid if present
+					const hasValidConfidence =
+						triple.confidence === undefined ||
+						triple.confidence === null ||
+						(typeof triple.confidence === 'number' &&
+							triple.confidence >= 0 &&
+							triple.confidence <= 1);
+
+					return hasValidFields && hasValidConfidence;
+				}
 			);
+
+			const filteredCount = originalLength - parsedData.triples.length;
+			if (filteredCount > 0) {
+				console.debug(
+					`[ExtractUsingTextGeneration] Filtered out ${filteredCount} triples with empty fields or invalid confidence scores`
+				);
+			}
 		}
 
 		// Validate against schema
@@ -300,6 +321,18 @@ async function extractFourStage(data: ProcessKnowledgeArgs) {
 					result.value.error?.message || result.value.error
 				);
 			}
+		}
+
+		// If no triples were extracted from any stage, return failure
+		if (allTriples.length === 0) {
+			return {
+				success: false,
+				error: {
+					type: 'EXTRACTION_ERROR',
+					message: 'All extraction stages failed to produce triples',
+					cause: new Error('No triples extracted from any stage'),
+				},
+			};
 		}
 
 		return {

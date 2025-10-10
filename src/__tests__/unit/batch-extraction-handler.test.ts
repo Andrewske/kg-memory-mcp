@@ -378,6 +378,10 @@ describe('executeExtraction', () => {
 				metadata: createTestJobMetadata(),
 			});
 
+			const mockSchedulePostProcessing = jest.fn(async () => {}) as jest.MockedFunction<
+				(parentJobId: string, extractionMetrics: any) => Promise<void>
+			>;
+
 			(
 				extractKnowledgeTriples as jest.MockedFunction<typeof extractKnowledgeTriples>
 			).mockResolvedValue({
@@ -410,9 +414,15 @@ describe('executeExtraction', () => {
 				})
 			);
 
-			await executeExtraction(job, true); // Skip QStash updates in tests
+			await executeExtraction(
+				job,
+				true, // Skip QStash updates in tests
+				undefined, // onProgress
+				updateJobProgress, // Use default updateProgressFn
+				mockSchedulePostProcessing // Inject mock for post-processing
+			);
 
-			expect(schedulePostProcessingJobs).toHaveBeenCalledWith(
+			expect(mockSchedulePostProcessing).toHaveBeenCalledWith(
 				'parent-job-id',
 				expect.objectContaining({
 					triplesExtracted: 1,
@@ -424,6 +434,10 @@ describe('executeExtraction', () => {
 
 		it('should update progress throughout processing', async () => {
 			const job = createTestJob({ metadata: createTestJobMetadata() });
+
+			const mockUpdateProgress = jest.fn(async () => {}) as jest.MockedFunction<
+				(jobId: string, progress: number, metrics?: any) => Promise<void>
+			>;
 
 			(
 				extractKnowledgeTriples as jest.MockedFunction<typeof extractKnowledgeTriples>
@@ -449,12 +463,17 @@ describe('executeExtraction', () => {
 				})
 			);
 
-			await executeExtraction(job, true); // Skip QStash updates in tests
+			await executeExtraction(
+				job,
+				true, // Skip QStash updates in tests
+				undefined, // onProgress
+				mockUpdateProgress // Inject mock for progress updates
+			);
 
-			expect(updateJobProgress).toHaveBeenCalledWith(job.id, 10);
-			expect(updateJobProgress).toHaveBeenCalledWith(job.id, 80);
-			expect(updateJobProgress).toHaveBeenCalledWith(job.id, 95);
-			expect(updateJobProgress).toHaveBeenCalledWith(job.id, 100);
+			expect(mockUpdateProgress).toHaveBeenCalledWith(job.id, 10);
+			expect(mockUpdateProgress).toHaveBeenCalledWith(job.id, 80);
+			expect(mockUpdateProgress).toHaveBeenCalledWith(job.id, 95);
+			expect(mockUpdateProgress).toHaveBeenCalledWith(job.id, 100);
 		});
 
 		it('should handle embedding generation failure', async () => {
@@ -578,7 +597,7 @@ describe('executeExtraction', () => {
 			const result = await executeExtraction(job, true); // Skip QStash updates in tests
 
 			expect(result.success).toBe(false);
-			expect(result.error?.message).toBe('Unexpected extraction error');
+			expect(result.error?.message).toBe('All chunk extractions failed');
 			expect(result.error?.operation).toBe('batch_extraction');
 		});
 
