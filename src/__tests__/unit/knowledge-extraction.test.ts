@@ -87,10 +87,10 @@ describe('Knowledge Extraction', () => {
 
 			// Verify all triple types are extracted
 			const triples = result.data?.triples || [];
-			expect(triples.some(t => t.triple_type === 'ENTITY_ENTITY')).toBe(true);
-			expect(triples.some(t => t.triple_type === 'ENTITY_EVENT')).toBe(true);
-			expect(triples.some(t => t.triple_type === 'EVENT_EVENT')).toBe(true);
-			expect(triples.some(t => t.triple_type === 'EMOTIONAL_CONTEXT')).toBe(true);
+			expect(triples.some(t => t.type === 'ENTITY_ENTITY')).toBe(true);
+			expect(triples.some(t => t.type === 'ENTITY_EVENT')).toBe(true);
+			expect(triples.some(t => t.type === 'EVENT_EVENT')).toBe(true);
+			expect(triples.some(t => t.type === 'EMOTIONAL_CONTEXT')).toBe(true);
 		});
 
 		it('should handle malformed JSON responses gracefully', async () => {
@@ -138,7 +138,7 @@ describe('Knowledge Extraction', () => {
 						object: 'Tech Corp',
 						confidence: 0.9,
 						semantic_content: 'John Smith works at Tech Corp',
-						triple_type: 'ENTITY_ENTITY',
+						type: 'ENTITY_ENTITY',
 						source_context: 'Employment',
 					},
 					{
@@ -147,7 +147,7 @@ describe('Knowledge Extraction', () => {
 						object: '',
 						confidence: 0.5,
 						semantic_content: '',
-						triple_type: 'ENTITY_ENTITY',
+						type: 'ENTITY_ENTITY',
 						source_context: 'Invalid',
 					},
 				],
@@ -319,11 +319,11 @@ describe('Knowledge Extraction', () => {
 			// Should still succeed with partial results
 			expect(result.success).toBe(true);
 			const triples = result.data?.triples || [];
-			expect(triples.some(t => t.triple_type === 'ENTITY_ENTITY')).toBe(true);
-			expect(triples.some(t => t.triple_type === 'EVENT_EVENT')).toBe(true);
-			expect(triples.some(t => t.triple_type === 'EMOTIONAL_CONTEXT')).toBe(true);
+			expect(triples.some(t => t.type === 'ENTITY_ENTITY')).toBe(true);
+			expect(triples.some(t => t.type === 'EVENT_EVENT')).toBe(true);
+			expect(triples.some(t => t.type === 'EMOTIONAL_CONTEXT')).toBe(true);
 			// Should not have ENTITY_EVENT triples due to failure
-			expect(triples.some(t => t.triple_type === 'ENTITY_EVENT')).toBe(false);
+			expect(triples.some(t => t.type === 'ENTITY_EVENT')).toBe(false);
 		});
 
 		it('should validate confidence scores are within valid range', async () => {
@@ -337,7 +337,7 @@ describe('Knowledge Extraction', () => {
 						object: 'Tech Corp',
 						confidence: 1.5, // Invalid: > 1.0
 						semantic_content: 'John Smith works at Tech Corp',
-						triple_type: 'ENTITY_ENTITY',
+						type: 'ENTITY_ENTITY',
 						source_context: 'Employment',
 					},
 					{
@@ -346,7 +346,7 @@ describe('Knowledge Extraction', () => {
 						object: 'San Francisco',
 						confidence: 0.8, // Valid
 						semantic_content: 'Tech Corp is located in San Francisco',
-						triple_type: 'ENTITY_ENTITY',
+						type: 'ENTITY_ENTITY',
 						source_context: 'Location',
 					},
 				],

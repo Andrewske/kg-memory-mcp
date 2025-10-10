@@ -47,12 +47,12 @@ export const benchmarkConfig = {
 	 * Prompt version for tracking iterations (optional)
 	 * Update this when making significant prompt changes
 	 */
-	promptVersion: 'v1.0',
+	promptVersion: 'v1.1',
 
 	/**
 	 * Optional notes for this benchmark configuration
 	 */
-	notes: '',
+	notes: 'Testing v1.1 prompts with explicit schema and few-shot examples to fix extraction failure (0 triples issue)',
 
 	/**
 	 * Regression detection configuration

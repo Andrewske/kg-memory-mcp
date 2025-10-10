@@ -164,7 +164,7 @@ const TripleSchema = z.object({
 			subject: z.string().min(1),
 			predicate: z.string().min(1),
 			object: z.string().min(1),
-			confidence: z.number().min(0).max(1).optional(),
+			confidence: z.coerce.number().min(0).max(1).optional(),
 		})
 	),
 });

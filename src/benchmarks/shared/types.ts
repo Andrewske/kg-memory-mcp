@@ -237,6 +237,22 @@ export const VocabularyAnalysisSchema = z
 export type VocabularyAnalysis = z.infer<typeof VocabularyAnalysisSchema>;
 
 /**
+ * Schema validation metrics schema
+ */
+export const ValidationMetricsSchema = z
+	.object({
+		total_ai_calls: z.number().nonnegative(),
+		schema_validation_passed: z.number().nonnegative(),
+		schema_validation_failed: z.number().nonnegative(),
+		parse_errors: z.number().nonnegative(),
+		validation_pass_rate: z.number().min(0).max(1),
+		failed_stages: z.array(z.string()).optional(), // Which extraction types failed
+	})
+	.optional();
+
+export type ValidationMetrics = z.infer<typeof ValidationMetricsSchema>;
+
+/**
  * Output analysis schema (optional detailed analysis)
  */
 export const OutputAnalysisSchema = z
@@ -247,6 +263,7 @@ export const OutputAnalysisSchema = z
 		sample_triples: z.array(SampleTripleSchema).optional(), // NEW
 		duplicate_analysis: DuplicateAnalysisSchema, // NEW
 		vocabulary_analysis: VocabularyAnalysisSchema,
+		validation_metrics: ValidationMetricsSchema, // NEW: Schema validation tracking
 		raw_extraction_data: RawExtractionDataSchema.optional(), // NEW: Full extraction breakdown
 		concepts_generated: z.array(ConceptWithStatusSchema).optional(), // NEW: All concepts with status
 	})

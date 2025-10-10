@@ -30,6 +30,7 @@ export interface BatchStorageResult {
 	conceptualizationsStored: number;
 	vectorsGenerated: number;
 	duplicatesSkipped: number;
+	storedTripleIds?: string[];
 	duplicateAnalysis?: {
 		total_generated: number;
 		internal_duplicates: number;
@@ -232,6 +233,7 @@ export async function batchStoreKnowledge(
 				const vectorsGenerated = 0;
 				let duplicatesSkipped = 0;
 				let duplicateAnalysis: any;
+				let storedTripleIds: string[] = [];
 
 				// Step 1: Store triples if any
 				if (triples.length > 0) {
@@ -268,6 +270,9 @@ export async function batchStoreKnowledge(
 					// Filter out duplicates
 					const newTriples = triplesWithIds.filter(t => !existingIdSet.has(t.id));
 					duplicatesSkipped = triplesWithIds.length - newTriples.length;
+
+					// Track the IDs of triples that will be stored
+					storedTripleIds = newTriples.map(t => t.id);
 
 					// Build duplicate analysis by stage
 					const triplesByStage = new Map<string, Set<string>>();
@@ -534,6 +539,7 @@ export async function batchStoreKnowledge(
 					vectorsGenerated,
 					duplicatesSkipped,
 					duplicateAnalysis: triples.length > 0 ? duplicateAnalysis : undefined,
+					storedTripleIds,
 				};
 			},
 			{
@@ -575,22 +581,29 @@ export async function batchStoreKnowledge(
 					hasEmbeddingMap: embeddingMap.size > 0,
 				});
 
+				// Get the IDs of triples that were actually stored (from transaction result)
+				const storedTripleIdSet = new Set(result.storedTripleIds || []);
+
 				// Find the stored triples (those that weren't duplicates)
 				const triplesWithIds = triples.map(triple => ({
 					...triple,
 					id: generateTripleId(triple),
 				}));
 
-				const storedTriples = triplesWithIds.filter(_t => {
-					// This is a simplified check - in practice we'd need to track which were actually stored
-					return true; // For now, assume all non-duplicates were stored
-				});
+				// Filter to only include triples that were actually stored in the database
+				const storedTriples = triplesWithIds.filter(t => storedTripleIdSet.has(t.id));
 
 				// Track stored IDs for potential rollback
-				storedTripleIds = storedTriples.slice(0, result.triplesStored).map(t => t.id);
+				storedTripleIds = storedTriples.map(t => t.id);
+
+				log('DEBUG', vectorContext, 'Filtered to stored triples', {
+					totalTriples: triplesWithIds.length,
+					storedTriples: storedTriples.length,
+					duplicatesSkipped: triplesWithIds.length - storedTriples.length,
+				});
 
 				const vectorResult = await generateAndStoreVectorsPostTransaction(
-					storedTriples.slice(0, result.triplesStored),
+					storedTriples,
 					embeddingMap
 				);
 

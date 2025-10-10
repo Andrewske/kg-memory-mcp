@@ -134,11 +134,152 @@ async function runPipelineBenchmark(config: PipelineConfig): Promise<BenchmarkMe
 		// Wait for post-transaction vector generation
 		await new Promise(resolve => setTimeout(resolve, 2000));
 
-		// Query created triples
-		const createdTriples = await db.knowledgeTriple.findMany({
-			where: { source: { startsWith: config.source || '' } },
+		// DIAGNOSTIC LOGGING: Log query parameters before execution
+		log('DEBUG', pipelineContext, 'Preparing to query triples', {
+			configSource: config.source,
+			expectedSourcePrefix: config.source || 'undefined',
+			triplesReportedByExtraction: extractionTiming.result.data?.triplesStored,
+			extractionSuccess: extractionTiming.result.success,
 		});
+
+		// Query created triples with robust pattern matching
+		// Use multiple fallback strategies to handle edge cases
+		let createdTriples = await db.knowledgeTriple.findMany({
+			where: {
+				OR: [
+					// Primary: Match by source prefix (handles _chunk_N suffix)
+					{ source: { startsWith: config.source || '' } },
+					// Fallback 1: Match by source pattern (in case startsWith fails)
+					{ source: { contains: config.source || '' } },
+					// Fallback 2: Match by source_type and recent timestamp
+					{
+						source_type: config.sourceType || 'benchmark',
+						created_at: { gte: new Date(startTime) },
+					},
+				],
+			},
+		});
+
+		// DIAGNOSTIC: If 0 found, try querying ALL recent benchmark triples for debugging
+		if (createdTriples.length === 0) {
+			log('WARN', pipelineContext, 'Initial query returned 0 triples, checking database state', {
+				configSource: config.source,
+			});
+
+			const allRecentBenchmarkTriples = await db.knowledgeTriple.findMany({
+				where: {
+					source_type: 'benchmark',
+					created_at: { gte: new Date(startTime) },
+				},
+				select: { id: true, source: true, created_at: true },
+				take: 10,
+			});
+
+			log('DEBUG', pipelineContext, 'All recent benchmark triples in database', {
+				count: allRecentBenchmarkTriples.length,
+				sources: allRecentBenchmarkTriples.map(t => t.source),
+				timestamps: allRecentBenchmarkTriples.map(t => t.created_at.toISOString()),
+			});
+
+			// Retry with exponential backoff (in case of timing issues)
+			for (let attempt = 1; attempt <= 3; attempt++) {
+				const backoffMs = attempt * 1000; // 1s, 2s, 3s
+				log('INFO', pipelineContext, `Retry attempt ${attempt}/3 after ${backoffMs}ms`, {
+					reason: 'Zero triples found',
+				});
+
+				await new Promise(resolve => setTimeout(resolve, backoffMs));
+
+				createdTriples = await db.knowledgeTriple.findMany({
+					where: {
+						OR: [
+							{ source: { startsWith: config.source || '' } },
+							{ source: { contains: config.source || '' } },
+							{
+								source_type: config.sourceType || 'benchmark',
+								created_at: { gte: new Date(startTime) },
+							},
+						],
+					},
+				});
+
+				log('DEBUG', pipelineContext, `Retry ${attempt} result`, {
+					foundTriples: createdTriples.length,
+				});
+
+				if (createdTriples.length > 0) {
+					log('INFO', pipelineContext, 'Triples found after retry', {
+						attempt,
+						tripleCount: createdTriples.length,
+					});
+					break;
+				}
+			}
+		}
+
 		createdTriples.forEach(t => tracker.tripleIds.add(t.id));
+
+		logQueryResult(
+			pipelineContext,
+			{ operation: 'findMany_triples' },
+			createdTriples,
+			'Triples queried'
+		);
+
+		// FAIL-FAST: Detect critical extraction failure (0 triples from substantial input)
+		// This prevents subtle regressions from going unnoticed in benchmarks
+		const MIN_TEXT_LENGTH_FOR_VALIDATION = 500; // ~125 tokens
+		if (createdTriples.length === 0 && config.testText.length > MIN_TEXT_LENGTH_FOR_VALIDATION) {
+			// Enhanced diagnostics for debugging
+			const allBenchmarkTriplesCount = await db.knowledgeTriple.count({
+				where: { source_type: 'benchmark' },
+			});
+
+			const recentBenchmarkTriples = await db.knowledgeTriple.findMany({
+				where: {
+					source_type: 'benchmark',
+					created_at: { gte: new Date(startTime - 60000) }, // Last minute
+				},
+				select: { id: true, source: true, created_at: true },
+				take: 20,
+			});
+
+			const errorMessage = [
+				'🔴 CRITICAL REGRESSION DETECTED: Zero triples extracted from substantial input',
+				'',
+				`Input length: ${config.testText.length} characters (~${Math.ceil(config.testText.length / 4)} tokens)`,
+				`Expected: At least a few triples from this input`,
+				`Got: 0 triples`,
+				'',
+				`Extraction reported: ${extractionTiming.result.data?.triplesStored || 0} triples stored`,
+				`Query source pattern: "${config.source || 'undefined'}"`,
+				`Total benchmark triples in database: ${allBenchmarkTriplesCount}`,
+				`Recent benchmark triples (last minute): ${recentBenchmarkTriples.length}`,
+				recentBenchmarkTriples.length > 0
+					? `Sample sources: ${recentBenchmarkTriples.slice(0, 3).map(t => `"${t.source}"`).join(', ')}`
+					: 'No recent benchmark triples found',
+				'',
+				'This indicates a complete extraction failure OR a source tracking mismatch.',
+				'Possible causes:',
+				'  1. Source mismatch: Stored source does not match query pattern',
+				'  2. Transaction isolation: Query cannot see committed data',
+				'  3. Extraction prompts returning incompatible schema (wrong field names)',
+				'  4. Schema validation failures (AI not following expected JSON format)',
+				'  5. Prompt version mismatch or corrupted prompt files',
+				'  6. Database connection or schema issues',
+				'',
+				'Action required:',
+				'  1. Check full log file for source field values and query results',
+				'  2. Verify extraction handler is using correct source field',
+				'  3. Check extraction logs for schema validation errors',
+				'  4. Verify prompt files contain explicit JSON schema specifications',
+				'  5. Run prompt validation: pnpm test src/__tests__/unit/prompt-validator.test.ts',
+				'  6. Enable AI integration tests: ENABLE_AI_INTEGRATION_TESTS=true pnpm test:integration',
+			].join('\n');
+
+			logError(pipelineContext, new Error(errorMessage));
+			throw new Error(errorMessage);
+		}
 
 		// Capture sample triples (top 20) for report
 		const sampleTriples = createdTriples.slice(0, 20).map(t => ({
@@ -149,13 +290,6 @@ async function runPipelineBenchmark(config: PipelineConfig): Promise<BenchmarkMe
 			confidence: Number(t.confidence || 0),
 			extraction_stage: (t as any).extraction_stage || 'unknown',
 		}));
-
-		logQueryResult(
-			pipelineContext,
-			{ operation: 'findMany_triples' },
-			createdTriples,
-			'Triples queried'
-		);
 
 		// Stage 2: Concepts
 		log('INFO', pipelineContext, 'Stage 2: Conceptualization');
@@ -276,7 +410,7 @@ async function runPipelineBenchmark(config: PipelineConfig): Promise<BenchmarkMe
 			};
 
 			log('INFO', pipelineContext, 'Vocabulary analysis complete', {
-				noveltyRate: (novelty.novelty_rate * 100).toFixed(1) + '%',
+				noveltyRate: `${(novelty.novelty_rate * 100).toFixed(1)}%`,
 				newTerms: novelty.new_terms,
 				vocabularyGrowth: newVocabSize - oldVocabSize,
 			});

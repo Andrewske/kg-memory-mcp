@@ -14,7 +14,10 @@ jest.mock('~/shared/utils/text-chunking.js');
 jest.mock('~/features/knowledge-processing/pipeline-coordinator.js');
 jest.mock('~/shared/env.js');
 
-import { deduplicateTriples } from '~/features/deduplication/deduplicate.js';
+import {
+	createDetailedDeduplicationBreakdownWithDatabase,
+	deduplicateTriples,
+} from '~/features/deduplication/deduplicate.js';
 import { extractKnowledgeTriples } from '~/features/knowledge-extraction/extract.js';
 import { executeExtraction } from '~/features/knowledge-processing/handlers/extraction-function.js';
 import {
@@ -71,6 +74,31 @@ describe('executeExtraction', () => {
 		(
 			schedulePostProcessingJobs as jest.MockedFunction<typeof schedulePostProcessingJobs>
 		).mockResolvedValue();
+
+		// Mock createDetailedDeduplicationBreakdownWithDatabase to return valid TripleWithStatus array
+		(
+			createDetailedDeduplicationBreakdownWithDatabase as jest.MockedFunction<
+				typeof createDetailedDeduplicationBreakdownWithDatabase
+			>
+		).mockImplementation((originalTriples, _extractionMergedMetadata, _databaseDuplicates, _crossStageDuplicates) => {
+			// Return a TripleWithStatus array with all triples marked as KEPT
+			return originalTriples.map((triple) => ({
+				subject: triple.subject,
+				predicate: triple.predicate,
+				object: triple.object,
+				type: triple.type as string,
+				confidence: typeof triple.confidence === 'object' && triple.confidence !== null
+					? Number(triple.confidence.toString())
+					: (triple.confidence ?? 0.8),
+				extraction_stage: triple.extraction_stage ?? triple.type,
+				status: 'KEPT' as const,
+				duplicate_of_index: undefined,
+				existing_triple_id: undefined,
+				stored_at: undefined,
+				kept_from_stage: undefined,
+				rejected_stages: undefined,
+			}));
+		});
 	});
 
 	describe('functional execution', () => {
