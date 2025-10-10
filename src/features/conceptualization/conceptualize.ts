@@ -1,8 +1,14 @@
 import { writeFileSync } from 'node:fs';
 import { Decimal } from '@prisma/client/runtime/library';
 import { z } from 'zod';
+import { env } from '~/shared/env.js';
 import { mapAbstractionLevel } from '~/shared/database/database-utils.js';
 import { createAIProvider } from '~/shared/services/ai-provider-service.js';
+import {
+	getSuiteDefinition,
+	loadPrompt,
+	renderPrompt,
+} from '~/shared/services/prompt-loader.js';
 import type { Triple } from '~/shared/types/core.js';
 import { trackTokenUsage } from '~/shared/utils/token-tracking.js';
 
@@ -46,7 +52,36 @@ export async function generateConcepts(
 	}
 ) {
 	try {
-		const prompt = createConceptualizationPrompt(input);
+		// Load prompt from versioned prompt system
+		const suiteVersion = env.PROMPT_VERSION;
+
+		// Get suite definition
+		const suiteResult = getSuiteDefinition(suiteVersion);
+		if (!suiteResult.success) {
+			throw new Error(`Failed to load prompt suite: ${suiteResult.error?.message}`);
+		}
+
+		// Load conceptualization prompt
+		const promptVersion = suiteResult.data.conceptualization;
+		const promptResult = loadPrompt('conceptualization', 'default', promptVersion);
+
+		if (!promptResult.success) {
+			throw new Error(`Failed to load prompt: ${promptResult.error?.message}`);
+		}
+
+		// Render prompt with variables
+		const renderedPromptResult = renderPrompt(promptResult.data, {
+			entities: input.entities.join(', '),
+			events: input.events.join(', '),
+			relationships: input.relationships.join(', '),
+		});
+
+		if (!renderedPromptResult.success) {
+			throw new Error(`Failed to render prompt: ${renderedPromptResult.error?.message}`);
+		}
+
+		const prompt = renderedPromptResult.data;
+
 		const aiProvider = createAIProvider();
 
 		const result = await aiProvider.generateObject(prompt, ConceptSchema, undefined, {
@@ -179,26 +214,6 @@ export function extractElementsFromTriples(triples: Triple[]) {
 }
 
 // Helper functions
-function createConceptualizationPrompt(input: ConceptualizationInput): string {
-	return `Analyze the following knowledge elements and generate high-level concepts that organize and categorize them.
-
-Entities: ${input.entities.join(', ')}
-Events: ${input.events.join(', ')}
-Relationships: ${input.relationships.join(', ')}
-
-For each concept, provide:
-1. The concept name (e.g., "Technology", "Human Interaction", "Business Process")
-2. Abstraction level: high (very general), medium (somewhat specific), or low (very specific)
-3. Confidence score (0.0 to 1.0)
-
-For each conceptualization relationship, specify:
-1. Which specific element (entity/event/relation) maps to which concept
-2. The type of the source element (entity, event, or relation)
-3. Confidence in the mapping
-
-Generate concepts that would be useful for organizing and searching this knowledge.`;
-}
-
 function generateTripleId(triple: Triple): string {
 	const key = `${triple.subject}|${triple.predicate}|${triple.object}|${triple.type}`;
 	return Buffer.from(key).toString('base64').replace(/[+/=]/g, '_');

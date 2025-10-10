@@ -295,6 +295,116 @@ After providing the analysis, be ready to discuss:
 - **Consider Context**: A personal journal needs different coverage than a research paper
 - **Think Holistically**: Sometimes low scores are due to source text quality, not extraction issues
 
+## Prompt Versioning System
+
+The extraction and conceptualization prompts are versioned for systematic iteration. When analyzing results:
+
+### Understanding Prompt Versions
+
+Benchmark reports include which prompt versions were used:
+
+```json
+{
+  "config": {
+    "prompt_version": "v1.1",
+    "prompts_used": {
+      "extraction": {
+        "entity-entity": "v1.1",
+        "entity-event": "v1.0",
+        "event-event": "v1.0",
+        "emotional-context": "v1.0"
+      },
+      "conceptualization": "v1.0"
+    }
+  }
+}
+```
+
+### Suggesting Prompt Improvements
+
+When recommending prompt changes:
+
+1. **Be Specific About Which Prompt**: Reference the exact prompt type (entity-entity, entity-event, event-event, emotional-context, or conceptualization)
+
+2. **Provide Concrete Additions**: Suggest specific text to add to the prompt file
+
+3. **Reference Existing Prompts**: Prompts are in `prompts/extraction/{type}/` and `prompts/conceptualization/`
+
+4. **Example Recommendation Format**:
+   ```markdown
+   ### Prompt Changes for v1.2
+
+   **Update entity-entity prompt (v1.1 → v1.2):**
+   Add after the main instruction:
+   ```
+   IMPORTANT: Always use the most complete form of entity names.
+   If a person is referred to multiple ways, use their full name consistently.
+   Example: "Dr. Sarah Chen" not "the doctor" or "Sarah"
+   ```
+
+   **Update event-event prompt (v1.0 → v1.1):**
+   Add section on temporal ordering:
+   ```
+   Pay special attention to temporal sequence:
+   - Use predicates like "before", "after", "during" for timing
+   - Use "caused", "led to" for causal relationships
+   - Preserve duration information when present
+   ```
+   ```
+
+5. **Version Incrementing Guidelines**:
+   - **Minor version (v1.0 → v1.1)**: Tweaks, clarifications, small additions
+   - **Major version (v1.x → v2.0)**: Fundamental changes to approach or structure
+
+### Workflow for Prompt Improvements
+
+After grading a benchmark:
+
+1. **Identify specific prompt weaknesses** based on extraction quality
+2. **Suggest concrete prompt additions** for each issue
+3. **Recommend version increment** (minor or major)
+4. **Explain expected improvements** from the changes
+5. **Suggest re-running the benchmark** to validate improvements
+
+### Example Full Recommendation
+
+```markdown
+## Recommended Prompt Changes
+
+Based on this analysis, create the following new prompt versions:
+
+**1. entity-entity v1.2** (from v1.1)
+- Issue: Entity normalization inconsistent
+- Add: Entity naming guidelines
+- Expected: 15-20% improvement in search utility
+
+**2. event-event v1.1** (from v1.0)
+- Issue: Missing temporal sequence information
+- Add: Temporal relationship extraction guidelines
+- Expected: Better coverage of causal/temporal links
+
+**3. Create Suite v1.2**
+Update `prompts/versions.json`:
+```json
+"v1.2": {
+  "extraction": {
+    "entity-entity": "v1.2",
+    "entity-event": "v1.0",
+    "event-event": "v1.1",
+    "emotional-context": "v1.0"
+  },
+  "conceptualization": "v1.0"
+}
+```
+
+**4. Test and Compare**
+```bash
+# Update benchmark.config.ts: promptVersion: 'v1.2'
+pnpm benchmark:extraction
+pnpm benchmark:compare --type extraction --last 2
+```
+```
+
 ## Rubric Evolution
 
 Update `rubric.md` when:

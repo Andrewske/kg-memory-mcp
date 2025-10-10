@@ -10,6 +10,7 @@ import { z } from 'zod';
 import { executeExtraction } from '~/features/knowledge-processing/handlers/extraction-function.js';
 import { db } from '~/shared/database/client.js';
 import { env } from '~/shared/env.js';
+import { getSuiteDefinition } from '~/shared/services/prompt-loader.js';
 import { createContext, log, logError } from '~/shared/utils/debug-logger.js';
 import { getPstTimestamp } from '~/shared/utils/pst-time.js';
 import {
@@ -141,6 +142,16 @@ async function runExtractionBenchmark(config: ExtractionConfig): Promise<Benchma
 			{} as Record<string, number>
 		);
 
+		// Get prompt versions used
+		const suiteVersion = config.promptVersion || env.PROMPT_VERSION;
+		const suiteResult = getSuiteDefinition(suiteVersion);
+		const promptsUsed = suiteResult.success
+			? {
+					extraction: suiteResult.data.extraction,
+					conceptualization: suiteResult.data.conceptualization,
+				}
+			: undefined;
+
 		const metrics: BenchmarkMetrics = {
 			id: randomUUID(),
 			timestamp: getPstTimestamp(),
@@ -149,7 +160,8 @@ async function runExtractionBenchmark(config: ExtractionConfig): Promise<Benchma
 				model: config.model || env.AI_MODEL,
 				provider: (config.provider || 'openai') as 'openai' | 'anthropic',
 				extraction_method: 'four-stage' as const,
-				prompt_version: config.promptVersion,
+				prompt_version: suiteVersion,
+				prompts_used: promptsUsed,
 			},
 			performance,
 			quality: {

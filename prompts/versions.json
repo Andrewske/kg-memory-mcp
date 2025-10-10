@@ -1,0 +1,12 @@
+{
+  "latest": "v1.0",
+  "v1.0": {
+    "extraction": {
+      "entity-entity": "v1.0",
+      "entity-event": "v1.0",
+      "event-event": "v1.0",
+      "emotional-context": "v1.0"
+    },
+    "conceptualization": "v1.0"
+  }
+}

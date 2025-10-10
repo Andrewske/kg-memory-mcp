@@ -13,6 +13,7 @@ Performance and quality benchmarks for the Knowledge Graph MCP Server pipeline.
 - [Metrics Reference](#metrics-reference)
 - [Test Fixtures](#test-fixtures)
 - [Advanced Usage](#advanced-usage)
+- [Prompt Versioning](#prompt-versioning)
 - [Tips & Best Practices](#tips--best-practices)
 
 ## Quick Start
@@ -351,6 +352,142 @@ pnpm benchmark:clean --type pipeline --keep 20
 # Remove results older than 30 days
 pnpm benchmark:clean --older-than 30
 ```
+
+## Prompt Versioning
+
+The extraction and conceptualization prompts use a versioning system that enables systematic iteration while maintaining reproducibility.
+
+### File Structure
+
+Prompts are stored in markdown files with YAML frontmatter:
+
+```
+prompts/
+├── extraction/
+│   ├── entity-entity/
+│   │   ├── v1.0.md
+│   │   └── v1.1.md
+│   ├── entity-event/v1.0.md
+│   ├── event-event/v1.0.md
+│   └── emotional-context/v1.0.md
+├── conceptualization/
+│   └── v1.0.md
+└── versions.json
+```
+
+### Prompt File Format
+
+Each prompt file contains YAML frontmatter with metadata:
+
+```markdown
+---
+version: v1.0
+created: 2025-10-10
+description: Extract entity-entity relationships
+changes: Initial version migrated from hardcoded prompt
+notes: Extracts relationships between people, places, things, concepts
+variables:
+  required: [text]
+  optional: [temporal_context]
+---
+
+Extract relationships between people, places, things, or concepts...
+Text: {{text}}{{temporal_context}}
+Respond with a JSON object containing an array of triples.
+```
+
+### Suite Versioning
+
+The `versions.json` file bundles prompt versions together:
+
+```json
+{
+  "latest": "v1.0",
+  "v1.0": {
+    "extraction": {
+      "entity-entity": "v1.0",
+      "entity-event": "v1.0",
+      "event-event": "v1.0",
+      "emotional-context": "v1.0"
+    },
+    "conceptualization": "v1.0"
+  }
+}
+```
+
+### Iterating on Prompts
+
+**1. Create new prompt version:**
+```bash
+cp prompts/extraction/entity-entity/v1.0.md prompts/extraction/entity-entity/v1.1.md
+```
+
+**2. Edit prompt content and metadata:**
+- Update `version`, `changes`, and `notes` fields
+- Modify prompt content as needed
+
+**3. Create new suite version in `versions.json`:**
+```json
+{
+  "latest": "v1.1",
+  "v1.0": { ... },
+  "v1.1": {
+    "extraction": {
+      "entity-entity": "v1.1",  // Updated
+      "entity-event": "v1.0",
+      "event-event": "v1.0",
+      "emotional-context": "v1.0"
+    },
+    "conceptualization": "v1.0"
+  }
+}
+```
+
+**4. Test new version:**
+```typescript
+// In benchmark.config.ts:
+promptVersion: 'v1.1'
+```
+
+```bash
+pnpm benchmark:extraction
+```
+
+**5. Compare results:**
+```bash
+pnpm benchmark:compare --type extraction --last 2
+```
+
+**6. Review and iterate:**
+- Check metrics improvements/regressions
+- Use AI grading for qualitative assessment
+- Repeat until quality targets met
+
+### Prompt Version Tracking
+
+Benchmark reports automatically track which prompt versions were used:
+
+```json
+{
+  "config": {
+    "prompt_version": "v1.1",
+    "prompts_used": {
+      "extraction": {
+        "entity-entity": "v1.1",
+        "entity-event": "v1.0",
+        "event-event": "v1.0",
+        "emotional-context": "v1.0"
+      },
+      "conceptualization": "v1.0"
+    }
+  }
+}
+```
+
+This enables:
+- Full reproducibility of benchmark runs
+- Precise comparison between prompt versions
+- Clear audit trail of prompt evolution
 
 ## Tips & Best Practices
 

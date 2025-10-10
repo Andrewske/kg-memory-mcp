@@ -29,6 +29,23 @@ export {
 };
 
 /**
+ * Prompt versions used in this benchmark run
+ */
+export const PromptsUsedSchema = z
+	.object({
+		extraction: z.object({
+			'entity-entity': z.string(),
+			'entity-event': z.string(),
+			'event-event': z.string(),
+			'emotional-context': z.string(),
+		}),
+		conceptualization: z.string(),
+	})
+	.optional();
+
+export type PromptsUsed = z.infer<typeof PromptsUsedSchema>;
+
+/**
  * Benchmark configuration schema
  */
 export const BenchmarkConfigSchema = z.object({
@@ -37,7 +54,8 @@ export const BenchmarkConfigSchema = z.object({
 	extraction_method: z.enum(['single-pass', 'four-stage']).optional(),
 	batch_size: z.number().positive().optional(),
 	temperature: z.number().min(0).max(2).optional(),
-	prompt_version: z.string().optional(),
+	prompt_version: z.string().optional(), // Suite version (e.g., "v1.0")
+	prompts_used: PromptsUsedSchema, // Detailed individual prompt versions
 	custom_params: z.record(z.unknown()).optional(),
 });
 

@@ -152,6 +152,18 @@ The server exposes 7 main tools via both transports:
 - `AI_PROVIDER` - openai | anthropic (default: openai)
 - `AI_MODEL` - Model for extraction (default: gpt-4o-mini)
 - `EMBEDDING_MODEL` - Embedding model (default: text-embedding-3-small)
+- `PROMPT_VERSION` - Prompt suite version to use (default: latest)
+
+### Prompt Versioning
+
+Extraction and conceptualization prompts are versioned for systematic iteration:
+
+- **Location**: `prompts/` directory with versioned markdown files
+- **Suite versions**: Defined in `prompts/versions.json`
+- **Control**: Set via `PROMPT_VERSION` env var or `benchmark.config.ts`
+- **Tracking**: Benchmark reports include exact prompt versions used
+
+See [Prompt Versioning](BENCHMARKS.md#prompt-versioning) in BENCHMARKS.md for iteration workflow.
 
 ### Performance Tuning
 - `BATCH_SIZE` - Embedding batch size (default: 100)

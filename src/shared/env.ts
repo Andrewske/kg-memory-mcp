@@ -100,6 +100,7 @@ const envSchema = z.object({
 		.default('10000')
 		.transform(val => parseInt(val)),
 	AI_GATEWAY_API_KEY: z.string(),
+	PROMPT_VERSION: z.string().default('latest'),
 
 	// Logging
 	LOG_LEVEL: z.enum(['ERROR', 'WARN', 'INFO', 'DEBUG', 'TRACE']).default('INFO'),

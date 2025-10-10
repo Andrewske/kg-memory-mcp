@@ -2,7 +2,13 @@ import type { TripleType } from '@prisma/client';
 import { Decimal } from '@prisma/client/runtime/library';
 import { z } from 'zod';
 import type { ProcessKnowledgeArgs } from '~/server/transport-manager.js';
+import { env } from '~/shared/env.js';
 import { createAIProvider } from '~/shared/services/ai-provider-service.js';
+import {
+	getSuiteDefinition,
+	loadPrompt,
+	renderPrompt,
+} from '~/shared/services/prompt-loader.js';
 import type { Concept, Triple } from '~/shared/types/core.js';
 import type { Result } from '~/shared/types/services.js';
 import { retryAIOperation, withCircuitBreaker } from '~/shared/utils/retry-mechanism.js';
@@ -335,7 +341,46 @@ async function extractFourStage(data: ProcessKnowledgeArgs) {
  */
 export async function extractByType(data: ProcessKnowledgeArgs, type: TripleType) {
 	try {
-		const prompt = createTypeSpecificPrompt(data, type);
+		// Load prompt from versioned prompt system
+		const suiteVersion = env.PROMPT_VERSION;
+
+		// Get suite definition
+		const suiteResult = getSuiteDefinition(suiteVersion);
+		if (!suiteResult.success) {
+			throw new Error(`Failed to load prompt suite: ${suiteResult.error?.message}`);
+		}
+
+		// Map TripleType to extraction type key
+		const typeKey = type.toLowerCase().replace('_', '-') as
+			| 'entity-entity'
+			| 'entity-event'
+			| 'event-event'
+			| 'emotional-context';
+
+		// Load specific prompt for this type
+		const promptVersion = suiteResult.data.extraction[typeKey];
+		const promptResult = loadPrompt('extraction', typeKey, promptVersion);
+
+		if (!promptResult.success) {
+			throw new Error(`Failed to load prompt: ${promptResult.error?.message}`);
+		}
+
+		// Prepare template variables
+		const temporalContext = data.source_date
+			? `\n\nTemporal Context: This text is from ${new Date(data.source_date).toLocaleDateString()}. Consider this temporal context when extracting relationships.`
+			: '';
+
+		// Render prompt with variables
+		const renderedPromptResult = renderPrompt(promptResult.data, {
+			text: data.text,
+			temporal_context: temporalContext,
+		});
+
+		if (!renderedPromptResult.success) {
+			throw new Error(`Failed to render prompt: ${renderedPromptResult.error?.message}`);
+		}
+
+		const prompt = renderedPromptResult.data;
 
 		// Use enhanced text generation for 40-50% speed improvement
 		const result = await extractUsingTextGeneration(prompt, TripleSchema, data, {
@@ -401,31 +446,3 @@ export async function extractByType(data: ProcessKnowledgeArgs, type: TripleType
 	}
 }
 
-// Helper function
-export function createTypeSpecificPrompt(data: ProcessKnowledgeArgs, type: string): string {
-	const typeDescriptions: Record<string, string> = {
-		'entity-entity': 'relationships between people, places, things, or concepts',
-		'entity-event': 'how entities are involved in or affected by events',
-		'event-event': 'causal, temporal, or logical relationships between events',
-		'emotional-context': 'emotional states, feelings, or contextual information',
-	};
-
-	const temporalContext = data.source_date
-		? `\n\nTemporal Context: This text is from ${new Date(data.source_date).toLocaleDateString()}. Consider this temporal context when extracting relationships.`
-		: '';
-
-	const temporalGuidance =
-		type === 'event-event'
-			? `\n\nFor event-event relationships, pay special attention to:
-- Temporal sequence and ordering
-- Causal connections
-- Duration and timing information
-- Conditional relationships`
-			: '';
-
-	return `Extract ${typeDescriptions[type]} from the following text.
-
-Text: ${data.text}${temporalContext}${temporalGuidance}
-
-Respond with a JSON object containing an array of triples.`;
-}
