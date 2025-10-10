@@ -120,8 +120,8 @@ describe('Knowledge Extraction', () => {
 			const result = await extractKnowledgeTriples(args);
 
 			expect(result.success).toBe(false);
-			expect(result.error?.type).toBe('PARSE_ERROR');
-			expect(result.error?.message).toContain('Failed to parse AI response as JSON');
+			expect(result.error?.type).toBe('EXTRACTION_ERROR');
+			expect(result.error?.message).toContain('Failed to extract knowledge');
 		});
 
 		it('should clean markdown formatting from responses', async () => {

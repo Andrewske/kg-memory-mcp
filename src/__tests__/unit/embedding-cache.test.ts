@@ -236,7 +236,7 @@ describe('Embedding Cache Optimization', () => {
 
 			expect(result.success).toBe(false);
 			if (!result.success) {
-				expect(result.error.message).toContain('batch failed');
+				expect(result.error.message).toContain('Failed to generate embeddings for batch');
 			}
 		});
 
@@ -264,10 +264,11 @@ describe('Embedding Cache Optimization', () => {
 
 			mockEmbeddingService.embedBatch.mockResolvedValue(
 				createSuccessResult([
-					[1, 2, 3], // First text
-					[4, 5, 6], // Second text
-					[7, 8, 9], // Third text
-					[10, 11, 12], // Fourth text
+					[1, 2, 3], // Unique Subject
+					[4, 5, 6], // unique object
+					[7, 8, 9], // unique predicate
+					[10, 11, 12], // Unique Subject unique predicate unique object (semantic)
+					[13, 14, 15], // Unique Concept
 				])
 			);
 

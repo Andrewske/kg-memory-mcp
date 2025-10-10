@@ -182,8 +182,8 @@ export function createTestArgs(
 ): ProcessKnowledgeArgs {
 	return {
 		text: 'John Smith is a software engineer at Tech Corp. He works on AI projects and feels excited about new technologies.',
-		source: 'test-document',
-		source_type: 'document',
+		source: 'test-source',
+		source_type: 'test',
 		source_date: '2025-01-01T00:00:00.000Z',
 		...overrides,
 	};

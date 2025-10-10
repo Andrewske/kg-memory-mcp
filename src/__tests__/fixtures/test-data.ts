@@ -295,14 +295,26 @@ export const expectedResults = {
 	},
 };
 
+// Helper to convert Triple to AI response format (only fields the AI returns)
+function toAIResponseFormat(triple: Triple) {
+	return {
+		subject: triple.subject,
+		predicate: triple.predicate,
+		object: triple.object,
+		confidence: triple.confidence && typeof triple.confidence === 'object'
+			? Number(triple.confidence.toString())
+			: triple.confidence ?? undefined,
+	};
+}
+
 // Mock AI responses for different extraction methods
 export const mockAIExtractions = {
 	singlePass: {
 		response: JSON.stringify({
 			triples: [
-				...sampleTriples.entityEntity,
-				...sampleTriples.entityEvent.slice(0, 1),
-				...sampleTriples.emotionalContext.slice(0, 1),
+				...sampleTriples.entityEntity.map(toAIResponseFormat),
+				...sampleTriples.entityEvent.slice(0, 1).map(toAIResponseFormat),
+				...sampleTriples.emotionalContext.slice(0, 1).map(toAIResponseFormat),
 			],
 		}),
 		usage: {
@@ -314,19 +326,27 @@ export const mockAIExtractions = {
 
 	fourStage: {
 		entityEntity: {
-			response: JSON.stringify({ triples: sampleTriples.entityEntity }),
+			response: JSON.stringify({
+				triples: sampleTriples.entityEntity.map(toAIResponseFormat)
+			}),
 			usage: { promptTokens: 200, completionTokens: 150, totalTokens: 350 },
 		},
 		entityEvent: {
-			response: JSON.stringify({ triples: sampleTriples.entityEvent }),
+			response: JSON.stringify({
+				triples: sampleTriples.entityEvent.map(toAIResponseFormat)
+			}),
 			usage: { promptTokens: 200, completionTokens: 100, totalTokens: 300 },
 		},
 		eventEvent: {
-			response: JSON.stringify({ triples: sampleTriples.eventEvent }),
+			response: JSON.stringify({
+				triples: sampleTriples.eventEvent.map(toAIResponseFormat)
+			}),
 			usage: { promptTokens: 200, completionTokens: 120, totalTokens: 320 },
 		},
 		emotionalContext: {
-			response: JSON.stringify({ triples: sampleTriples.emotionalContext }),
+			response: JSON.stringify({
+				triples: sampleTriples.emotionalContext.map(toAIResponseFormat)
+			}),
 			usage: { promptTokens: 200, completionTokens: 80, totalTokens: 280 },
 		},
 	},
