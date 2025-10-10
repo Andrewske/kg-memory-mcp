@@ -241,7 +241,7 @@ export type OutputAnalysis = z.infer<typeof OutputAnalysisSchema>;
  */
 export const BenchmarkMetricsSchema = z.object({
 	id: z.string().uuid(),
-	timestamp: z.string().datetime(),
+	timestamp: z.string().datetime({ offset: true }),
 	benchmark_type: z.enum(['pipeline', 'extraction', 'concepts', 'dedup', 'search']),
 	config: BenchmarkConfigSchema,
 	performance: PerformanceMetricsSchema,
@@ -261,6 +261,7 @@ export interface BenchmarkResult {
 	metrics: BenchmarkMetrics;
 	jsonPath: string;
 	mdPath: string;
+	regressionAnalysis?: RegressionAnalysis;
 }
 
 /**
@@ -287,5 +288,62 @@ export interface ComparisonResult {
 		concepts_pct: number;
 		cost_pct: number;
 		confidence_pct: number;
+	};
+}
+
+/**
+ * Regression severity levels
+ */
+export type RegressionSeverity = 'OK' | 'WARNING' | 'CRITICAL';
+
+/**
+ * Metric comparison result
+ */
+export interface MetricComparison {
+	name: string;
+	baseline: number;
+	current: number;
+	delta_pct: number;
+	severity: RegressionSeverity;
+}
+
+/**
+ * Regression analysis result
+ */
+export interface RegressionAnalysis {
+	has_regression: boolean;
+	baseline_strategy: string;
+	baseline_run_ids: string[];
+	comparisons: {
+		performance: MetricComparison[];
+		quality: MetricComparison[];
+		cost: MetricComparison[];
+	};
+	summary: {
+		total_metrics: number;
+		warning_count: number;
+		critical_count: number;
+		degraded_metrics: string[];
+	};
+}
+
+/**
+ * Regression threshold configuration
+ */
+export interface RegressionThresholds {
+	warning: number;
+	critical: number;
+}
+
+/**
+ * Regression detection configuration
+ */
+export interface RegressionConfig {
+	enabled: boolean;
+	rolling_window: number;
+	thresholds: {
+		performance: Record<string, RegressionThresholds>;
+		quality: Record<string, RegressionThresholds>;
+		cost: Record<string, RegressionThresholds>;
 	};
 }

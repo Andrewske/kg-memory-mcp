@@ -15,12 +15,21 @@ import {
 	BenchmarkMetricsSchema,
 	type BenchmarkResult,
 	type ComparisonFilters,
+	type RegressionAnalysis,
 } from './types.js';
+import {
+	calculateRollingBaseline,
+	detectRegressions,
+	formatRegressionSummary,
+	generateRegressionReport,
+} from './baseline-manager.js';
+import { benchmarkConfig } from '../benchmark.config.js';
 
 const RESULTS_DIR = path.join(process.cwd(), 'benchmarks/results');
 
 /**
  * Save benchmark result - writes JSON, generates MD report, updates CSV
+ * Optionally performs regression detection against recent runs
  */
 export async function saveBenchmarkResult(metrics: BenchmarkMetrics): Promise<BenchmarkResult> {
 	// Validate metrics
@@ -37,13 +46,62 @@ export async function saveBenchmarkResult(metrics: BenchmarkMetrics): Promise<Be
 	await fs.writeFile(jsonPath, JSON.stringify(metrics, null, 2));
 
 	// Generate markdown report
-	const markdown = generateMarkdownReport(metrics);
-	await fs.writeFile(mdPath, markdown);
+	let markdown = generateMarkdownReport(metrics);
 
 	// Update metrics CSV (append mode)
 	await appendToCsvLog(metrics);
 
-	return { metrics, jsonPath, mdPath };
+	// Regression detection (if enabled)
+	let regressionAnalysis: RegressionAnalysis | undefined;
+	if (benchmarkConfig.regression.enabled) {
+		try {
+			// Load recent runs (excluding the current one since it's not yet on disk as JSON result)
+			const recentRuns = await loadBenchmarkResults(metrics.benchmark_type, {
+				last: benchmarkConfig.regression.rolling_window + 1, // +1 because current run might be included
+			});
+
+			// Filter out current run if it somehow got included
+			const historicalRuns = recentRuns.filter(r => r.id !== metrics.id);
+
+			// Need at least some historical data for comparison
+			if (historicalRuns.length >= Math.min(3, benchmarkConfig.regression.rolling_window)) {
+				// Calculate rolling baseline from recent runs
+				const baseline = calculateRollingBaseline(
+					historicalRuns.slice(0, benchmarkConfig.regression.rolling_window)
+				);
+
+				if (baseline) {
+					// Detect regressions
+					regressionAnalysis = detectRegressions(metrics, baseline, {
+						enabled: benchmarkConfig.regression.enabled,
+						rolling_window: benchmarkConfig.regression.rolling_window,
+						thresholds: benchmarkConfig.regression.thresholds,
+					});
+
+					// Append regression report to markdown
+					const regressionReport = generateRegressionReport(regressionAnalysis);
+					markdown += regressionReport;
+
+					// Log regression summary to console
+					console.log('\n' + formatRegressionSummary(regressionAnalysis) + '\n');
+				}
+			} else {
+				// Not enough historical data yet
+				const needed = Math.min(3, benchmarkConfig.regression.rolling_window);
+				console.log(
+					`\nℹ️  Regression detection skipped: Need ${needed - historicalRuns.length} more run(s) for baseline comparison\n`
+				);
+			}
+		} catch (error) {
+			// Don't fail the benchmark if regression detection fails
+			console.error('⚠️  Regression detection failed:', (error as Error).message);
+		}
+	}
+
+	// Write markdown report (with regression section if available)
+	await fs.writeFile(mdPath, markdown);
+
+	return { metrics, jsonPath, mdPath, regressionAnalysis };
 }
 
 /**

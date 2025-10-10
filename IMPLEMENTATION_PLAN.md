@@ -68,22 +68,6 @@
 
 ### SUGGESTION-1: String Concatenation Performance ✅ COMPLETED
 
-**File**: `src/benchmarks/shared/storage.ts`
-**Lines**: 52-455
-**Time**: 1 hour
-**Status**: ✅ COMPLETED
-
-**What Was Done**:
-- Refactored `generateMarkdownReport()` function to use `array.join()` instead of `+=` string concatenation
-- Changed from `let report = ''; report += ...` pattern to `const lines: string[] = []; lines.push(...); return lines.join('')`
-- All 19 unit tests pass, confirming identical output
-- Expected 30-50% performance improvement on large reports (reduces intermediate string object creation)
-
-**Changes**:
-- Replaced mutable `report` variable with immutable `lines` array
-- All `report +=` operations converted to `lines.push()`
-- Final return changed from `return report` to `return lines.join('')`
-
 ### SUGGESTION-2: Regression Detection
 
 **New File**: `src/benchmarks/shared/baseline-manager.ts`

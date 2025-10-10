@@ -72,3 +72,4 @@ prisma/migrations/
 # Benchmark results
 benchmarks/results/
 benchmarks/vocabulary.json
+benchmarks/
