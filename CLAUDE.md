@@ -57,6 +57,8 @@ pnpm run ai-extraction # Test extraction performance
 pnpm run ai-embedding # Test embedding generation
 ```
 
+**📊 Benchmarking**: See [BENCHMARKS.md](BENCHMARKS.md) for comprehensive benchmark documentation, including quality evaluation, comparison tools, and iteration workflows.
+
 ## Architecture Overview
 
 ### Pure Functional Architecture
