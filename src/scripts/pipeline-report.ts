@@ -37,7 +37,6 @@ const PipelineConfigSchema = z.object({
 	source: z.string().optional(),
 	sourceType: z.string().optional(),
 	model: z.string().optional(),
-	extractionMethod: z.enum(['single-pass', 'four-stage']).optional(),
 	enableDedup: z.boolean().optional(),
 	outputDir: z.string().optional(),
 });
@@ -111,7 +110,6 @@ async function runPipelineReport(config: PipelineConfig) {
 		source: config.source,
 		testTextLength: config.testText.length,
 		model: config.model || env.AI_MODEL,
-		extractionMethod: config.extractionMethod || env.EXTRACTION_METHOD,
 		enableDedup: config.enableDedup || false,
 		timestamp,
 	});
@@ -500,7 +498,6 @@ async function createMockJob(
 				source_type: config.sourceType || 'pipeline-test',
 				source_date: new Date().toISOString(),
 				model: config.model || env.AI_MODEL,
-				extraction_method: config.extractionMethod || env.EXTRACTION_METHOD,
 			},
 		},
 	});
@@ -643,7 +640,7 @@ async function generateReport(data: {
 
 ## ⚙️ Configuration
 - **Model**: ${data.config.model || env.AI_MODEL}
-- **Extraction Method**: ${data.config.extractionMethod || env.EXTRACTION_METHOD}
+- **Extraction Method**: Four-stage (parallel)
 - **Semantic Deduplication**: ${data.config.enableDedup || false}
 - **Test Text Length**: ${data.config.testText.length} characters
 - **Timestamp**: ${new Date().toISOString()}
@@ -851,15 +848,12 @@ async function main() {
 		source: `pipeline-test-${Date.now()}`,
 		sourceType: 'benchmark',
 		model: process.env.AI_MODEL,
-		extractionMethod: process.env.EXTRACTION_METHOD as 'single-pass' | 'four-stage',
 		enableDedup: process.env.ENABLE_SEMANTIC_DEDUP === 'true',
 	};
 
 	// Parse flags
 	for (let i = 0; i < args.length; i++) {
 		if (args[i] === '--model') rawConfig.model = args[++i];
-		if (args[i] === '--extraction-method')
-			rawConfig.extractionMethod = args[++i] as 'single-pass' | 'four-stage';
 		if (args[i] === '--enable-dedup') rawConfig.enableDedup = true;
 	}
 
@@ -870,7 +864,6 @@ async function main() {
 		source: config.source,
 		args: args.length,
 		modelFlag: rawConfig.model || 'default',
-		extractionMethodFlag: rawConfig.extractionMethod || 'default',
 		enableDedupFlag: rawConfig.enableDedup || false,
 	});
 

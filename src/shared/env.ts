@@ -64,7 +64,6 @@ const envSchema = z.object({
 		.transform(val => parseInt(val)),
 
 	// Extraction
-	EXTRACTION_METHOD: z.enum(['single-pass', 'four-stage']).default('four-stage'),
 	DELAY_BETWEEN_TYPES: z
 		.string()
 		.default('2000')

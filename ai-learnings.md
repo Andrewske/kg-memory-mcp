@@ -284,7 +284,6 @@ npx jest src/tests/performance/
 ```bash
 # AI Configuration
 AI_MODEL="gpt-4o-mini"                    # Current default (fast)
-EXTRACTION_METHOD="four-stage"            # vs "single-pass"
 EMBEDDING_MODEL="text-embedding-3-small"
 
 # Performance Tuning

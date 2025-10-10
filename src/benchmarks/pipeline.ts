@@ -57,7 +57,6 @@ const PipelineConfigSchema = z.object({
 	sourceType: z.string().optional(),
 	model: z.string().optional(),
 	provider: z.enum(['openai', 'anthropic']).optional(),
-	extractionMethod: z.enum(['single-pass', 'four-stage']).optional(),
 	enableDedup: z.boolean().optional(),
 	promptVersion: z.string().optional(),
 	notes: z.string().optional(),
@@ -370,8 +369,7 @@ async function runPipelineBenchmark(config: PipelineConfig): Promise<BenchmarkMe
 			config: {
 				model: config.model || env.AI_MODEL,
 				provider: (config.provider || 'openai') as 'openai' | 'anthropic',
-				extraction_method:
-					config.extractionMethod || (env.EXTRACTION_METHOD as 'single-pass' | 'four-stage'),
+				extraction_method: 'four-stage' as const,
 				prompt_version: config.promptVersion,
 			},
 			performance,
@@ -460,7 +458,6 @@ async function createMockJob(
 				source_type: config.sourceType || 'benchmark',
 				source_date: new Date().toISOString(),
 				model: config.model || env.AI_MODEL,
-				extraction_method: config.extractionMethod || env.EXTRACTION_METHOD,
 			},
 		},
 	});
@@ -507,7 +504,6 @@ async function main(): Promise<void> {
 		sourceType: 'benchmark',
 		model: benchmarkConfig.model,
 		provider: benchmarkConfig.provider,
-		extractionMethod: benchmarkConfig.extractionMethod,
 		enableDedup: benchmarkConfig.enableDeduplication,
 		promptVersion: benchmarkConfig.promptVersion,
 		notes: benchmarkConfig.notes,
@@ -519,7 +515,7 @@ async function main(): Promise<void> {
 		`📄 Test text: ${testText.length} characters (~${Math.ceil(testText.length / 4)} tokens)`
 	);
 	console.log(`🤖 Model: ${config.model || env.AI_MODEL}`);
-	console.log(`⚙️  Method: ${config.extractionMethod || env.EXTRACTION_METHOD}`);
+	console.log(`⚙️  Method: four-stage (parallel)`);
 	console.log(`🔄 Deduplication: ${config.enableDedup ? 'enabled' : 'disabled'}`);
 	console.log(
 		`📚 Vocabulary tracking: ${benchmarkConfig.vocabulary.enabled ? 'enabled' : 'disabled'}`

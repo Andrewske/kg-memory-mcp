@@ -2,7 +2,6 @@ import type { TripleType } from '@prisma/client';
 import { Decimal } from '@prisma/client/runtime/library';
 import { z } from 'zod';
 import type { ProcessKnowledgeArgs } from '~/server/transport-manager.js';
-import { env } from '~/shared/env.js';
 import { createAIProvider } from '~/shared/services/ai-provider-service.js';
 import type { Concept, Triple } from '~/shared/types/core.js';
 import type { Result } from '~/shared/types/services.js';
@@ -152,7 +151,7 @@ IMPORTANT: Return ONLY a valid JSON object, no markdown formatting, no code bloc
 	}
 }
 
-// Zod schemas for validation
+// Zod schema for validation
 const TripleSchema = z.object({
 	triples: z.array(
 		z.object({
@@ -164,29 +163,14 @@ const TripleSchema = z.object({
 	),
 });
 
-const SinglePassTripleSchema = z.object({
-	relationships: z.array(
-		z.object({
-			subject: z.string().min(1),
-			predicate: z.string().min(1),
-			object: z.string().min(1),
-			relationship_type: z.string().min(1),
-			confidence: z.number().min(0).max(1).optional(),
-			reasoning: z.string().optional(),
-		})
-	),
-});
-
 /**
  * Extract knowledge triples from text using AI
  * Pure function that takes all dependencies as parameters
+ * Uses four-stage extraction for optimal results
  */
 export async function extractKnowledgeTriples(data: ProcessKnowledgeArgs) {
 	try {
-		const method = env.EXTRACTION_METHOD;
-
-		const extractionResult =
-			method === 'single-pass' ? await extractSinglePass(data) : await extractFourStage(data);
+		const extractionResult = await extractFourStage(data);
 
 		if (!extractionResult.success || !extractionResult.data) {
 			throw new Error(extractionResult.error?.message);
@@ -214,63 +198,6 @@ export async function extractKnowledgeTriples(data: ProcessKnowledgeArgs) {
 			error: {
 				type: 'EXTRACTION_ERROR',
 				message: 'Failed to extract knowledge',
-				cause: error,
-			},
-		};
-	}
-}
-
-/**
- * Single-pass extraction - extract all relationship types at once
- */
-async function extractSinglePass(data: ProcessKnowledgeArgs) {
-	try {
-		const prompt = createSinglePassPrompt(data);
-
-		// Use enhanced text generation for 40-50% speed improvement
-		const result = await extractUsingTextGeneration(prompt, SinglePassTripleSchema, data, {
-			operation_type: 'extraction',
-			source: data.source,
-			source_type: data.source_type,
-			source_date: data.source_date,
-			extraction_method: 'single-pass',
-			text_length: data.text.length,
-		});
-
-		if (!result.success) {
-			throw new Error(result.error?.message);
-		}
-
-		// Convert to KnowledgeTriple format
-		const triples = result.data.data.relationships.map(rel => ({
-			subject: rel.subject,
-			predicate: rel.predicate,
-			object: rel.object,
-			type: rel.relationship_type as TripleType,
-			extraction_stage: 'single-pass', // Track extraction method
-			source: data.source,
-			source_type: data.source_type,
-			source_date: new Date(data.source_date),
-			extracted_at: new Date(),
-			confidence:
-				rel.confidence !== undefined && rel.confidence !== null
-					? new Decimal(rel.confidence)
-					: null,
-		})) as Triple[];
-
-		return {
-			success: true,
-			data: {
-				triples,
-				stageResults: { 'single-pass': triples }, // Group all under single-pass stage
-			},
-		};
-	} catch (error) {
-		return {
-			success: false,
-			error: {
-				type: 'EXTRACTION_ERROR',
-				message: 'Single-pass extraction failed',
 				cause: error,
 			},
 		};
@@ -474,31 +401,7 @@ export async function extractByType(data: ProcessKnowledgeArgs, type: TripleType
 	}
 }
 
-// Helper functions
-function createSinglePassPrompt(data: ProcessKnowledgeArgs): string {
-	const temporalContext = data.source_date
-		? `\n\nTemporal Context: This text is from ${new Date(data.source_date).toLocaleDateString()}. Pay special attention to temporal relationships and time-sensitive information.`
-		: '';
-
-	return `Extract all meaningful relationships from the following text. Identify:
-1. Entity-Entity relationships (how entities relate to each other)
-2. Entity-Event relationships (entities involved in events)
-3. Event-Event relationships (how events relate to each other, including temporal, causal, and sequential relationships)  
-4. Emotional-Context relationships (emotional states and context)
-
-For each relationship, specify the relationship_type as one of: "entity-entity", "entity-event", "event-event", "emotional-context"
-
-When extracting event-event relationships, pay special attention to:
-- Temporal sequence ("before", "after", "during", "since", "until")
-- Causal relationships ("caused by", "resulted in", "led to")
-- Conditional relationships ("if", "when", "whenever")
-- Duration and timing ("lasted", "took place over", "occurred at")
-
-Text: ${data.text}${temporalContext}
-
-Respond with a JSON object containing an array of relationships.`;
-}
-
+// Helper function
 export function createTypeSpecificPrompt(data: ProcessKnowledgeArgs, type: string): string {
 	const typeDescriptions: Record<string, string> = {
 		'entity-entity': 'relationships between people, places, things, or concepts',

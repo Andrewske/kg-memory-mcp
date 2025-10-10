@@ -28,7 +28,6 @@ export interface SearchConfig {
 }
 
 export interface ExtractionConfig {
-	extractionMethod?: 'single-pass' | 'four-stage';
 	delayBetweenTypes?: number;
 	maxChunkTokens: number;
 	model: string;

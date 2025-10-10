@@ -152,7 +152,6 @@ The server exposes 7 main tools via both transports:
 - `AI_PROVIDER` - openai | anthropic (default: openai)
 - `AI_MODEL` - Model for extraction (default: gpt-4o-mini)
 - `EMBEDDING_MODEL` - Embedding model (default: text-embedding-3-small)
-- `EXTRACTION_METHOD` - single-pass | four-stage (default: four-stage)
 
 ### Performance Tuning
 - `BATCH_SIZE` - Embedding batch size (default: 100)

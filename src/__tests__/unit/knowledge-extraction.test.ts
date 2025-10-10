@@ -37,7 +37,7 @@ describe('Knowledge Extraction', () => {
 
 		// Setup mocks
 		(createAIProvider as jest.Mock).mockReturnValue(mockAIProvider);
-		Object.assign(env, { ...mockEnv, EXTRACTION_METHOD: 'four-stage' });
+		Object.assign(env, { ...mockEnv });
 		(trackTokenUsage as jest.Mock).mockImplementation(usage => usage);
 
 		// Mock retry mechanism to pass through function calls
@@ -50,7 +50,7 @@ describe('Knowledge Extraction', () => {
 	});
 
 	describe('extractKnowledgeTriples', () => {
-		it('should extract triples using four-stage method by default', async () => {
+		it('should extract triples using four-stage method', async () => {
 			const args = createTestArgs({ text: testTexts.medium });
 
 			// Mock successful responses for all four stages
@@ -91,24 +91,6 @@ describe('Knowledge Extraction', () => {
 			expect(triples.some(t => t.triple_type === 'ENTITY_EVENT')).toBe(true);
 			expect(triples.some(t => t.triple_type === 'EVENT_EVENT')).toBe(true);
 			expect(triples.some(t => t.triple_type === 'EMOTIONAL_CONTEXT')).toBe(true);
-		});
-
-		it('should extract triples using single-pass method when configured', async () => {
-			Object.assign(env, { EXTRACTION_METHOD: 'single-pass' });
-			const args = createTestArgs({ text: testTexts.small });
-
-			mockAIProvider.generateText.mockResolvedValueOnce(
-				createSuccessResult({
-					data: mockAIExtractions.singlePass.response,
-					usage: mockAIExtractions.singlePass.usage,
-				})
-			);
-
-			const result = await extractKnowledgeTriples(args);
-
-			expect(result.success).toBe(true);
-			expect(mockAIProvider.generateText).toHaveBeenCalledTimes(1);
-			expect(result.data?.triples).toHaveLength(4); // Mixed triple types
 		});
 
 		it('should handle malformed JSON responses gracefully', async () => {

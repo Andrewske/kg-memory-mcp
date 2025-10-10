@@ -214,7 +214,7 @@ QSTASH_URL="https://..."        # QStash callback URL
 AI_PROVIDER=openai              # openai | anthropic
 AI_MODEL=gpt-4o-mini           # AI model for extraction
 EMBEDDING_MODEL=text-embedding-3-small  # Embedding model
-EXTRACTION_METHOD=four-stage    # four-stage | single-pass
+EXTRACTION_METHOD=four-stage    # Four-stage parallel extraction (optimal performance)
 
 # Knowledge Graph Configuration
 KG_EMBEDDING_MODEL=text-embedding-3-small

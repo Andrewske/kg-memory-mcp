@@ -14,11 +14,6 @@ export const benchmarkConfig = {
 	defaultFixture: 'default' as const,
 
 	/**
-	 * Extraction method (always four-stage for benchmarks)
-	 */
-	extractionMethod: 'four-stage' as const,
-
-	/**
 	 * Enable deduplication by default
 	 */
 	enableDeduplication: true,

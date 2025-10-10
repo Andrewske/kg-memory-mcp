@@ -302,7 +302,6 @@ export const mockEnv = {
 	AI_PROVIDER: 'openai',
 	AI_MODEL: 'gpt-4o-mini',
 	EMBEDDING_MODEL: 'text-embedding-3-small',
-	EXTRACTION_METHOD: 'four-stage',
 	BATCH_SIZE: 32,
 	ENABLE_SEMANTIC_DEDUP: false,
 	SEMANTIC_THRESHOLD: 0.85,

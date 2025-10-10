@@ -32,7 +32,6 @@ const ExtractionConfigSchema = z.object({
 	source: z.string(),
 	model: z.string().optional(),
 	provider: z.enum(['openai', 'anthropic']).optional(),
-	extractionMethod: z.enum(['single-pass', 'four-stage']).optional(),
 	promptVersion: z.string().optional(),
 	notes: z.string().optional(),
 });
@@ -71,7 +70,6 @@ async function runExtractionBenchmark(config: ExtractionConfig): Promise<Benchma
 					source_type: 'benchmark',
 					source_date: new Date().toISOString(),
 					model: config.model || env.AI_MODEL,
-					extraction_method: config.extractionMethod || env.EXTRACTION_METHOD,
 				},
 			},
 		});
@@ -150,8 +148,7 @@ async function runExtractionBenchmark(config: ExtractionConfig): Promise<Benchma
 			config: {
 				model: config.model || env.AI_MODEL,
 				provider: (config.provider || 'openai') as 'openai' | 'anthropic',
-				extraction_method:
-					config.extractionMethod || (env.EXTRACTION_METHOD as 'single-pass' | 'four-stage'),
+				extraction_method: 'four-stage' as const,
 				prompt_version: config.promptVersion,
 			},
 			performance,
@@ -202,7 +199,6 @@ async function main(): Promise<void> {
 			fixture: { type: 'string', short: 'f' },
 			model: { type: 'string' },
 			provider: { type: 'string' },
-			method: { type: 'string' },
 			'prompt-version': { type: 'string' },
 			notes: { type: 'string' },
 		},
@@ -226,7 +222,6 @@ async function main(): Promise<void> {
 		source: `extraction-benchmark-${Date.now()}`,
 		model: values.model,
 		provider: values.provider as 'openai' | 'anthropic' | undefined,
-		extractionMethod: values.method as 'single-pass' | 'four-stage' | undefined,
 		promptVersion: values['prompt-version'],
 		notes: values.notes,
 	});
@@ -234,7 +229,7 @@ async function main(): Promise<void> {
 	console.log('🔍 Starting Extraction Benchmark');
 	console.log(`📄 Test text: ${testText.length} characters`);
 	console.log(`🤖 Model: ${config.model || env.AI_MODEL}`);
-	console.log(`⚙️  Method: ${config.extractionMethod || env.EXTRACTION_METHOD}`);
+	console.log(`⚙️  Method: four-stage (parallel)`);
 	if (config.promptVersion) {
 		console.log(`📝 Prompt version: ${config.promptVersion}`);
 	}

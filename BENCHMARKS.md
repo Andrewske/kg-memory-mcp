@@ -54,7 +54,6 @@ Tests complete extraction → concepts → (optional) deduplication pipeline.
 --fixture <size>            # Use fixture (micro, tiny, small, medium, large, xlarge, default)
 --model <model>             # AI model to use
 --provider <provider>       # openai or anthropic
---extraction-method <method> # single-pass or four-stage
 --enable-dedup              # Enable deduplication
 --prompt-version <version>  # Track prompt iterations
 --notes <text>              # Add notes to benchmark
@@ -71,8 +70,8 @@ Tests only knowledge extraction stage.
 
 **Use when:**
 - Iterating on extraction prompts
-- Testing extraction methods (single-pass vs four-stage)
 - Optimizing extraction quality
+- Testing different AI models
 
 **Example:**
 ```bash
@@ -326,21 +325,6 @@ pnpm benchmark:extraction --model gpt-4o --prompt-version v2.0 --notes "GPT-4 te
 pnpm benchmark:extraction --model gpt-3.5-turbo --prompt-version v2.0 --notes "GPT-3.5 test"
 
 # Compare results
-pnpm benchmark:compare --last 2
-```
-
-### Extraction Method Testing
-
-Compare single-pass vs four-stage extraction:
-
-```bash
-# Four-stage (default)
-pnpm benchmark:extraction --extraction-method four-stage --notes "Four-stage extraction"
-
-# Single-pass
-pnpm benchmark:extraction --extraction-method single-pass --notes "Single-pass extraction"
-
-# Compare
 pnpm benchmark:compare --last 2
 ```
 
