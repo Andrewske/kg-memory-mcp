@@ -2,6 +2,7 @@
  * Test fixtures and sample data for Knowledge Graph MCP Server tests
  */
 
+import { JobStatus, JobType } from '@prisma/client';
 import { Decimal } from '@prisma/client/runtime/library';
 import type { ProcessKnowledgeArgs } from '~/server/transport-manager.js';
 import type { Concept, Triple } from '~/shared/types/core.js';
@@ -398,15 +399,15 @@ export const performanceData = {
 export const seedData = {
 	processingJobs: [
 		{
-			job_type: 'EXTRACT_KNOWLEDGE_BATCH' as const,
+			job_type: JobType.EXTRACT_KNOWLEDGE_BATCH,
 			text: testTexts.small,
-			status: 'COMPLETED' as const,
+			status: JobStatus.COMPLETED,
 			progress: 100,
 		},
 		{
-			job_type: 'GENERATE_CONCEPTS' as const,
+			job_type: JobType.GENERATE_CONCEPTS,
 			text: '',
-			status: 'PROCESSING' as const,
+			status: JobStatus.PROCESSING,
 			progress: 50,
 		},
 	],

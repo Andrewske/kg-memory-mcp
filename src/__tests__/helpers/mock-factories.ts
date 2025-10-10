@@ -2,7 +2,7 @@
  * Mock factory functions for testing Knowledge Graph MCP Server
  */
 
-import type { JobStatus, JobType, ProcessingJob } from '@prisma/client';
+import { JobStatus, JobType, type ProcessingJob } from '@prisma/client';
 import { Decimal } from '@prisma/client/runtime/library';
 import type { ExtractionMetrics, JobMetadata } from '~/features/knowledge-processing/job-types.js';
 import type { ProcessKnowledgeArgs } from '~/server/transport-manager.js';
@@ -68,10 +68,10 @@ export function createMockEmbeddingService(): jest.Mocked<EmbeddingService> {
 export function createMockDatabase() {
 	const mockJob = {
 		id: 'test-job-id',
-		job_type: 'EXTRACT_KNOWLEDGE_BATCH' as JobType,
+		job_type: JobType.EXTRACT_KNOWLEDGE_BATCH,
 		text: 'Test text',
 		metadata: {},
-		status: 'QUEUED' as JobStatus,
+		status: JobStatus.QUEUED,
 		progress: 0,
 		createdAt: new Date(),
 		startedAt: null,
@@ -192,14 +192,14 @@ export function createTestArgs(
 export function createTestJob(overrides: Partial<ProcessingJob> = {}): ProcessingJob {
 	return {
 		id: 'test-job-id',
-		job_type: 'EXTRACT_KNOWLEDGE_BATCH' as JobType,
+		job_type: JobType.EXTRACT_KNOWLEDGE_BATCH,
 		text: 'Test processing job text',
 		metadata: {
 			source: 'test-source',
 			source_type: 'test',
 			source_date: '2025-01-01T00:00:00.000Z',
 		},
-		status: 'QUEUED' as JobStatus,
+		status: JobStatus.QUEUED,
 		progress: 0,
 		result: null,
 		errorMessage: null,
