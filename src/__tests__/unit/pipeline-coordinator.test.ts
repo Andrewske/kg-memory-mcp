@@ -2,25 +2,25 @@
  * Unit tests for pipeline coordinator functions
  */
 
-import { beforeEach, describe, expect, it, jest } from '@jest/globals';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { JobStage, JobStatus, JobType } from '@prisma/client';
 
 // Mock dependencies before imports
-jest.mock('~/shared/database/client.js', () => ({
+vi.mock('~/shared/database/client.js', () => ({
 	db: {
 		processingJob: {
-			create: jest.fn(),
-			findUnique: jest.fn(),
-			findFirst: jest.fn(),
-			findMany: jest.fn(),
-			update: jest.fn(),
-			deleteMany: jest.fn(),
+			create: vi.fn(),
+			findUnique: vi.fn(),
+			findFirst: vi.fn(),
+			findMany: vi.fn(),
+			update: vi.fn(),
+			deleteMany: vi.fn(),
 		},
-		$disconnect: jest.fn(),
+		$disconnect: vi.fn(),
 	},
 }));
-jest.mock('~/shared/services/qstash.js');
-jest.mock('~/shared/env.js');
+vi.mock('~/shared/services/qstash.js');
+vi.mock('~/shared/env.js');
 
 import {
 	getJobByStage,
@@ -50,7 +50,7 @@ describe('Pipeline Coordinator', () => {
 
 	beforeEach(() => {
 		// Reset mocks
-		jest.clearAllMocks();
+		vi.clearAllMocks();
 
 		// Setup mock implementations
 		mockDb = createMockDatabase();
@@ -58,7 +58,7 @@ describe('Pipeline Coordinator', () => {
 
 		// Set up the mocked database client
 		Object.assign(db.processingJob, mockDb.processingJob);
-		(getQStash as jest.Mock).mockReturnValue(mockQStash);
+		(getQStash as ReturnType<typeof vi.fn>).mockReturnValue(mockQStash);
 		Object.assign(env, {
 			HTTP_SERVER_URL: 'http://localhost:3000',
 			ENABLE_SEMANTIC_DEDUP: false,
@@ -124,7 +124,7 @@ describe('Pipeline Coordinator', () => {
 
 		it('should handle QStash unavailability gracefully', async () => {
 			const args = createTestArgs();
-			(getQStash as jest.Mock).mockReturnValue(null);
+			(getQStash as ReturnType<typeof vi.fn>).mockReturnValue(null);
 
 			const result = await initiateKnowledgePipeline(args);
 
@@ -152,7 +152,7 @@ describe('Pipeline Coordinator', () => {
 		const metrics = createTestMetrics({ triplesExtracted: 10, processingTime: 5000 });
 
 		beforeEach(() => {
-			(getQStash as jest.Mock).mockReturnValue(mockQStash);
+			(getQStash as ReturnType<typeof vi.fn>).mockReturnValue(mockQStash);
 		});
 
 		it('should schedule concept generation job', async () => {
@@ -215,7 +215,7 @@ describe('Pipeline Coordinator', () => {
 		});
 
 		it('should handle QStash unavailability', async () => {
-			(getQStash as jest.Mock).mockReturnValue(null);
+			(getQStash as ReturnType<typeof vi.fn>).mockReturnValue(null);
 
 			await expect(schedulePostProcessingJobs(parentJobId, metrics)).resolves.not.toThrow();
 

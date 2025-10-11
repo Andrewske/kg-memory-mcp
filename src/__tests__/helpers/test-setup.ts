@@ -2,7 +2,7 @@
  * Test setup utilities for Knowledge Graph MCP Server tests
  */
 
-import { afterAll, afterEach, beforeAll, beforeEach } from '@jest/globals';
+import { afterAll, afterEach, beforeAll, beforeEach, vi } from 'vitest';
 import { JobStatus, JobType, type Prisma, type ProcessingJob } from '@prisma/client';
 import type { ProcessKnowledgeArgs } from '~/server/transport-manager.js';
 import { db } from '~/shared/database/client.js';
@@ -210,12 +210,12 @@ export function setupTestSuite(): void {
 // Mock timers for consistent testing
 export function mockTimers(): void {
 	beforeEach(() => {
-		jest.useFakeTimers();
-		jest.setSystemTime(new Date('2025-01-01T00:00:00.000Z'));
+		vi.useFakeTimers();
+		vi.setSystemTime(new Date('2025-01-01T00:00:00.000Z'));
 	});
 
 	afterEach(() => {
-		jest.useRealTimers();
+		vi.useRealTimers();
 	});
 }
 

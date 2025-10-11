@@ -2,14 +2,14 @@
  * Integration tests for the complete knowledge processing pipeline
  */
 
-import { afterAll, beforeEach, describe, expect, it, jest } from '@jest/globals';
+import { beforeEach, describe, expect, it, vi } from 'vitest'';
 import { JobStage, JobStatus, JobType, type ProcessingJob } from '@prisma/client';
 
 // Mock external dependencies
-jest.mock('~/shared/services/ai-provider-service.js');
-jest.mock('~/shared/services/embedding-service.js');
-jest.mock('~/shared/services/qstash.js');
-jest.mock('~/shared/env.js');
+vi.mock('~/shared/services/ai-provider-service.js');
+vi.mock('~/shared/services/embedding-service.js');
+vi.mock('~/shared/services/qstash.js');
+vi.mock('~/shared/env.js');
 
 import { routeJob } from '~/features/knowledge-processing/job-router.js';
 import {
@@ -54,16 +54,16 @@ describe('Full Pipeline Integration', () => {
 
 	beforeEach(async () => {
 		// Clear mock call history and reset mock implementations
-		jest.clearAllMocks();
+		vi.clearAllMocks();
 
 		// Setup fresh mocks for each test
 		mockAIProvider = createMockAIProvider();
 		mockEmbeddingService = createMockEmbeddingService();
 		mockQStash = createMockQStash();
 
-		(createAIProvider as jest.Mock).mockReturnValue(mockAIProvider);
-		(createEmbeddingService as jest.Mock).mockReturnValue(mockEmbeddingService);
-		(getQStash as jest.Mock).mockReturnValue(mockQStash);
+		(createAIProvider as vi.Mock).mockReturnValue(mockAIProvider);
+		(createEmbeddingService as vi.Mock).mockReturnValue(mockEmbeddingService);
+		(getQStash as vi.Mock).mockReturnValue(mockQStash);
 		Object.assign(env, { ...mockEnv });
 	});
 

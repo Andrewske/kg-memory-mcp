@@ -9,7 +9,7 @@
  */
 
 import type { TripleType } from '@prisma/client';
-import { describe, expect, it } from '@jest/globals';
+import { describe, expect, it } from 'vitest';
 import { extractByType } from '~/features/knowledge-extraction/extract.js';
 import type { ProcessKnowledgeArgs } from '~/server/transport-manager.js';
 
@@ -32,7 +32,7 @@ function createTestArgs(text: string): ProcessKnowledgeArgs {
 
 describeIfEnabled('Prompt Integration Tests (AI-powered)', () => {
 	// Increase timeout for AI calls
-	jest.setTimeout(30000);
+	vi.setTimeout(30000);
 
 	describe('Entity-Entity Extraction', () => {
 		it('should produce valid schema for simple relationships', async () => {

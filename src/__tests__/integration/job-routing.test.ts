@@ -2,13 +2,13 @@
  * Integration tests for job routing and handler dispatch
  */
 
-import { afterAll, beforeEach, describe, expect, it, jest } from '@jest/globals';
+import { beforeEach, describe, expect, it, vi } from 'vitest'';
 import { JobStage, JobStatus, JobType } from '@prisma/client';
 
 // Mock dependencies
-jest.mock('~/shared/services/ai-provider-service.js');
-jest.mock('~/shared/services/embedding-service.js');
-jest.mock('~/shared/env.js');
+vi.mock('~/shared/services/ai-provider-service.js');
+vi.mock('~/shared/services/embedding-service.js');
+vi.mock('~/shared/env.js');
 
 import { routeJob } from '~/features/knowledge-processing/job-router.js';
 import { db } from '~/shared/database/client.js';
@@ -35,14 +35,14 @@ describe('Job Routing Integration', () => {
 
 	beforeEach(async () => {
 		// Clear mock call history and reset mock implementations
-		jest.clearAllMocks();
+		vi.clearAllMocks();
 
 		// Setup fresh mocks for each test
 		mockAIProvider = createMockAIProvider();
 		mockEmbeddingService = createMockEmbeddingService();
 
-		(createAIProvider as jest.Mock).mockReturnValue(mockAIProvider);
-		(createEmbeddingService as jest.Mock).mockReturnValue(mockEmbeddingService);
+		(createAIProvider as vi.Mock).mockReturnValue(mockAIProvider);
+		(createEmbeddingService as vi.Mock).mockReturnValue(mockEmbeddingService);
 		Object.assign(env, { ...mockEnv });
 	});
 

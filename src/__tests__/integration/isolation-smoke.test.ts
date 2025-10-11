@@ -10,12 +10,12 @@
  * 3. No "zombie client" issues
  */
 
-import { afterAll, beforeEach, describe, expect, it, jest } from '@jest/globals';
+import { beforeEach, describe, expect, it, vi } from 'vitest'';
 import { JobStatus, JobType } from '@prisma/client';
 
 // Mock dependencies
-jest.mock('~/shared/services/ai-provider-service.js');
-jest.mock('~/shared/services/embedding-service.js');
+vi.mock('~/shared/services/ai-provider-service.js');
+vi.mock('~/shared/services/embedding-service.js');
 
 import { db } from '~/shared/database/client.js';
 import { createAIProvider } from '~/shared/services/ai-provider-service.js';
@@ -34,13 +34,13 @@ describe('Database Isolation Smoke Test', () => {
 	let mockEmbeddingService: ReturnType<typeof createMockEmbeddingService>;
 
 	beforeEach(async () => {
-		jest.clearAllMocks();
+		vi.clearAllMocks();
 
 		mockAIProvider = createMockAIProvider();
 		mockEmbeddingService = createMockEmbeddingService();
 
-		(createAIProvider as jest.Mock).mockReturnValue(mockAIProvider);
-		(createEmbeddingService as jest.Mock).mockReturnValue(mockEmbeddingService);
+		(createAIProvider as vi.Mock).mockReturnValue(mockAIProvider);
+		(createEmbeddingService as vi.Mock).mockReturnValue(mockEmbeddingService);
 	});
 
 	afterAll(async () => {

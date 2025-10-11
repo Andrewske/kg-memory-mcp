@@ -2,7 +2,7 @@
  * Unit tests for prompt validation utility
  */
 
-import { describe, expect, it } from '@jest/globals';
+import { describe, expect, it } from 'vitest';
 import {
 	EXTRACTION_PROMPT_REQUIREMENTS,
 	formatValidationReport,

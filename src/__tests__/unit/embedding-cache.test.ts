@@ -2,10 +2,10 @@
  * Unit tests for embedding cache optimization functions
  */
 
-import { beforeEach, describe, expect, it, jest } from '@jest/globals';
+import { beforeEach, describe, expect, it, vi } from 'vitest'';
 
 // Mock dependencies before imports
-jest.mock('~/shared/env.js');
+vi.mock('~/shared/env.js');
 
 import { env } from '~/shared/env.js';
 import type { Concept } from '~/shared/types/core.js';
@@ -27,7 +27,7 @@ describe('Embedding Cache Optimization', () => {
 	let mockEmbeddingService: ReturnType<typeof createMockEmbeddingService>;
 
 	beforeEach(() => {
-		jest.clearAllMocks();
+		vi.clearAllMocks();
 		mockEmbeddingService = createMockEmbeddingService();
 		Object.assign(env, { BATCH_SIZE: 32 });
 	});

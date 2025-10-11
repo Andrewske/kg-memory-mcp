@@ -2,6 +2,7 @@
  * Mock factory functions for testing Knowledge Graph MCP Server
  */
 
+import { vi } from 'vitest';
 import { JobStatus, JobType, type ProcessingJob } from '@prisma/client';
 import { Decimal } from '@prisma/client/runtime/library';
 import type { ExtractionMetrics, JobMetadata } from '~/features/knowledge-processing/job-types.js';
@@ -10,9 +11,9 @@ import type { Concept, Triple } from '~/shared/types/core.js';
 import type { AIProvider, EmbeddingService, Result } from '~/shared/types/services.js';
 
 // Mock AI Provider Service
-export function createMockAIProvider(): jest.Mocked<AIProvider> {
+export function createMockAIProvider(): ReturnType<typeof vi.fn><AIProvider> {
 	return {
-		generateText: jest.fn().mockResolvedValue({
+		generateText: vi.fn().mockResolvedValue({
 			success: true,
 			data: {
 				data: JSON.stringify({
@@ -35,7 +36,7 @@ export function createMockAIProvider(): jest.Mocked<AIProvider> {
 				},
 			},
 		}),
-		generateObject: jest.fn().mockResolvedValue({
+		generateObject: vi.fn().mockResolvedValue({
 			success: true,
 			data: {},
 		}),
@@ -43,15 +44,15 @@ export function createMockAIProvider(): jest.Mocked<AIProvider> {
 }
 
 // Mock Embedding Service
-export function createMockEmbeddingService(): jest.Mocked<EmbeddingService> {
+export function createMockEmbeddingService(): ReturnType<typeof vi.fn><EmbeddingService> {
 	return {
-		embed: jest.fn().mockResolvedValue({
+		embed: vi.fn().mockResolvedValue({
 			success: true,
 			data: Array(1536)
 				.fill(0)
 				.map(() => Math.random()),
 		}),
-		embedBatch: jest.fn().mockImplementation((texts: string[]) =>
+		embedBatch: vi.fn().mockImplementation((texts: string[]) =>
 			Promise.resolve({
 				success: true,
 				data: texts.map(() =>
@@ -84,32 +85,32 @@ export function createMockDatabase() {
 
 	const mockDatabase = {
 		processingJob: {
-			create: jest.fn().mockResolvedValue(mockJob),
-			findUnique: jest.fn().mockResolvedValue(mockJob),
-			findFirst: jest.fn().mockResolvedValue(mockJob),
-			findMany: jest.fn().mockResolvedValue([mockJob]),
-			update: jest.fn().mockResolvedValue(mockJob),
-			deleteMany: jest.fn().mockResolvedValue({ count: 0 }),
+			create: vi.fn().mockResolvedValue(mockJob),
+			findUnique: vi.fn().mockResolvedValue(mockJob),
+			findFirst: vi.fn().mockResolvedValue(mockJob),
+			findMany: vi.fn().mockResolvedValue([mockJob]),
+			update: vi.fn().mockResolvedValue(mockJob),
+			deleteMany: vi.fn().mockResolvedValue({ count: 0 }),
 		},
 		knowledgeTriple: {
-			createMany: jest.fn().mockResolvedValue({ count: 1 }),
-			findMany: jest.fn().mockResolvedValue([]),
-			deleteMany: jest.fn().mockResolvedValue({ count: 0 }),
+			createMany: vi.fn().mockResolvedValue({ count: 1 }),
+			findMany: vi.fn().mockResolvedValue([]),
+			deleteMany: vi.fn().mockResolvedValue({ count: 0 }),
 		},
 		conceptNode: {
-			createMany: jest.fn().mockResolvedValue({ count: 1 }),
-			findMany: jest.fn().mockResolvedValue([]),
-			deleteMany: jest.fn().mockResolvedValue({ count: 0 }),
+			createMany: vi.fn().mockResolvedValue({ count: 1 }),
+			findMany: vi.fn().mockResolvedValue([]),
+			deleteMany: vi.fn().mockResolvedValue({ count: 0 }),
 		},
 		conceptualizationRelationship: {
-			findMany: jest.fn().mockResolvedValue([]),
-			deleteMany: jest.fn().mockResolvedValue({ count: 0 }),
+			findMany: vi.fn().mockResolvedValue([]),
+			deleteMany: vi.fn().mockResolvedValue({ count: 0 }),
 		},
 		vectorEmbedding: {
-			findMany: jest.fn().mockResolvedValue([]),
-			deleteMany: jest.fn().mockResolvedValue({ count: 0 }),
+			findMany: vi.fn().mockResolvedValue([]),
+			deleteMany: vi.fn().mockResolvedValue({ count: 0 }),
 		},
-		$transaction: jest.fn().mockImplementation((callback: (tx: unknown) => unknown) =>
+		$transaction: vi.fn().mockImplementation((callback: (tx: unknown) => unknown) =>
 			callback({
 				processingJob: mockDatabase.processingJob,
 				knowledgeTriple: mockDatabase.knowledgeTriple,
@@ -117,7 +118,7 @@ export function createMockDatabase() {
 				vectorEmbedding: mockDatabase.vectorEmbedding,
 			})
 		),
-		$disconnect: jest.fn().mockResolvedValue(undefined),
+		$disconnect: vi.fn().mockResolvedValue(undefined),
 	};
 	return mockDatabase;
 }
@@ -125,7 +126,7 @@ export function createMockDatabase() {
 // Mock QStash Service
 export function createMockQStash() {
 	return {
-		publishJSON: jest.fn().mockResolvedValue({
+		publishJSON: vi.fn().mockResolvedValue({
 			messageId: 'test-message-id',
 			url: 'https://example.com/api/process-job',
 		}),
@@ -135,11 +136,11 @@ export function createMockQStash() {
 // Mock Resource Manager
 export function createMockResourceManager() {
 	return {
-		withAI: jest.fn().mockImplementation(async <T>(callback: () => Promise<T>) => await callback()),
-		withDatabase: jest
+		withAI: vi.fn().mockImplementation(async <T>(callback: () => Promise<T>) => await callback()),
+		withDatabase: vi
 			.fn()
 			.mockImplementation(async <T>(callback: () => Promise<T>) => await callback()),
-		getStatus: jest.fn().mockReturnValue({
+		getStatus: vi.fn().mockReturnValue({
 			database: { available: 2, waiting: 0 },
 			ai: { available: 2, waiting: 0 },
 			memory: { usedMB: 100, maxMB: 2048, percentage: 5 },

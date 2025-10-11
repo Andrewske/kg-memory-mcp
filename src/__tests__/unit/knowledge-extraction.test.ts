@@ -2,14 +2,14 @@
  * Unit tests for knowledge extraction functions
  */
 
-import { beforeEach, describe, expect, it, jest } from '@jest/globals';
+import { beforeEach, describe, expect, it, vi } from 'vitest'';
 
 // Mock dependencies before imports
-jest.mock('~/shared/services/ai-provider-service.js');
-jest.mock('~/shared/utils/retry-mechanism.js');
-jest.mock('~/shared/utils/token-tracking.js');
-jest.mock('~/features/conceptualization/conceptualize.js');
-jest.mock('~/shared/env.js');
+vi.mock('~/shared/services/ai-provider-service.js');
+vi.mock('~/shared/utils/retry-mechanism.js');
+vi.mock('~/shared/utils/token-tracking.js');
+vi.mock('~/features/conceptualization/conceptualize.js');
+vi.mock('~/shared/env.js');
 
 import { extractKnowledgeTriples } from '~/features/knowledge-extraction/extract.js';
 import { env } from '~/shared/env.js';
@@ -46,19 +46,19 @@ describe('Knowledge Extraction', () => {
 	let mockAIProvider: ReturnType<typeof createMockAIProvider>;
 
 	beforeEach(() => {
-		jest.clearAllMocks();
+		vi.clearAllMocks();
 		mockAIProvider = createMockAIProvider();
 
 		// Setup mocks
-		(createAIProvider as jest.Mock).mockReturnValue(mockAIProvider);
+		(createAIProvider as vi.Mock).mockReturnValue(mockAIProvider);
 		Object.assign(env, { ...mockEnv });
-		(trackTokenUsage as jest.Mock).mockImplementation(usage => usage);
+		(trackTokenUsage as vi.Mock).mockImplementation(usage => usage);
 
 		// Mock retry mechanism to pass through function calls
-		(retryAIOperation as jest.MockedFunction<typeof retryAIOperation>).mockImplementation(
+		(retryAIOperation as vi.MockedFunction<typeof retryAIOperation>).mockImplementation(
 			async <T>(fn: () => Promise<T>) => await fn()
 		);
-		(withCircuitBreaker as jest.MockedFunction<typeof withCircuitBreaker>).mockImplementation(
+		(withCircuitBreaker as vi.MockedFunction<typeof withCircuitBreaker>).mockImplementation(
 			async <T>(fn: () => Promise<T>) => await fn()
 		);
 	});
@@ -189,7 +189,7 @@ describe('Knowledge Extraction', () => {
 		it('should use retry mechanism for AI operations', async () => {
 			const args = createTestArgs();
 
-			(retryAIOperation as jest.MockedFunction<typeof retryAIOperation>).mockImplementation(
+			(retryAIOperation as vi.MockedFunction<typeof retryAIOperation>).mockImplementation(
 				async <T>(
 					operation: () => Promise<T>,
 					operationName: string,
@@ -218,7 +218,7 @@ describe('Knowledge Extraction', () => {
 		it('should use circuit breaker for AI operations', async () => {
 			const args = createTestArgs();
 
-			(withCircuitBreaker as jest.MockedFunction<typeof withCircuitBreaker>).mockImplementation(
+			(withCircuitBreaker as vi.MockedFunction<typeof withCircuitBreaker>).mockImplementation(
 				async <T>(
 					fn: () => Promise<T>,
 					operationKey: string,
@@ -280,7 +280,7 @@ describe('Knowledge Extraction', () => {
 			// Should track token usage for each of the 4 extraction stages
 			expect(trackTokenUsage).toHaveBeenCalledTimes(4);
 			// Verify the structure of token tracking calls
-			const tokenTrackingCalls = (trackTokenUsage as jest.Mock).mock.calls;
+			const tokenTrackingCalls = (trackTokenUsage as vi.Mock).mock.calls;
 			expect(tokenTrackingCalls.length).toBe(4);
 			// Each call should have the result data (with 'data' and 'usage' fields) and context
 			tokenTrackingCalls.forEach((call: any[]) => {
@@ -309,7 +309,7 @@ describe('Knowledge Extraction', () => {
 			mockAIProvider.generateText.mockRejectedValue(new Error('AI service unavailable'));
 
 			// Mock retry mechanism to propagate the error for all stages
-			(retryAIOperation as jest.MockedFunction<typeof retryAIOperation>).mockImplementation(
+			(retryAIOperation as vi.MockedFunction<typeof retryAIOperation>).mockImplementation(
 				async <_T>() => {
 					throw new Error('AI service unavailable');
 				}
@@ -372,7 +372,7 @@ describe('Knowledge Extraction', () => {
 			);
 
 			// Mock retry to fail only for ENTITY_EVENT stage
-			(retryAIOperation as jest.MockedFunction<typeof retryAIOperation>).mockImplementation(
+			(retryAIOperation as vi.MockedFunction<typeof retryAIOperation>).mockImplementation(
 				async <T>(
 					operation: () => Promise<T>,
 					operationName: string,
