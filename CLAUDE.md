@@ -15,6 +15,52 @@ This is a **Knowledge Graph MCP Server** built with:
 - **Jest** for testing
 - **pnpm** for package management
 
+## Test Strategy
+
+### Quick Iteration During Development
+
+```bash
+# Fastest: Isolation smoke test (~7s) - validates DB cleanup
+pnpm test -- isolation-smoke
+
+# Fast: Run a specific test by name (~10-15s)
+pnpm test -- -t "should generate and store concepts"
+
+# Medium: Run single test file (~20-30s)
+pnpm test -- src/__tests__/integration/job-routing.test.ts
+
+# Slow: Full integration suite (~80s)
+pnpm test:integration
+
+# Complete validation (~120s)
+pnpm test
+```
+
+### Test Organization
+
+- **Unit tests** (`src/__tests__/unit`): Fast, isolated, heavily mocked
+- **Integration tests** (`src/__tests__/integration`): Real database, mocked AI
+- **Isolation smoke test**: Quick validation that DB singleton cleanup works
+
+### Common Test Patterns
+
+**Four-Stage Extraction Mock Setup:**
+```typescript
+import { setupFourStageExtractionMocks } from '../helpers/mock-factories.js';
+
+// For single chunk
+setupFourStageExtractionMocks(mockAIProvider);
+
+// For multiple chunks (e.g., large text)
+setupFourStageExtractionMocks(mockAIProvider, 5); // 5 chunks
+```
+
+**Debugging Test Failures:**
+1. Run the specific failing test in isolation
+2. If it passes alone but fails in suite → check mock setup
+3. Check that you're using `.mockResolvedValueOnce()` not `.mockResolvedValue()`
+4. Ensure `setupFourStageExtractionMocks()` is called for extraction tests
+
 ## Common Development Commands
 
 ```bash

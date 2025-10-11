@@ -308,3 +308,55 @@ export const mockEnv = {
 	HTTP_SERVER_URL: 'http://localhost:3000',
 	DATABASE_URL: 'postgresql://test:test@localhost:5432/test',
 };
+
+/**
+ * Helper to setup four-stage extraction mock responses
+ * Call this when you need to mock a complete extraction pipeline
+ *
+ * @param mockAIProvider - The mocked AI provider instance
+ * @param iterations - Number of chunks to process (default: 1)
+ */
+export function setupFourStageExtractionMocks(
+	mockAIProvider: ReturnType<typeof createMockAIProvider>,
+	iterations: number = 1
+): void {
+	// Import test data locally to avoid circular dependencies
+	const { mockAIExtractions, sampleConcepts } = require('../fixtures/test-data.js');
+
+	for (let i = 0; i < iterations; i++) {
+		// Four stages of extraction
+		mockAIProvider.generateText
+			.mockResolvedValueOnce(
+				createSuccessResult({
+					data: mockAIExtractions.fourStage.entityEntity.response,
+					usage: mockAIExtractions.fourStage.entityEntity.usage,
+				})
+			)
+			.mockResolvedValueOnce(
+				createSuccessResult({
+					data: mockAIExtractions.fourStage.entityEvent.response,
+					usage: mockAIExtractions.fourStage.entityEvent.usage,
+				})
+			)
+			.mockResolvedValueOnce(
+				createSuccessResult({
+					data: mockAIExtractions.fourStage.eventEvent.response,
+					usage: mockAIExtractions.fourStage.eventEvent.usage,
+				})
+			)
+			.mockResolvedValueOnce(
+				createSuccessResult({
+					data: mockAIExtractions.fourStage.emotionalContext.response,
+					usage: mockAIExtractions.fourStage.emotionalContext.usage,
+				})
+			);
+	}
+
+	// Add concept generation response (happens after all chunks)
+	mockAIProvider.generateText.mockResolvedValueOnce(
+		createSuccessResult({
+			data: JSON.stringify({ concepts: sampleConcepts }),
+			usage: { promptTokens: 200, completionTokens: 150, totalTokens: 350 },
+		})
+	);
+}

@@ -13,6 +13,7 @@ module.exports = {
     '^(\\.{1,2}/.*)\\.js$': '$1',
   },
   resolver: '<rootDir>/jest.resolver.cjs',
+  globalTeardown: '<rootDir>/jest.global-teardown.cjs',
   collectCoverageFrom: [
     'src/**/*.ts',
     '!src/**/*.d.ts',

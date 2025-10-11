@@ -52,7 +52,6 @@ export async function routeJob(job: ProcessingJob): Promise<JobResult> {
 
 		log('INFO', context, 'Job completed successfully', {
 			success: result.success,
-			data: result.data,
 		});
 
 		if (result.success) {

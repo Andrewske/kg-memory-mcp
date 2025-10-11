@@ -192,6 +192,12 @@ export function setupTestSuite(): void {
 				if (db && typeof db.$disconnect === 'function') {
 					await db.$disconnect();
 				}
+
+				// CRITICAL: Clear the global singleton to prevent reuse across test suites
+				const globalForPrisma = globalThis as unknown as {
+					prisma: typeof db | undefined;
+				};
+				globalForPrisma.prisma = undefined;
 			}
 		} catch (error) {
 			console.error('Error during test cleanup:', error);

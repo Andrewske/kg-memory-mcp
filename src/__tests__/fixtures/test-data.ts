@@ -248,6 +248,52 @@ export const sampleConcepts: Concept[] = [
 	},
 ];
 
+// Sample conceptualization relationships linking entities/events to concepts
+export const sampleConceptualizations = [
+	{
+		source_element: 'John Smith',
+		triple_type: 'ENTITY_ENTITY' as const,
+		concept: 'Software Engineering',
+		confidence: 0.97,
+		reasoning: 'John Smith is a software engineer, directly mapping to the Software Engineering concept',
+	},
+	{
+		source_element: 'John Smith',
+		triple_type: 'ENTITY_ENTITY' as const,
+		concept: 'Artificial Intelligence',
+		confidence: 0.96,
+		reasoning: 'John Smith works on AI projects, relating to Artificial Intelligence concept',
+	},
+	{
+		source_element: 'Tech Corp',
+		triple_type: 'ENTITY_ENTITY' as const,
+		concept: 'Technology Industry',
+		confidence: 0.95,
+		reasoning: 'Tech Corp is a technology company operating in the Technology Industry',
+	},
+	{
+		source_element: 'software engineer',
+		triple_type: 'ENTITY_ENTITY' as const,
+		concept: 'Professional Relationships',
+		confidence: 0.90,
+		reasoning: 'Software engineer represents a professional role in work relationships',
+	},
+	{
+		source_element: 'product launch event',
+		triple_type: 'ENTITY_EVENT' as const,
+		concept: 'Product Launch Event',
+		confidence: 0.92,
+		reasoning: 'Product launch event directly maps to Product Launch Event concept',
+	},
+	{
+		source_element: 'product launch event',
+		triple_type: 'EVENT_EVENT' as const,
+		concept: 'Business Operations',
+		confidence: 0.91,
+		reasoning: 'Product launch events are part of business operations',
+	},
+];
+
 // Test arguments for different scenarios
 export const testScenarios: Record<string, ProcessKnowledgeArgs> = {
 	simple: {

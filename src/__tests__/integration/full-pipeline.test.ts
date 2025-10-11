@@ -34,6 +34,7 @@ import {
 	createSuccessResult,
 	createTestArgs,
 	mockEnv,
+	setupFourStageExtractionMocks,
 } from '../helpers/mock-factories.js';
 import { cleanupTestDatabase, setupTestSuite } from '../helpers/test-setup.js';
 
@@ -52,10 +53,10 @@ describe('Full Pipeline Integration', () => {
 	let mockQStash: ReturnType<typeof createMockQStash>;
 
 	beforeEach(async () => {
+		// Clear mock call history and reset mock implementations
 		jest.clearAllMocks();
-		// Note: cleanupTestDatabase() is already called by setupTestSuite()
 
-		// Setup mocks
+		// Setup fresh mocks for each test
 		mockAIProvider = createMockAIProvider();
 		mockEmbeddingService = createMockEmbeddingService();
 		mockQStash = createMockQStash();
@@ -346,13 +347,8 @@ describe('Full Pipeline Integration', () => {
 		it('should track pipeline progress across all stages', async () => {
 			const args = createTestArgs();
 
-			// Setup AI responses
-			mockAIProvider.generateText.mockResolvedValue(
-				createSuccessResult({
-					data: JSON.stringify({ triples: sampleTriples.entityEntity.slice(0, 1) }),
-					usage: { promptTokens: 100, completionTokens: 50, totalTokens: 150 },
-				})
-			);
+			// Setup AI responses for four-stage extraction
+			setupFourStageExtractionMocks(mockAIProvider);
 
 			const parentJobId = await initiateKnowledgePipeline(args);
 
@@ -419,19 +415,36 @@ describe('Full Pipeline Integration', () => {
 		it('should handle partial failures in extraction', async () => {
 			const args = createTestArgs({ text: testTexts.large });
 
-			// Setup mixed success/failure responses for chunks
+			// Setup mixed success/failure responses for four-stage extraction
+			// First stage succeeds
 			mockAIProvider.generateText
 				.mockResolvedValueOnce(
 					createSuccessResult({
-						data: JSON.stringify({ triples: sampleTriples.entityEntity }),
-						usage: { promptTokens: 100, completionTokens: 50, totalTokens: 150 },
+						data: mockAIExtractions.fourStage.entityEntity.response,
+						usage: mockAIExtractions.fourStage.entityEntity.usage,
 					})
 				)
+				// Second stage fails
 				.mockRejectedValueOnce(new Error('Chunk processing failed'))
+				// Third stage succeeds
 				.mockResolvedValueOnce(
 					createSuccessResult({
-						data: JSON.stringify({ triples: sampleTriples.entityEvent }),
-						usage: { promptTokens: 100, completionTokens: 50, totalTokens: 150 },
+						data: mockAIExtractions.fourStage.eventEvent.response,
+						usage: mockAIExtractions.fourStage.eventEvent.usage,
+					})
+				)
+				// Fourth stage succeeds
+				.mockResolvedValueOnce(
+					createSuccessResult({
+						data: mockAIExtractions.fourStage.emotionalContext.response,
+						usage: mockAIExtractions.fourStage.emotionalContext.usage,
+					})
+				)
+				// Concept generation
+				.mockResolvedValueOnce(
+					createSuccessResult({
+						data: JSON.stringify({ concepts: sampleConcepts }),
+						usage: { promptTokens: 200, completionTokens: 150, totalTokens: 350 },
 					})
 				);
 
@@ -492,14 +505,11 @@ describe('Full Pipeline Integration', () => {
 		it('should maintain data consistency across failed operations', async () => {
 			const args = createTestArgs();
 
-			// Setup AI to fail during concept generation
+			// Setup AI to succeed for extraction but fail during concept generation
+			setupFourStageExtractionMocks(mockAIProvider);
+			// Override the concept generation to fail
 			mockAIProvider.generateText
-				.mockResolvedValueOnce(
-					createSuccessResult({
-						data: JSON.stringify({ triples: sampleTriples.entityEntity }),
-						usage: { promptTokens: 100, completionTokens: 50, totalTokens: 150 },
-					})
-				)
+				.mockReset() // Clear the queued concept response
 				.mockRejectedValueOnce(new Error('Concept generation failed'));
 
 			const parentJobId = await initiateKnowledgePipeline(args);
@@ -508,6 +518,10 @@ describe('Full Pipeline Integration', () => {
 			const extractionJob = await db.processingJob.findFirst({
 				where: { parent_job_id: parentJobId, job_type: JobType.EXTRACT_KNOWLEDGE_BATCH },
 			});
+
+			// Re-setup mocks since we cleared them
+			setupFourStageExtractionMocks(mockAIProvider);
+
 			const extractionResult = await routeJob(
 				assertJobExists(extractionJob, 'Extraction job not created')
 			);
@@ -519,6 +533,9 @@ describe('Full Pipeline Integration', () => {
 			});
 
 			if (conceptJob) {
+				mockAIProvider.generateText.mockRejectedValueOnce(
+					new Error('Concept generation failed')
+				);
 				const conceptResult = await routeJob(conceptJob);
 				expect(conceptResult.success).toBe(false);
 			}
