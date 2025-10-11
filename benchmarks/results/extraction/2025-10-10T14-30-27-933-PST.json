@@ -1,0 +1,45 @@
+{
+  "id": "5e50a5f4-1698-4e0e-9f9d-5561ab9246e8",
+  "timestamp": "2025-10-10T14:30:27.933-07:00",
+  "benchmark_type": "extraction",
+  "config": {
+    "model": "gpt-4o-mini",
+    "provider": "openai",
+    "extraction_method": "four-stage",
+    "prompt_version": "latest",
+    "prompts_used": {
+      "extraction": {
+        "entity-entity": "v1.1",
+        "entity-event": "v1.1",
+        "event-event": "v1.1",
+        "emotional-context": "v1.1"
+      },
+      "conceptualization": "v1.0"
+    }
+  },
+  "performance": {
+    "total_duration_ms": 81479,
+    "tokens_per_second": 169.3319751101511,
+    "ms_per_token": 5.9055591795317826,
+    "memory_used_mb": 16.42200469970703
+  },
+  "quality": {
+    "triples_extracted": 108,
+    "avg_confidence": 0.8967592592592596
+  },
+  "cost": {
+    "input_tokens": 9926,
+    "output_tokens": 3871,
+    "total_tokens": 13797,
+    "estimated_cost_usd": 0.0038115,
+    "api_calls": 15
+  },
+  "output_analysis": {
+    "triple_types": {
+      "ENTITY_ENTITY": 43,
+      "ENTITY_EVENT": 41,
+      "EVENT_EVENT": 12,
+      "EMOTIONAL_CONTEXT": 12
+    }
+  }
+}

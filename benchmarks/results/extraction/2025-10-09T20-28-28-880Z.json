@@ -1,0 +1,33 @@
+{
+  "id": "12aa591f-f242-4da8-aea3-8468607de21c",
+  "timestamp": "2025-10-09T20:28:28.880Z",
+  "benchmark_type": "extraction",
+  "config": {
+    "model": "gpt-4o-mini",
+    "provider": "openai",
+    "extraction_method": "four-stage"
+  },
+  "performance": {
+    "total_duration_ms": 26101,
+    "tokens_per_second": 372.28458679744074,
+    "ms_per_token": 2.6861171143357003,
+    "memory_used_mb": 16.16826629638672
+  },
+  "quality": {
+    "triples_extracted": 42
+  },
+  "cost": {
+    "input_tokens": 7381,
+    "output_tokens": 2336,
+    "total_tokens": 9717,
+    "estimated_cost_usd": 0.00250875,
+    "api_calls": 10
+  },
+  "output_analysis": {
+    "triple_types": {
+      "ENTITY_ENTITY": 13,
+      "ENTITY_EVENT": 17,
+      "EMOTIONAL_CONTEXT": 12
+    }
+  }
+}
