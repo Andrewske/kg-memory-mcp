@@ -10,6 +10,22 @@ import { createContext, log, logDataFlow, logError } from '~/shared/utils/debug-
 
 // Note: sanitizeForLogging is now provided by the debug logger
 
+/**
+ * Security: Pattern to remove null bytes and dangerous control characters
+ *
+ * Removes:
+ * - \x00-\x08: Null through backspace (includes null byte injection vectors)
+ * - \x0B: Vertical tab
+ * - \x0C: Form feed
+ * - \x0E-\x1F: Shift out through unit separator
+ * - \x7F: Delete character
+ *
+ * These characters can cause SQL injection, data corruption, or unexpected behavior
+ * when stored in the database or processed by downstream systems.
+ */
+// biome-ignore lint/suspicious/noControlCharactersInRegex: Explicit control character ranges required for security validation
+const CONTROL_CHARS_PATTERN = /[\x00-\x08\x0B\x0C\x0E-\x1F\x7F]/g;
+
 export interface BatchStorageInput {
 	/** Knowledge triples to store */
 	triples: Triple[];
@@ -88,7 +104,7 @@ function validateAndSanitizeInput(input: BatchStorageInput): Result<BatchStorage
 				}
 				return text
 					.replace(/\0/g, '') // Remove null bytes
-					.replace(/[\x00-\x08\x0B\x0C\x0E-\x1F\x7F]/g, '') // Remove control characters
+					.replace(CONTROL_CHARS_PATTERN, '') // Remove control characters
 					.trim()
 					.slice(0, 5000); // Reasonable length limit
 			};
@@ -111,7 +127,7 @@ function validateAndSanitizeInput(input: BatchStorageInput): Result<BatchStorage
 				}
 				return text
 					.replace(/\0/g, '')
-					.replace(/[\x00-\x08\x0B\x0C\x0E-\x1F\x7F]/g, '')
+					.replace(CONTROL_CHARS_PATTERN, '')
 					.trim()
 					.slice(0, 2000);
 			};
@@ -132,7 +148,7 @@ function validateAndSanitizeInput(input: BatchStorageInput): Result<BatchStorage
 				}
 				return text
 					.replace(/\0/g, '')
-					.replace(/[\x00-\x08\x0B\x0C\x0E-\x1F\x7F]/g, '')
+					.replace(CONTROL_CHARS_PATTERN, '')
 					.trim()
 					.slice(0, 2000);
 			};

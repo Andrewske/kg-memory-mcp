@@ -2,7 +2,7 @@
  * Integration tests for the complete knowledge processing pipeline
  */
 
-import { beforeEach, describe, expect, it, vi } from 'vitest'';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { JobStage, JobStatus, JobType, type ProcessingJob } from '@prisma/client';
 
 // Mock external dependencies

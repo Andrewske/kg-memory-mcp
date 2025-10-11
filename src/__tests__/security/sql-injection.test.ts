@@ -5,12 +5,40 @@
  * against SQL injection attacks through various attack vectors.
  */
 
+import { afterAll, beforeAll } from 'vitest';
 import { Decimal } from '@prisma/client/runtime/library';
 import { db } from '~/shared/database/client.js';
 import { batchStoreKnowledge } from '~/shared/database/batch-storage.js';
 import type { Triple } from '~/shared/types/core.js';
+import { cleanupTestDatabase } from '../helpers/test-setup.js';
 
 describe('SQL Injection Prevention', () => {
+	// Clean database before running these tests
+	beforeAll(async () => {
+		await cleanupTestDatabase();
+	});
+
+	// Clean up between tests to prevent data accumulation
+	afterEach(async () => {
+		// Delete vectors first (child), then triples (parent) for this test source only
+		await db.vectorEmbedding.deleteMany({
+			where: {
+				knowledge_triple: {
+					source: 'security-test',
+				},
+			},
+		});
+		await db.knowledgeTriple.deleteMany({
+			where: { source: 'security-test' },
+		});
+	});
+
+	// Clean database after all tests complete
+	afterAll(async () => {
+		await cleanupTestDatabase();
+		await db.$disconnect();
+	});
+
 	// Helper function to create a valid embedding array
 	const createEmbedding = (): number[] => Array(1536).fill(0.1);
 
@@ -36,24 +64,6 @@ describe('SQL Injection Prevention', () => {
 		extracted_at: new Date(),
 		extraction_stage: null,
 		confidence: new Decimal(0.9),
-	});
-
-	afterEach(async () => {
-		// Clean up test data
-		await db.vectorEmbedding.deleteMany({
-			where: {
-				knowledge_triple: {
-					source: 'security-test',
-				},
-			},
-		});
-		await db.knowledgeTriple.deleteMany({
-			where: { source: 'security-test' },
-		});
-	});
-
-	afterAll(async () => {
-		await db.$disconnect();
 	});
 
 	it('should safely handle SQL injection attempt with DROP TABLE', async () => {

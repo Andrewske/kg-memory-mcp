@@ -4,7 +4,7 @@
 
 import fs from 'node:fs/promises';
 import path from 'node:path';
-import { beforeEach, afterEach, describe, expect, it } from '@jest/globals';
+import { beforeEach, afterEach, describe, expect, it } from 'vitest';
 import {
 	createVocabularyBackup,
 	saveVocabulary,

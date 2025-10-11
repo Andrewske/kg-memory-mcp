@@ -3,11 +3,14 @@
  * Tests the fixes implemented for critical security vulnerabilities
  */
 
-import { beforeEach, describe, expect, it } from '@jest/globals';
+import { beforeEach, describe, expect, it } from 'vitest';
 import { TripleType } from '@prisma/client';
 import { Decimal } from '@prisma/client/runtime/library';
-import { type BatchStorageInput, batchStoreKnowledge } from '../../shared/database/batch-storage';
-import type { Triple } from '../../shared/types/core';
+import { type BatchStorageInput, batchStoreKnowledge } from '~/shared/database/batch-storage.js';
+import type { Triple } from '~/shared/types/core.js';
+import { setupTestSuite } from '~/__tests__/helpers/test-setup.js';
+
+setupTestSuite();
 
 describe('Batch Storage Security Tests', () => {
 	let mockEmbeddingMap: Map<string, number[]>;

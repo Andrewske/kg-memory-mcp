@@ -10,7 +10,7 @@
  * 3. No "zombie client" issues
  */
 
-import { beforeEach, describe, expect, it, vi } from 'vitest'';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { JobStatus, JobType } from '@prisma/client';
 
 // Mock dependencies

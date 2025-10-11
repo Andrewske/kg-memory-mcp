@@ -2,9 +2,12 @@
  * Integration test for the 3-job knowledge processing pipeline
  */
 
-import { afterAll, beforeAll, describe, expect, it, jest } from '@jest/globals';
+import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest';
 import { JobStatus, JobType } from '@prisma/client';
 import { routeJob } from '~/features/knowledge-processing/job-router.js';
+import { setupTestSuite } from '~/__tests__/helpers/test-setup.js';
+
+setupTestSuite();
 import {
 	getPipelineStatus,
 	initiateKnowledgePipeline,

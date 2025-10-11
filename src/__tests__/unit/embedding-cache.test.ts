@@ -2,7 +2,7 @@
  * Unit tests for embedding cache optimization functions
  */
 
-import { beforeEach, describe, expect, it, vi } from 'vitest'';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 // Mock dependencies before imports
 vi.mock('~/shared/env.js');

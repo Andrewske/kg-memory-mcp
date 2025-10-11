@@ -2,7 +2,7 @@
  * Unit tests for executeExtraction function
  */
 
-import { beforeEach, describe, expect, it, vi } from 'vitest'';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 // Mock dependencies before imports
 vi.mock('~/features/deduplication/deduplicate.js');

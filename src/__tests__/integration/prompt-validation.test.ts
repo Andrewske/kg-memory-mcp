@@ -9,9 +9,12 @@
  */
 
 import type { TripleType } from '@prisma/client';
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 import { extractByType } from '~/features/knowledge-extraction/extract.js';
 import type { ProcessKnowledgeArgs } from '~/server/transport-manager.js';
+import { setupTestSuite } from '../helpers/test-setup.js';
+
+setupTestSuite();
 
 const INTEGRATION_TESTS_ENABLED = process.env.ENABLE_AI_INTEGRATION_TESTS === 'true';
 

@@ -11,7 +11,7 @@ import type { Concept, Triple } from '~/shared/types/core.js';
 import type { AIProvider, EmbeddingService, Result } from '~/shared/types/services.js';
 
 // Mock AI Provider Service
-export function createMockAIProvider(): ReturnType<typeof vi.fn><AIProvider> {
+export function createMockAIProvider() {
 	return {
 		generateText: vi.fn().mockResolvedValue({
 			success: true,
@@ -44,7 +44,7 @@ export function createMockAIProvider(): ReturnType<typeof vi.fn><AIProvider> {
 }
 
 // Mock Embedding Service
-export function createMockEmbeddingService(): ReturnType<typeof vi.fn><EmbeddingService> {
+export function createMockEmbeddingService() {
 	return {
 		embed: vi.fn().mockResolvedValue({
 			success: true,

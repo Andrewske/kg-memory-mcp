@@ -2,7 +2,7 @@
  * Integration tests for job routing and handler dispatch
  */
 
-import { beforeEach, describe, expect, it, vi } from 'vitest'';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { JobStage, JobStatus, JobType } from '@prisma/client';
 
 // Mock dependencies
