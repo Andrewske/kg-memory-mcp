@@ -3,6 +3,7 @@ import { handleMcpRequest } from '~/server/http-server.js';
 import { env } from '~/shared/env.js';
 
 // Express.js adapter
+// Exported for HTTP transport integration testing
 export async function createExpressAdapter(): Promise<Express> {
 	const { default: express } = await import('express');
 	const { default: compression } = await import('compression');

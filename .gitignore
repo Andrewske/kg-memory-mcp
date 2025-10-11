@@ -70,6 +70,6 @@ prisma/migrations/
 .mcp.json
 
 # Benchmark results
-benchmarks/results/
+benchmarks/results
 benchmarks/vocabulary.json
 benchmarks/

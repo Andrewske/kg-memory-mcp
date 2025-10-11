@@ -7,7 +7,7 @@ import type { VercelRequest } from '@vercel/node';
 import type { Request } from 'express';
 import type { z } from 'zod';
 import {
-	type processKnowledgeSchema,
+	processKnowledgeSchema,
 	searchConceptsSchema,
 	searchKnowledgeSchema,
 } from '~/server/routes/knowledge-routes.js';
@@ -21,6 +21,17 @@ import {
 import { getAllTriples } from '~/shared/database/triple-operations.js';
 import { env } from '~/shared/env.js';
 import { addJobToQueue, handleGetJobStatus } from '~/shared/services/queue-service.js';
+
+// Custom error class for validation errors
+class ValidationError extends Error {
+	constructor(
+		message: string,
+		public details: any
+	) {
+		super(message);
+		this.name = 'ValidationError';
+	}
+}
 
 // Validation helper
 function validateRequest<T>(
@@ -48,9 +59,7 @@ async function handleSearchKnowledge(body: z.infer<typeof searchKnowledgeSchema>
 	// Validate input
 	const validation = validateRequest(searchKnowledgeSchema, body);
 	if (!validation.success) {
-		throw new Error(
-			`Validation Error: ${JSON.stringify(validation.error.errors || validation.error)}`
-		);
+		throw new ValidationError('Validation failed', validation.error.errors || validation.error);
 	}
 
 	// Use your existing function
@@ -67,9 +76,7 @@ async function handleSearchConcepts(body: z.infer<typeof searchConceptsSchema>) 
 	// Validate input
 	const validation = validateRequest(searchConceptsSchema, body);
 	if (!validation.success) {
-		throw new Error(
-			`Validation Error: ${JSON.stringify(validation.error.errors || validation.error)}`
-		);
+		throw new ValidationError('Validation failed', validation.error.errors || validation.error);
 	}
 
 	// Use your existing function
@@ -95,8 +102,14 @@ async function handleGetStats() {
 
 // Queue processing for large jobs
 async function queueKnowledgeProcessing(data: z.infer<typeof processKnowledgeSchema>) {
+	// Validate input
+	const validation = validateRequest(processKnowledgeSchema, data);
+	if (!validation.success) {
+		throw new ValidationError('Validation failed', validation.error.errors || validation.error);
+	}
+
 	try {
-		const jobId = await addJobToQueue(data);
+		const jobId = await addJobToQueue(validation.data);
 		return {
 			jobId,
 			message: 'Knowledge processing job queued',
@@ -452,11 +465,26 @@ export async function handleMcpRequest(req: VercelRequest | Request) {
 		}
 	} catch (error) {
 		console.error('HTTP Handler Error:', error);
+
+		// Handle validation errors with 400 status
+		if (error instanceof ValidationError) {
+			return {
+				status: 400,
+				body: {
+					error: 'Validation Error',
+					details: error.details,
+					timestamp: new Date().toISOString(),
+				},
+				headers: defaultHeaders,
+			};
+		}
+
+		// Handle all other errors with 500 status
 		return {
 			status: 500,
 			body: {
 				error: 'Internal Server Error',
-				message: 'An unexpected error occurred',
+				message: error instanceof Error ? error.message : 'An unexpected error occurred',
 				timestamp: new Date().toISOString(),
 			},
 			headers: defaultHeaders,

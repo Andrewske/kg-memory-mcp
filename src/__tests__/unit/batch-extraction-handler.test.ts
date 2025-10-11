@@ -642,4 +642,208 @@ describe('executeExtraction', () => {
 			expect(extractKnowledgeTriples).toHaveBeenCalled();
 		});
 	});
+
+	describe('Error Path Coverage', () => {
+		it('should handle embedding service rate limiting', async () => {
+			const job = createTestJob({ metadata: createTestJobMetadata() });
+
+			(
+				extractKnowledgeTriples as vi.MockedFunction<typeof extractKnowledgeTriples>
+			).mockResolvedValue({
+				success: true,
+				data: {
+					triples: [createTestTriple()],
+					stageResults: {},
+					concepts: [] as ExtractKTSuccess['data']['concepts'],
+					conceptualizations: [] as ExtractKTSuccess['data']['conceptualizations'],
+				},
+			} as ExtractKTResult);
+
+			// Mock rate limit error from embedding service
+			(generateEmbeddingMap as vi.MockedFunction<typeof generateEmbeddingMap>).mockResolvedValue(
+				createErrorResult('Rate limit exceeded: 429 Too Many Requests')
+			);
+
+			const result = await executeExtraction(job, true);
+
+			expect(result.success).toBe(false);
+			expect(result.error?.message).toContain('Embedding generation failed');
+			expect(result.error?.operation).toBe('embedding_generation');
+		});
+
+		it('should handle database connection timeout', async () => {
+			const job = createTestJob({ metadata: createTestJobMetadata() });
+
+			(
+				extractKnowledgeTriples as vi.MockedFunction<typeof extractKnowledgeTriples>
+			).mockResolvedValue({
+				success: true,
+				data: {
+					triples: [createTestTriple()],
+					stageResults: {},
+					concepts: [] as ExtractKTSuccess['data']['concepts'],
+					conceptualizations: [] as ExtractKTSuccess['data']['conceptualizations'],
+				},
+			} as ExtractKTResult);
+			(generateEmbeddingMap as vi.MockedFunction<typeof generateEmbeddingMap>).mockResolvedValue(
+				createTestEmbeddingMap()
+			);
+			(deduplicateTriples as vi.MockedFunction<typeof deduplicateTriples>).mockResolvedValue({
+				success: true,
+				data: {
+					uniqueTriples: [createTestTriple()],
+					duplicatesRemoved: 0,
+					mergedMetadata: [] as DedupSuccess['data']['mergedMetadata'],
+				},
+			} as DedupTriplesResult);
+
+			// Mock database connection timeout
+			(batchStoreKnowledge as vi.MockedFunction<typeof batchStoreKnowledge>).mockResolvedValue(
+				createErrorResult('Connection timeout: database pool exhausted')
+			);
+
+			const result = await executeExtraction(job, true);
+
+			expect(result.success).toBe(false);
+			expect(result.error?.message).toContain('Storage failed');
+			expect(result.error?.operation).toBe('batch_storage');
+		});
+
+		it('should handle transaction rollback failure', async () => {
+			const job = createTestJob({ metadata: createTestJobMetadata() });
+
+			(
+				extractKnowledgeTriples as vi.MockedFunction<typeof extractKnowledgeTriples>
+			).mockResolvedValue({
+				success: true,
+				data: {
+					triples: [createTestTriple()],
+					stageResults: {},
+					concepts: [] as ExtractKTSuccess['data']['concepts'],
+					conceptualizations: [] as ExtractKTSuccess['data']['conceptualizations'],
+				},
+			} as ExtractKTResult);
+			(generateEmbeddingMap as vi.MockedFunction<typeof generateEmbeddingMap>).mockResolvedValue(
+				createTestEmbeddingMap()
+			);
+			(deduplicateTriples as vi.MockedFunction<typeof deduplicateTriples>).mockResolvedValue({
+				success: true,
+				data: {
+					uniqueTriples: [createTestTriple()],
+					duplicatesRemoved: 0,
+					mergedMetadata: [] as DedupSuccess['data']['mergedMetadata'],
+				},
+			} as DedupTriplesResult);
+
+			// Mock transaction constraint violation
+			(batchStoreKnowledge as vi.MockedFunction<typeof batchStoreKnowledge>).mockResolvedValue(
+				createErrorResult('Transaction rollback: unique constraint violation')
+			);
+
+			const result = await executeExtraction(job, true);
+
+			expect(result.success).toBe(false);
+			expect(result.error?.message).toContain('Storage failed');
+		});
+
+		it('should handle memory limit exceeded during processing', async () => {
+			const job = createTestJob({
+				text: 'A'.repeat(15000),
+				metadata: createTestJobMetadata({ resourceLimits: { maxMemoryMB: 100 } }),
+			});
+
+			// Mock extraction failing due to memory pressure
+			(
+				extractKnowledgeTriples as vi.MockedFunction<typeof extractKnowledgeTriples>
+			).mockRejectedValue(new Error('JavaScript heap out of memory'));
+
+			const result = await executeExtraction(job, true);
+
+			expect(result.success).toBe(false);
+			expect(result.error?.message).toBe('All chunk extractions failed');
+		});
+
+		it('should handle concurrent extraction failures', async () => {
+			const job = createTestJob({
+				text: 'A'.repeat(15000),
+				metadata: createTestJobMetadata(),
+			});
+
+			const chunks = createTestChunks(3);
+			(chunkText as vi.MockedFunction<typeof chunkText>).mockReturnValue(chunks);
+
+			// All chunks fail
+			(
+				extractKnowledgeTriples as vi.MockedFunction<typeof extractKnowledgeTriples>
+			).mockRejectedValue(new Error('Service unavailable'));
+
+			const result = await executeExtraction(job, true);
+
+			expect(result.success).toBe(false);
+			expect(result.error?.message).toBe('All chunk extractions failed');
+			expect(result.error?.operation).toBe('batch_extraction');
+		});
+
+		it('should handle deduplication service failure', async () => {
+			const job = createTestJob({ metadata: createTestJobMetadata() });
+
+			(
+				extractKnowledgeTriples as vi.MockedFunction<typeof extractKnowledgeTriples>
+			).mockResolvedValue({
+				success: true,
+				data: {
+					triples: [createTestTriple(), createTestTriple()],
+					stageResults: {},
+					concepts: [] as ExtractKTSuccess['data']['concepts'],
+					conceptualizations: [] as ExtractKTSuccess['data']['conceptualizations'],
+				},
+			} as ExtractKTResult);
+			(generateEmbeddingMap as vi.MockedFunction<typeof generateEmbeddingMap>).mockResolvedValue({
+				success: true,
+				data: {
+					embeddings: new Map([['test', [1, 2, 3]]]),
+					stats: { totalTexts: 1, uniqueTexts: 1, duplicatesAverted: 0, batchCalls: 1 },
+				},
+			} as EmbeddingMapResult);
+
+			// Mock deduplication failure
+			(deduplicateTriples as vi.MockedFunction<typeof deduplicateTriples>).mockResolvedValue(
+				createErrorResult('Deduplication comparison failed')
+			);
+
+			const result = await executeExtraction(job, true);
+
+			expect(result.success).toBe(false);
+			expect(result.error?.message).toContain('Deduplication failed');
+			expect(result.error?.operation).toBe('deduplication');
+		});
+
+		it('should handle embedding batch size limit exceeded', async () => {
+			const job = createTestJob({ metadata: createTestJobMetadata() });
+
+			const largeTripleSet = Array.from({ length: 1000 }, () => createTestTriple());
+
+			(
+				extractKnowledgeTriples as vi.MockedFunction<typeof extractKnowledgeTriples>
+			).mockResolvedValue({
+				success: true,
+				data: {
+					triples: largeTripleSet,
+					stageResults: {},
+					concepts: [] as ExtractKTSuccess['data']['concepts'],
+					conceptualizations: [] as ExtractKTSuccess['data']['conceptualizations'],
+				},
+			} as ExtractKTResult);
+
+			// Mock embedding service rejecting oversized batch
+			(generateEmbeddingMap as vi.MockedFunction<typeof generateEmbeddingMap>).mockResolvedValue(
+				createErrorResult('Batch size exceeds maximum allowed limit')
+			);
+
+			const result = await executeExtraction(job, true);
+
+			expect(result.success).toBe(false);
+			expect(result.error?.operation).toBe('embedding_generation');
+		});
+	});
 });

@@ -228,3 +228,73 @@ export function waitFor(ms: number): Promise<void> {
 export function createTestId(suffix: string): string {
 	return `test-${suffix}-${Date.now()}`;
 }
+
+/**
+ * Seed database with fusion search test data
+ * Creates triples, concepts, and conceptualizations for comprehensive search testing
+ * Note: We don't seed embeddings - those are handled by mock services in tests
+ */
+export async function seedFusionSearchTestData(): Promise<{
+	triples: Array<{ id: string; subject: string; predicate: string; object: string }>;
+	concepts: Array<{ id: string; concept: string }>;
+}> {
+	const { searchTestData } = await import('../fixtures/test-data.js');
+
+	// 1. Create triples
+	await db.knowledgeTriple.createMany({
+		data: searchTestData.triples.map(triple => ({
+			...triple,
+			source: 'fusion-search-test',
+			source_type: 'test',
+			source_date: new Date('2025-01-01T00:00:00.000Z'),
+		})),
+	});
+
+	// Get the created triple IDs
+	const storedTriples = await db.knowledgeTriple.findMany({
+		where: {
+			source: 'fusion-search-test',
+			source_type: 'test',
+		},
+		select: {
+			id: true,
+			subject: true,
+			predicate: true,
+			object: true,
+		},
+	});
+
+	// 2. Create concepts
+	await db.conceptNode.createMany({
+		data: searchTestData.concepts,
+	});
+
+	const storedConcepts = await db.conceptNode.findMany({
+		where: {
+			source: 'fusion-search-test',
+			source_type: 'test',
+		},
+		select: {
+			id: true,
+			concept: true,
+		},
+	});
+
+	// 3. Create conceptualization relationships
+	await db.conceptualizationRelationship.createMany({
+		data: searchTestData.conceptualizations.map(rel => ({
+			...rel,
+			extracted_at: new Date('2025-01-01T00:00:00.000Z'),
+		})),
+	});
+
+	// Note: Vector embeddings are not seeded here.
+	// The mock embedding service will handle vector search queries.
+	// This is actually better for testing since it allows us to test
+	// the search logic without dealing with complex vector database setup.
+
+	return {
+		triples: storedTriples,
+		concepts: storedConcepts,
+	};
+}

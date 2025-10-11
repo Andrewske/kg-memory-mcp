@@ -9,6 +9,7 @@ import type { ExtractionMetrics, JobMetadata } from '~/features/knowledge-proces
 import type { ProcessKnowledgeArgs } from '~/server/transport-manager.js';
 import type { Concept, Triple } from '~/shared/types/core.js';
 import type { AIProvider, EmbeddingService, Result } from '~/shared/types/services.js';
+import { mockAIExtractions, sampleConcepts } from '../fixtures/test-data.js';
 
 // Mock AI Provider Service
 export function createMockAIProvider() {
@@ -311,8 +312,42 @@ export const mockEnv = {
 };
 
 /**
+ * Create four-stage extraction mock configuration
+ * Returns mock responses that can be inspected before use
+ *
+ * @returns Object containing mock responses for each extraction stage
+ */
+export function createFourStageExtractionMocks() {
+	return {
+		entityEntity: createSuccessResult({
+			data: mockAIExtractions.fourStage.entityEntity.response,
+			usage: mockAIExtractions.fourStage.entityEntity.usage,
+		}),
+		entityEvent: createSuccessResult({
+			data: mockAIExtractions.fourStage.entityEvent.response,
+			usage: mockAIExtractions.fourStage.entityEvent.usage,
+		}),
+		eventEvent: createSuccessResult({
+			data: mockAIExtractions.fourStage.eventEvent.response,
+			usage: mockAIExtractions.fourStage.eventEvent.usage,
+		}),
+		emotionalContext: createSuccessResult({
+			data: mockAIExtractions.fourStage.emotionalContext.response,
+			usage: mockAIExtractions.fourStage.emotionalContext.usage,
+		}),
+		conceptGeneration: createSuccessResult({
+			data: JSON.stringify({ concepts: sampleConcepts }),
+			usage: { promptTokens: 200, completionTokens: 150, totalTokens: 350 },
+		}),
+	};
+}
+
+/**
  * Helper to setup four-stage extraction mock responses
  * Call this when you need to mock a complete extraction pipeline
+ *
+ * DEPRECATED: Use createFourStageExtractionMocks() for better debuggability
+ * This function is kept for backward compatibility with existing tests
  *
  * @param mockAIProvider - The mocked AI provider instance
  * @param iterations - Number of chunks to process (default: 1)
@@ -321,43 +356,17 @@ export function setupFourStageExtractionMocks(
 	mockAIProvider: ReturnType<typeof createMockAIProvider>,
 	iterations: number = 1
 ): void {
-	// Import test data locally to avoid circular dependencies
-	const { mockAIExtractions, sampleConcepts } = require('../fixtures/test-data.js');
+	const mocks = createFourStageExtractionMocks();
 
 	for (let i = 0; i < iterations; i++) {
 		// Four stages of extraction
 		mockAIProvider.generateText
-			.mockResolvedValueOnce(
-				createSuccessResult({
-					data: mockAIExtractions.fourStage.entityEntity.response,
-					usage: mockAIExtractions.fourStage.entityEntity.usage,
-				})
-			)
-			.mockResolvedValueOnce(
-				createSuccessResult({
-					data: mockAIExtractions.fourStage.entityEvent.response,
-					usage: mockAIExtractions.fourStage.entityEvent.usage,
-				})
-			)
-			.mockResolvedValueOnce(
-				createSuccessResult({
-					data: mockAIExtractions.fourStage.eventEvent.response,
-					usage: mockAIExtractions.fourStage.eventEvent.usage,
-				})
-			)
-			.mockResolvedValueOnce(
-				createSuccessResult({
-					data: mockAIExtractions.fourStage.emotionalContext.response,
-					usage: mockAIExtractions.fourStage.emotionalContext.usage,
-				})
-			);
+			.mockResolvedValueOnce(mocks.entityEntity)
+			.mockResolvedValueOnce(mocks.entityEvent)
+			.mockResolvedValueOnce(mocks.eventEvent)
+			.mockResolvedValueOnce(mocks.emotionalContext);
 	}
 
 	// Add concept generation response (happens after all chunks)
-	mockAIProvider.generateText.mockResolvedValueOnce(
-		createSuccessResult({
-			data: JSON.stringify({ concepts: sampleConcepts }),
-			usage: { promptTokens: 200, completionTokens: 150, totalTokens: 350 },
-		})
-	);
+	mockAIProvider.generateText.mockResolvedValueOnce(mocks.conceptGeneration);
 }

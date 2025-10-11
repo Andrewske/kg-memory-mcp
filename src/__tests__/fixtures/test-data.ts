@@ -462,3 +462,108 @@ export const seedData = {
 
 	conceptNodes: sampleConcepts.slice(0, 3),
 };
+
+/**
+ * Search test data - Comprehensive dataset for fusion search testing
+ * Includes triples, concepts, and conceptualizations with predictable relationships
+ */
+export const searchTestData = {
+	// Core triples for search testing with diverse content
+	triples: [
+		// Entity-Entity relationships
+		createTriple('John Smith', 'works at', 'TechCorp', 'ENTITY_ENTITY', 0.95),
+		createTriple('John Smith', 'is a', 'software engineer', 'ENTITY_ENTITY', 0.93),
+		createTriple('Sarah Jones', 'manages', 'John Smith', 'ENTITY_ENTITY', 0.90),
+		createTriple('TechCorp', 'located in', 'San Francisco', 'ENTITY_ENTITY', 0.88),
+		createTriple('Sarah Jones', 'is a', 'product manager', 'ENTITY_ENTITY', 0.92),
+
+		// Entity-Event relationships
+		createTriple('John Smith', 'presented at', 'AI Conference 2025', 'ENTITY_EVENT', 0.87),
+		createTriple('TechCorp', 'hosted', 'product launch', 'ENTITY_EVENT', 0.89),
+		createTriple('Sarah Jones', 'organized', 'team meeting', 'ENTITY_EVENT', 0.85),
+
+		// Event-Event relationships
+		createTriple('AI Conference 2025', 'preceded', 'product launch', 'EVENT_EVENT', 0.82),
+		createTriple('product launch', 'caused', 'revenue increase', 'EVENT_EVENT', 0.80),
+
+		// Emotional context
+		createTriple('John Smith', 'feels', 'excited about machine learning', 'EMOTIONAL_CONTEXT', 0.85),
+		createTriple('Sarah Jones', 'feels', 'proud of team achievements', 'EMOTIONAL_CONTEXT', 0.83),
+	],
+
+	// Concepts for conceptual search testing
+	concepts: [
+		{
+			concept: 'Software Development',
+			abstraction_level: 'HIGH' as const,
+			confidence: new Decimal(0.96),
+			source: 'fusion-search-test',
+			source_type: 'test',
+			extracted_at: new Date('2025-01-01T00:00:00.000Z'),
+		},
+		{
+			concept: 'Technology Industry',
+			abstraction_level: 'HIGH' as const,
+			confidence: new Decimal(0.94),
+			source: 'fusion-search-test',
+			source_type: 'test',
+			extracted_at: new Date('2025-01-01T00:00:00.000Z'),
+		},
+		{
+			concept: 'Machine Learning',
+			abstraction_level: 'MEDIUM' as const,
+			confidence: new Decimal(0.97),
+			source: 'fusion-search-test',
+			source_type: 'test',
+			extracted_at: new Date('2025-01-01T00:00:00.000Z'),
+		},
+		{
+			concept: 'Software Engineering Role',
+			abstraction_level: 'LOW' as const,
+			confidence: new Decimal(0.95),
+			source: 'fusion-search-test',
+			source_type: 'test',
+			extracted_at: new Date('2025-01-01T00:00:00.000Z'),
+		},
+	],
+
+	// Conceptualization relationships for concept search
+	conceptualizations: [
+		{
+			source_element: 'John Smith',
+			triple_type: 'ENTITY_ENTITY' as const,
+			concept: 'Software Development',
+			confidence: new Decimal(0.96),
+			context_triples: [],
+			source: 'fusion-search-test',
+			source_type: 'test',
+		},
+		{
+			source_element: 'software engineer',
+			triple_type: 'ENTITY_ENTITY' as const,
+			concept: 'Software Engineering Role',
+			confidence: new Decimal(0.95),
+			context_triples: [],
+			source: 'fusion-search-test',
+			source_type: 'test',
+		},
+		{
+			source_element: 'TechCorp',
+			triple_type: 'ENTITY_ENTITY' as const,
+			concept: 'Technology Industry',
+			confidence: new Decimal(0.94),
+			context_triples: [],
+			source: 'fusion-search-test',
+			source_type: 'test',
+		},
+		{
+			source_element: 'machine learning',
+			triple_type: 'EMOTIONAL_CONTEXT' as const,
+			concept: 'Machine Learning',
+			confidence: new Decimal(0.97),
+			context_triples: [],
+			source: 'fusion-search-test',
+			source_type: 'test',
+		},
+	],
+};

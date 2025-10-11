@@ -12,8 +12,8 @@ This is a **Knowledge Graph MCP Server** built with:
 - **Model Context Protocol (MCP)** via STDIO and HTTP/REST transports
 - **Express.js** for HTTP server with security middleware
 - **QStash** for asynchronous job processing
-- **Jest** for testing
-- **pnpm** for package management
+- **Vitest** for testing
+- **bun** for package management
 
 ## Test Strategy
 
@@ -21,19 +21,19 @@ This is a **Knowledge Graph MCP Server** built with:
 
 ```bash
 # Fastest: Isolation smoke test (~7s) - validates DB cleanup
-pnpm test -- isolation-smoke
+bun test -- isolation-smoke
 
 # Fast: Run a specific test by name (~10-15s)
-pnpm test -- -t "should generate and store concepts"
+bun test -- -t "should generate and store concepts"
 
 # Medium: Run single test file (~20-30s)
-pnpm test -- src/__tests__/integration/job-routing.test.ts
+bun test -- src/__tests__/integration/job-routing.test.ts
 
 # Slow: Full integration suite (~80s)
-pnpm test:integration
+bun test:integration
 
 # Complete validation (~120s)
-pnpm test
+bun test
 ```
 
 ### Test Organization
@@ -65,42 +65,42 @@ setupFourStageExtractionMocks(mockAIProvider, 5); // 5 chunks
 
 ```bash
 # Development workflow
-pnpm run dev          # Development server with hot reload (STDIO only)
-pnpm run dev:stdio    # STDIO transport only (traditional MCP)
-pnpm run dev:http     # HTTP transport only (REST API + SSE)
-pnpm run dev:dual     # Both transports simultaneously
+bun run dev          # Development server with hot reload (STDIO only)
+bun run dev:stdio    # STDIO transport only (traditional MCP)
+bun run dev:http     # HTTP transport only (REST API + SSE)
+bun run dev:dual     # Both transports simultaneously
 
 # Production workflow
-pnpm run build        # TypeScript compilation
-pnpm run start        # Production server (STDIO only)
-pnpm run start:http   # Production HTTP transport  
-pnpm run start:dual   # Production dual transport
+bun run build        # TypeScript compilation
+bun run start        # Production server (STDIO only)
+bun run start:http   # Production HTTP transport  
+bun run start:dual   # Production dual transport
 
 # Database operations
-pnpm run db:push      # Push schema changes to database
-pnpm run db:migrate   # Create new migration
-pnpm run db:generate  # Generate Prisma client
-pnpm run db:studio    # Open Prisma Studio GUI
-pnpm run db:reset     # Reset database (caution: deletes all data)
+bun run db:push      # Push schema changes to database
+bun run db:migrate   # Create new migration
+bun run db:generate  # Generate Prisma client
+bun run db:studio    # Open Prisma Studio GUI
+bun run db:reset     # Reset database (caution: deletes all data)
 
 # Code quality
-pnpm run lint         # Biome linting
-pnpm run format       # Biome formatting
-pnpm run check        # Full check (lint + type check + tests)
+bun run lint         # Biome linting
+bun run format       # Biome formatting
+bun run check        # Full check (lint + type check + tests)
 
 # Testing
-pnpm run test         # Run all Jest tests
-pnpm run test:unit    # Unit tests only
-pnpm run test:integration # Integration tests only
-pnpm run test:pipeline # Pipeline-specific tests
-pnpm run test:watch   # Run tests in watch mode
-pnpm run test:coverage # Generate coverage report
+bun run test         # Run all Vitest tests
+bun run test:unit    # Unit tests only
+bun run test:integration # Integration tests only
+bun run test:pipeline # Pipeline-specific tests
+bun run test:watch   # Run tests in watch mode
+bun run test:coverage # Generate coverage report
 
 # Performance testing
-pnpm run benchmark    # Run performance benchmarks
-pnpm run ai-isolation # Test AI provider isolation
-pnpm run ai-extraction # Test extraction performance
-pnpm run ai-embedding # Test embedding generation
+bun run benchmark    # Run performance benchmarks
+bun run ai-isolation # Test AI provider isolation
+bun run ai-extraction # Test extraction performance
+bun run ai-embedding # Test embedding generation
 ```
 
 **📊 Benchmarking**: See [BENCHMARKS.md](BENCHMARKS.md) for comprehensive benchmark documentation, including quality evaluation, comparison tools, and iteration workflows.
@@ -180,7 +180,7 @@ The server exposes 7 main tools via both transports:
 
 ### Development Tips
 - **Path Aliases**: Use `~/*` imports (e.g., `import { foo } from '~/shared/utils/bar.js'`)
-- **Always use dev scripts**: Run via `pnpm run dev`, not direct `node` commands
+- **Always use dev scripts**: Run via `bun run dev`, not direct `node` commands
 - **Check embeddings**: Query `vector_embeddings` table directly if issues arise
 - **Monitor jobs**: Check `ProcessingJob` table for status and errors
 
@@ -222,27 +222,27 @@ See [Prompt Versioning](BENCHMARKS.md#prompt-versioning) in BENCHMARKS.md for it
 ### Unit Tests
 Test pure functions with mock dependencies:
 ```typescript
-const mockDb = { checkExistingTriples: jest.fn() };
+const mockDb = { checkExistingTriples: vi.fn() };
 const result = await storeTriples(triples, mockDb, config);
 ```
 
 ### Integration Tests
 Test full pipeline with real database:
 ```bash
-pnpm run test:integration
+bun run test:integration
 ```
 
 ### Performance Tests
 Measure extraction, embedding, and search performance:
 ```bash
-pnpm run benchmark
-pnpm run ai-isolation
+bun run benchmark
+bun run ai-isolation
 ```
 
 ## Common Issues & Solutions
 
 - **Missing Embeddings**: Ensure `generateAndStoreVectorsPostTransaction` is called
 - **Build Errors**: Check all vector operations use `vector_embeddings` table
-- **Path Alias Issues**: Use `pnpm run dev` scripts, not direct `node`
+- **Path Alias Issues**: Use `bun run dev` scripts, not direct `node`
 - **Job Stuck**: Check QStash queue and `ProcessingJob` table for errors
 - **Slow Search**: Create pgvector indexes (see README for SQL commands)

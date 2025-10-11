@@ -470,4 +470,140 @@ describe('Knowledge Extraction', () => {
 			expect(confidenceValue).toBe(0.8);
 		});
 	});
+
+	describe('Error Path Coverage', () => {
+		it('should handle AI provider timeout', async () => {
+			const args = createTestArgs();
+
+			// Mock timeout via circuit breaker
+			(withCircuitBreaker as vi.MockedFunction<typeof withCircuitBreaker>).mockImplementation(
+				async <_T>() => {
+					throw new Error('Operation timed out after 45000ms');
+				}
+			);
+
+			const result = await extractKnowledgeTriples(args);
+
+			expect(result.success).toBe(false);
+			expect(result.error?.message).toContain('Failed to extract knowledge');
+		});
+
+		it('should handle AI provider rate limiting', async () => {
+			const args = createTestArgs();
+
+			mockAIProvider.generateText.mockRejectedValue(new Error('Rate limit exceeded: 429'));
+
+			// Mock retry mechanism to propagate rate limit error
+			(retryAIOperation as vi.MockedFunction<typeof retryAIOperation>).mockImplementation(
+				async <_T>() => {
+					throw new Error('Rate limit exceeded: 429');
+				}
+			);
+
+			const result = await extractKnowledgeTriples(args);
+
+			expect(result.success).toBe(false);
+			expect(result.error?.message).toContain('Failed to extract knowledge');
+		});
+
+		it('should handle invalid JSON response from AI', async () => {
+			const args = createTestArgs();
+
+			// Mock invalid JSON that cannot be parsed
+			mockAIProvider.generateText.mockResolvedValue(
+				createSuccessResult({
+					data: '{ invalid json: missing quotes }',
+					usage: SIMPLE_USAGE,
+				})
+			);
+
+			const result = await extractKnowledgeTriples(args);
+
+			expect(result.success).toBe(false);
+			expect(result.error?.type).toBe('EXTRACTION_ERROR');
+		});
+
+		it('should handle network interruption during extraction', async () => {
+			const args = createTestArgs();
+
+			// Simulate network interruption
+			mockAIProvider.generateText.mockRejectedValue(
+				new Error('Network error: ECONNRESET')
+			);
+
+			(retryAIOperation as vi.MockedFunction<typeof retryAIOperation>).mockImplementation(
+				async <_T>() => {
+					throw new Error('Network error: ECONNRESET');
+				}
+			);
+
+			const result = await extractKnowledgeTriples(args);
+
+			expect(result.success).toBe(false);
+			expect(result.error?.message).toContain('Failed to extract knowledge');
+		});
+
+		it('should handle empty response from AI provider', async () => {
+			const args = createTestArgs();
+
+			mockAIProvider.generateText.mockResolvedValue(
+				createSuccessResult({
+					data: '',
+					usage: SIMPLE_USAGE,
+				})
+			);
+
+			const result = await extractKnowledgeTriples(args);
+
+			expect(result.success).toBe(false);
+			expect(result.error?.message).toContain('Failed to extract knowledge');
+		});
+
+		it('should handle AI provider returning non-string data', async () => {
+			const args = createTestArgs();
+
+			mockAIProvider.generateText.mockResolvedValue(
+				createSuccessResult({
+					data: null as unknown as string,
+					usage: SIMPLE_USAGE,
+				})
+			);
+
+			const result = await extractKnowledgeTriples(args);
+
+			expect(result.success).toBe(false);
+			expect(result.error?.message).toContain('Failed to extract knowledge');
+		});
+
+		it('should handle circuit breaker open state', async () => {
+			const args = createTestArgs();
+
+			(withCircuitBreaker as vi.MockedFunction<typeof withCircuitBreaker>).mockImplementation(
+				async <_T>() => {
+					throw new Error('Circuit breaker is OPEN - too many failures');
+				}
+			);
+
+			const result = await extractKnowledgeTriples(args);
+
+			expect(result.success).toBe(false);
+			expect(result.error?.message).toContain('Failed to extract knowledge');
+		});
+
+		it('should handle all stages failing in four-stage extraction', async () => {
+			const args = createTestArgs();
+
+			// Mock retry to fail for all stages
+			(retryAIOperation as vi.MockedFunction<typeof retryAIOperation>).mockImplementation(
+				async <_T>() => {
+					throw new Error('All AI calls failed');
+				}
+			);
+
+			const result = await extractKnowledgeTriples(args);
+
+			expect(result.success).toBe(false);
+			expect(result.error?.message).toContain('Failed to extract knowledge');
+		});
+	});
 });

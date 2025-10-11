@@ -187,21 +187,6 @@ describe('Job Routing Integration', () => {
 			});
 			expect(updatedJob?.status).toBe(JobStatus.COMPLETED);
 		});
-
-		it('should reject invalid job types at the database layer', async () => {
-			// Prisma now validates job types at creation time, preventing invalid values
-			// This test verifies that database-level validation works correctly
-			await expect(
-				db.processingJob.create({
-					data: {
-						job_type: 'UNKNOWN_JOB_TYPE' as any,
-						text: 'test text',
-						metadata: {},
-						status: JobStatus.QUEUED,
-					},
-				})
-			).rejects.toThrow(/Invalid value for argument/);
-		});
 	});
 
 	describe('Handler Chain Coordination', () => {

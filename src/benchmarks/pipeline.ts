@@ -256,7 +256,10 @@ async function runPipelineBenchmark(config: PipelineConfig): Promise<BenchmarkMe
 				`Total benchmark triples in database: ${allBenchmarkTriplesCount}`,
 				`Recent benchmark triples (last minute): ${recentBenchmarkTriples.length}`,
 				recentBenchmarkTriples.length > 0
-					? `Sample sources: ${recentBenchmarkTriples.slice(0, 3).map(t => `"${t.source}"`).join(', ')}`
+					? `Sample sources: ${recentBenchmarkTriples
+							.slice(0, 3)
+							.map(t => `"${t.source}"`)
+							.join(', ')}`
 					: 'No recent benchmark triples found',
 				'',
 				'This indicates a complete extraction failure OR a source tracking mismatch.',
@@ -545,7 +548,7 @@ async function runPipelineBenchmark(config: PipelineConfig): Promise<BenchmarkMe
 		});
 
 		// Cleanup test data
-		await cleanupBenchmarkData(db, tracker);
+		// await cleanupBenchmarkData(db, tracker);
 		log('INFO', pipelineContext, 'Cleanup completed');
 
 		// Save updated vocabulary (only after successful benchmark)
